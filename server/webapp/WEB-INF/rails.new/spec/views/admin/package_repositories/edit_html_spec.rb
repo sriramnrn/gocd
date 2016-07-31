@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/package_repositories/edit.html.erb" do
   include GoUtil, FormUI, ReflectiveUtil
@@ -23,7 +23,7 @@ describe "admin/package_repositories/edit.html.erb" do
 
   before(:each) do
     view.stub(:package_repositories_update_path).and_return("package_repositories_update_path")
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     set(@cruise_config, "md5", "abc")
 
     plugin_configuration = PluginConfiguration.new("yum","1.0")

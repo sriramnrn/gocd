@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
@@ -34,7 +34,7 @@ import org.apache.log4j.Logger;
 public class TestArtifactPlan extends ArtifactPlan {
     private static final Logger LOG = Logger.getLogger(TestArtifactPlan.class);
     public static final String TEST_OUTPUT_FOLDER = "testoutput";
-    private final ArrayList<ArtifactPlan> plans = new ArrayList<ArtifactPlan>();
+    private final ArrayList<ArtifactPlan> plans = new ArrayList<>();
     static final String MERGED_RESULT_FOLDER = "result";
     public static final String TEST_PLAN_DISPLAY_NAME = "Test Artifact";
 
@@ -46,6 +46,10 @@ public class TestArtifactPlan extends ArtifactPlan {
         this();
         add(plan);
         setDest(TEST_OUTPUT_FOLDER);
+    }
+
+    public TestArtifactPlan(String src, String dest) {
+        super(ArtifactType.unit, src, dest);
     }
 
     public void add(ArtifactPlan plan) {
@@ -63,7 +67,7 @@ public class TestArtifactPlan extends ArtifactPlan {
     }
 
     private ArrayList<File> uploadTestResults(GoPublisher publisher, File rootPath) {
-        ArrayList<File> allFiles = new ArrayList<File>();
+        ArrayList<File> allFiles = new ArrayList<>();
         for (ArtifactPlan plan : plans) {
             final File source = plan.getSource(rootPath);
             WildcardScanner wildcardScanner = new WildcardScanner(rootPath, plan.getSrc());
@@ -94,8 +98,8 @@ public class TestArtifactPlan extends ArtifactPlan {
                 File testResultSource = new File(tempFolder, MERGED_RESULT_FOLDER);
                 testResultSource.mkdirs();
                 UnitTestReportGenerator generator = new UnitTestReportGenerator(publisher, testResultSource);
-                generator.generate(allFiles.toArray(new File[allFiles.size()]));
-                publisher.upload(testResultSource, "testoutput");                
+                generator.generate(allFiles.toArray(new File[allFiles.size()]), "testoutput");
+                publisher.upload(testResultSource, "testoutput");
             } finally {
                 if (tempFolder!=null) {
                     FileUtil.deleteFolder(tempFolder);

@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ public class HgModificationSplitter {
 
     public List<Modification> modifications() {
         try {
-            SAXBuilder builder = new SAXBuilder(false);
+            SAXBuilder builder = new SAXBuilder();
             Document document = builder.build(new StringReader(output));
             return parseDOMTree(document);
         } catch (Exception e) {
@@ -57,7 +57,7 @@ public class HgModificationSplitter {
 
 
     private List<Modification> parseDOMTree(Document document) throws ParseException {
-        List<Modification> modifications = new ArrayList<Modification>();
+        List<Modification> modifications = new ArrayList<>();
 
         Element rootElement = document.getRootElement();
         List logEntries = rootElement.getChildren("changeset");
@@ -92,7 +92,7 @@ public class HgModificationSplitter {
 
     private List<File> parseFiles(Element filesElement, String fileType) {
         List files = filesElement.getChild(fileType).getChildren("file");
-        List<File> modifiedFiles = new ArrayList<File>();
+        List<File> modifiedFiles = new ArrayList<>();
         for (Iterator iterator = files.iterator(); iterator.hasNext();) {
             Element node = (Element) iterator.next();
             modifiedFiles.add(new File(org.apache.commons.lang.StringEscapeUtils.unescapeXml(node.getText())));

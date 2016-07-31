@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ *
+ */
 
 package com.thoughtworks.go.domain.packagerepository;
 
@@ -32,6 +33,7 @@ import com.thoughtworks.go.config.Validatable;
 import com.thoughtworks.go.config.ValidationContext;
 import com.thoughtworks.go.config.validation.NameTypeValidator;
 import com.thoughtworks.go.domain.ConfigErrors;
+import com.thoughtworks.go.domain.ConfigurationDisplayUtil;
 import com.thoughtworks.go.domain.config.PluginConfiguration;
 import com.thoughtworks.go.domain.config.Configuration;
 import com.thoughtworks.go.domain.config.ConfigurationProperty;
@@ -67,7 +69,7 @@ public class PackageRepository implements Serializable, Validatable {
     private Configuration configuration = new Configuration();
 
     @ConfigSubtag
-    private Packages packages = new Packages();
+    private transient Packages packages = new Packages();
 
     private ConfigErrors errors = new ConfigErrors();
 
@@ -171,7 +173,7 @@ public class PackageRepository implements Serializable, Validatable {
     public void validate(ValidationContext validationContext) {
         if (isBlank(name)) {
             errors().add(NAME, "Please provide name");
-        } else if (!new NameTypeValidator().isNameValid(name)) {
+        } else if (new NameTypeValidator().isNameInvalid(name)) {
             errors().add(NAME, NameTypeValidator.errorMessage("PackageRepository", name));
         }
         configuration.validateUniqueness(String.format("Repository '%s'", name));
@@ -201,6 +203,10 @@ public class PackageRepository implements Serializable, Validatable {
 
         String prefix = metadataStore.hasPlugin(pluginId) ? "" : "WARNING! Plugin missing for ";
         return prefix + "Repository: " + configuration.forDisplay(propertiesToBeUsedForDisplay);
+    }
+
+    public boolean doesPluginExist(){
+        return RepositoryMetadataStore.getInstance().hasPlugin(pluginConfiguration.getId());
     }
 
     @PostConstruct

@@ -16,29 +16,37 @@
 
 package com.thoughtworks.go.server.view.artifacts;
 
-import java.io.File;
-
 import com.thoughtworks.go.domain.JobIdentifier;
 import com.thoughtworks.go.server.service.ArtifactsService;
+import com.thoughtworks.go.server.service.ConsoleService;
 import com.thoughtworks.go.server.web.ArtifactFolder;
 import com.thoughtworks.go.server.web.ArtifactFolderViewFactory;
 import com.thoughtworks.go.server.web.FileModelAndView;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.io.File;
+
+import static com.thoughtworks.go.util.ArtifactLogUtil.isConsoleOutput;
+
 public class LocalArtifactsView implements ArtifactsView {
     private ArtifactsService artifactsService;
     private final JobIdentifier translatedId;
+    private ConsoleService consoleService;
     protected ArtifactFolderViewFactory folderViewFactory;
 
-    public LocalArtifactsView(ArtifactFolderViewFactory folderViewFactory, ArtifactsService artifactsService, JobIdentifier translatedId) {
+    public LocalArtifactsView(ArtifactFolderViewFactory folderViewFactory, ArtifactsService artifactsService,
+                              JobIdentifier translatedId, ConsoleService consoleService) {
         this.folderViewFactory = folderViewFactory;
         this.artifactsService = artifactsService;
         this.translatedId = translatedId;
+        this.consoleService = consoleService;
     }
 
     public final ModelAndView createView(String filePath, String sha) throws Exception {
         //return the artifact itself if this is a single file
-        File file = artifactsService.findArtifact(translatedId, filePath);
+        File file = isConsoleOutput(filePath) ? consoleService.findConsoleArtifact(translatedId)
+                : artifactsService.findArtifact(translatedId, filePath);
+
         if (file.exists() && file.isFile()) {
             return FileModelAndView.createFileView(file, sha);
         }

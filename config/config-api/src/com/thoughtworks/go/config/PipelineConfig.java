@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,17 +12,22 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
 import com.rits.cloning.Cloner;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.materials.PackageMaterialConfig;
+import com.thoughtworks.go.config.materials.PluggableSCMMaterialConfig;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.preprocessor.ParamResolver;
 import com.thoughtworks.go.config.preprocessor.ParamScope;
 import com.thoughtworks.go.config.preprocessor.SkipParameterResolution;
+import com.thoughtworks.go.config.remote.ConfigOrigin;
+import com.thoughtworks.go.config.remote.ConfigOriginTraceable;
+import com.thoughtworks.go.config.remote.FileConfigOrigin;
+import com.thoughtworks.go.config.remote.RepoConfigOrigin;
 import com.thoughtworks.go.config.validation.NameTypeValidator;
 import com.thoughtworks.go.domain.BaseCollection;
 import com.thoughtworks.go.domain.CommentRenderer;
@@ -40,6 +45,7 @@ import org.apache.commons.collections.Predicate;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.*;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
@@ -51,8 +57,9 @@ import static org.apache.commons.collections.CollectionUtils.select;
  * @understands how a cruise pipeline is configured by the user
  */
 @ConfigTag("pipeline")
-@ConfigCollection(value = StageConfig.class, asFieldName = "Stages")
-public class PipelineConfig extends BaseCollection<StageConfig> implements ParamScope, ParamsAttributeAware, Validatable, EnvironmentVariableScope {
+@ConfigCollection(StageConfig.class)
+public class PipelineConfig extends BaseCollection<StageConfig> implements ParamScope, ParamsAttributeAware,
+        Validatable, EnvironmentVariableScope, ConfigOriginTraceable {
     private static final Cloner CLONER = new Cloner();
 
     private static final String ERR_TEMPLATE = "You have defined a label template in pipeline %s that refers to a material called %s, but no material with this name is defined.";
@@ -62,14 +69,22 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     public static final String TIMER_CONFIG = "timer";
     public static final String ENVIRONMENT_VARIABLES = "variables";
     public static final String PARAMS = "params";
-    private static final String LABEL_TEMPLATE_CHARACTERS = "[a-zA-Z0-9_\\-.!~*'()#:]";
-    public static final String LABEL_TEMPLATE_FORMAT = "((" + LABEL_TEMPLATE_CHARACTERS + ")*[$]\\{" + LABEL_TEMPLATE_CHARACTERS + "+\\}(" + LABEL_TEMPLATE_CHARACTERS + ")*)+";
+    private static final String LABEL_TEMPLATE_ZERO_TRUNC_BLOCK = "(\\[:0+\\])";
+    private static final String LABEL_TEMPLATE_TRUNC_BLOCK = "(\\[:\\d+\\])?";
+    private static final String LABEL_TEMPLATE_CHARACTERS = "[a-zA-Z0-9_\\-.!~*'()#:]"; // why a '#'?
+    private static final String LABEL_TEMPLATE_VARIABLE_REGEX = "[$]\\{(" + LABEL_TEMPLATE_CHARACTERS + "+)" + LABEL_TEMPLATE_TRUNC_BLOCK + "\\}";
+    public static final String LABEL_TEMPLATE_FORMAT = "((" + LABEL_TEMPLATE_CHARACTERS + ")*[$]"
+            + "\\{" + LABEL_TEMPLATE_CHARACTERS + "+" + LABEL_TEMPLATE_TRUNC_BLOCK + "\\}(" + LABEL_TEMPLATE_CHARACTERS + ")*)+";
     private static final Pattern LABEL_TEMPLATE_FORMAT_REGEX = Pattern.compile(String.format("^(%s)$", LABEL_TEMPLATE_FORMAT));
+    public static final Pattern LABEL_TEMPATE_ZERO_TRUNC_BLOCK_PATTERN = Pattern.compile(LABEL_TEMPLATE_ZERO_TRUNC_BLOCK);
     public static final String TEMPLATE_NAME = "templateName";
     public static final String LOCK = "lock";
     public static final String CONFIGURATION_TYPE = "configurationType";
     public static final String CONFIGURATION_TYPE_STAGES = "configurationType_stages";
     public static final String CONFIGURATION_TYPE_TEMPLATE = "configurationType_template";
+    public static final String LABEL_TEMPLATE_FORMAT_MESSAGE = "Label should be composed of alphanumeric text, it should contain the builder number as ${COUNT}, can contain a material revision as ${<material-name>} of ${<material-name>[:<number>]}, or use params as #{<param-name>}.";
+    public static final String LABEL_TEMPLATE_ERROR_MESSAGE = "Invalid label. ".concat(LABEL_TEMPLATE_FORMAT_MESSAGE);
+    public static final String BLANK_LABEL_TEMPLATE_ERROR_MESSAGE = "Label cannot be blank. ".concat(LABEL_TEMPLATE_FORMAT_MESSAGE);
 
     @SkipParameterResolution
     @ConfigAttribute(value = "name", optional = false)
@@ -78,7 +93,8 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     @ConfigAttribute(value = "labeltemplate", optional = true)
     private String labelTemplate = PipelineLabel.COUNT_TEMPLATE;
 
-    @ConfigSubtag @SkipParameterResolution
+    @ConfigSubtag
+    @SkipParameterResolution
     private ParamsConfig params = new ParamsConfig();
 
     @ConfigSubtag
@@ -102,6 +118,8 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     @SkipParameterResolution
     @ConfigAttribute(value = "template", optional = true, allowNull = true)
     private CaseInsensitiveString templateName;
+
+    private ConfigOrigin origin;
 
     private boolean templateApplied;
 
@@ -135,11 +153,37 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         }
     }
 
+    @Override
+    public String toString() {
+        return String.format("PipelineConfig: %s",name);
+    }
+
+    public boolean validateTree(PipelineConfigSaveValidationContext validationContext) {
+        return new PipelineConfigTreeValidator(this).validate(validationContext);
+    }
+
     public void validate(ValidationContext validationContext) {
         validateLabelTemplate();
         validatePipelineName();
         validateStageNameUniqueness();
-        validateTemplateName();
+        if (!hasTemplate() && isEmpty()) {
+            addError("pipeline", String.format("Pipeline '%s' does not have any stages configured. A pipeline must have at least one stage.", name()));
+        }
+    }
+
+    public void validateTemplate(PipelineTemplateConfig templateConfig) {
+        if (hasTemplate()) {
+            if (new NameTypeValidator().isNameInvalid(templateName.toString())) {
+                errors().add(TEMPLATE_NAME, NameTypeValidator.errorMessage("template", templateName));
+            }
+            if (hasStages() && !hasTemplateApplied()) {
+                addError("stages", String.format("Cannot add stages to pipeline '%s' which already references template '%s'", this.name(), this.getTemplateName()));
+                addError("template", String.format("Cannot set template '%s' on pipeline '%s' because it already has stages defined", this.getTemplateName(), this.name()));
+            }
+            if (templateConfig==null) {
+                addError("pipeline", String.format("Pipeline '%s' refers to non-existent template '%s'.", name(), templateName));
+            }
+        }
     }
 
     private void validatePipelineName() {
@@ -148,22 +192,26 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         }
     }
 
-    private void validateTemplateName() {
-        if (templateName != null && !new NameTypeValidator().isNameValid(templateName)) {
-            errors().add(TEMPLATE_NAME, NameTypeValidator.errorMessage("template", templateName));
-        }
-    }
-
     private void validateStageNameUniqueness() {
-        Map<String, StageConfig> stageNameMap = new HashMap<String, StageConfig>();
+        Map<String, StageConfig> stageNameMap = new HashMap<>();
         for (StageConfig stageConfig : this) {
             stageConfig.validateNameUniqueness(stageNameMap);
         }
     }
 
     private void validateLabelTemplate() {
+        if (StringUtil.isBlank(labelTemplate)) {
+            addError("labelTemplate", BLANK_LABEL_TEMPLATE_ERROR_MESSAGE);
+            return;
+        }
+
         if (XmlUtils.doesNotMatchUsingXsdRegex(LABEL_TEMPLATE_FORMAT_REGEX, labelTemplate)) {
-            addError("labelTemplate", "Invalid label. Label should be composed of alphanumeric text, it should contain material revision or ${COUNT}, or use params as #{<param-name>}.");
+            addError("labelTemplate", LABEL_TEMPLATE_ERROR_MESSAGE);
+            return;
+        }
+
+        if (validateLabelTemplateTruncation(labelTemplate)) {
+            addError("labelTemplate", String.format("Length of zero not allowed on label %s defined on pipeline %s.", labelTemplate, name));
             return;
         }
 
@@ -174,6 +222,14 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
                 addError("labelTemplate", String.format(ERR_TEMPLATE, name(), templateVariable));
             }
         }
+    }
+
+    private boolean validateLabelTemplateTruncation(String labelTemplate) {
+        return LABEL_TEMPATE_ZERO_TRUNC_BLOCK_PATTERN.matcher(labelTemplate).find();
+    }
+
+    private boolean hasStages(){
+        return !isEmpty();
     }
 
     private Predicate withNameSameAs(final String templateVariable) {
@@ -192,12 +248,16 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         return errors;
     }
 
-	public List<StageConfig> getStages() {
-		return this;
-	}
+    public List<StageConfig> getStages() {
+        return this;
+    }
 
     public StageConfig getStage(final CaseInsensitiveString stageName) {
         return findBy(stageName);
+    }
+
+    public StageConfig getStage(String stageName) {
+        return getStage(new CaseInsensitiveString(stageName));
     }
 
     public StageConfig findBy(final CaseInsensitiveString stageName) {
@@ -271,6 +331,36 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         return null;
     }
 
+    public boolean isConfigOriginSameAsOneOfMaterials() {
+        if (!(this.origin instanceof RepoConfigOrigin))
+            return false;
+
+        RepoConfigOrigin repoConfigOrigin = (RepoConfigOrigin) this.origin;
+        MaterialConfig configMaterial = repoConfigOrigin.getMaterial();
+
+        for(MaterialConfig material : this.materialConfigs())
+        {
+            if(material.getFingerprint().equals(configMaterial.getFingerprint()))
+                return true;
+        }
+        return false;
+    }
+
+    public boolean isConfigOriginFromRevision(String revision) {
+        if (!(this.origin instanceof RepoConfigOrigin))
+            return false;
+
+        RepoConfigOrigin repoConfigOrigin = (RepoConfigOrigin) this.origin;
+        return repoConfigOrigin.isFromRevision(revision);
+    }
+
+    private static <T> T as(Class<T> clazz, Object o) {
+        if (clazz.isInstance(o)) {
+            return clazz.cast(o);
+        }
+        return null;
+    }
+
     public MaterialConfigs materialConfigs() {
         return materialConfigs;
     }
@@ -283,10 +373,11 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public Node getDependenciesAsNode() {
-        List<CaseInsensitiveString> pipelineDeps = new ArrayList<CaseInsensitiveString>();
+        List<Node.DependencyNode> pipelineDeps = new ArrayList<>();
         for (MaterialConfig material : materialConfigs) {
             if (material instanceof DependencyMaterialConfig) {
-                pipelineDeps.add(((DependencyMaterialConfig) material).getPipelineName());
+                DependencyMaterialConfig dependencyMaterialConfig = (DependencyMaterialConfig) material;
+                pipelineDeps.add(new Node.DependencyNode(dependencyMaterialConfig.getPipelineName(), dependencyMaterialConfig.getStageName()));
             }
         }
         return new Node(pipelineDeps);
@@ -401,9 +492,9 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public Set<String> getTemplateVariables() {
-        Pattern pattern = Pattern.compile("\\$\\{([a-zA-Z0-9_\\-.!~*'():]+)\\}");
-        java.util.regex.Matcher matcher = pattern.matcher(this.labelTemplate);
-        LinkedHashSet<String> result = new LinkedHashSet<String>();
+        Pattern pattern = Pattern.compile(LABEL_TEMPLATE_VARIABLE_REGEX);
+        Matcher matcher = pattern.matcher(this.labelTemplate);
+        LinkedHashSet<String> result = new LinkedHashSet<>();
         while (matcher.find()) {
             result.add(matcher.group(1));
         }
@@ -411,7 +502,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public List<String> allowedTemplateVariables() {
-        List<String> names = new ArrayList<String>();
+        List<String> names = new ArrayList<>();
         for (MaterialConfig material : materialConfigs) {
             if (!CaseInsensitiveString.isBlank(material.getName())) {
                 names.add(CaseInsensitiveString.str(material.getName()));
@@ -423,6 +514,10 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
 
     public TimerConfig getTimer() {
         return timer;
+    }
+
+    public void setTimer(TimerConfig timer) {
+        this.timer = timer;
     }
 
     public boolean requiresApproval() {
@@ -471,16 +566,10 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public EnvironmentVariablesConfig getPlainTextVariables() {
-        EnvironmentVariablesConfig result = new EnvironmentVariablesConfig();
-        for (EnvironmentVariableConfig variable : variables) {
-            if (!variable.isSecure()) {
-                result.add(variable);
-            }
-        }
-        return result;
+        return variables.getPlainTextVariables();
     }
 
-    public List<EnvironmentVariableConfig> getSecureVariables() {
+    public EnvironmentVariablesConfig getSecureVariables() {
         return variables.getSecureVariables();
     }
 
@@ -489,7 +578,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public boolean hasTemplate() {
-        return templateName != null;
+        return templateName != null && !StringUtil.isBlank(templateName.toString());
     }
 
     public CaseInsensitiveString getTemplateName() {
@@ -546,7 +635,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public List<DependencyMaterialConfig> dependencyMaterialConfigs() {
-        List<DependencyMaterialConfig> materialConfigs = new ArrayList<DependencyMaterialConfig>();
+        List<DependencyMaterialConfig> materialConfigs = new ArrayList<>();
         for (MaterialConfig material : this.materialConfigs) {
             if (material instanceof DependencyMaterialConfig) {
                 materialConfigs.add((DependencyMaterialConfig) material);
@@ -583,6 +672,10 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         this.params = paramsConfig;
     }
 
+    public void setParams(List<ParamConfig> paramsConfig) {
+        setParams(new ParamsConfig(paramsConfig));
+    }
+
     public ParamResolver applyOver(ParamResolver enclosingScope) {
         return enclosingScope.override(CLONER.deepClone(params));
     }
@@ -602,7 +695,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         }
         Map attributeMap = (Map) attributes;
         if (attributeMap.containsKey(NAME)) {
-            name = new CaseInsensitiveString((String) attributeMap.get(NAME));
+            setName((String) attributeMap.get(NAME));
         }
         if (attributeMap.containsKey(MATERIALS)) {
             materialConfigs.setConfigAttributes(attributeMap.get(MATERIALS));
@@ -645,6 +738,14 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
             StageConfig firstStage = first();
             firstStage.setConfigAttributes(attributeMap);
         }
+    }
+
+    public void setName(String name) {
+        this.name = new CaseInsensitiveString(name);
+    }
+
+    public void setName(CaseInsensitiveString name) {
+        this.name = name;
     }
 
     private void setConfigurationType(Map attributeMap) {
@@ -715,7 +816,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public List<StageConfig> allStagesBefore(CaseInsensitiveString stage) {
-        List<StageConfig> stages = new ArrayList<StageConfig>();
+        List<StageConfig> stages = new ArrayList<>();
         for (StageConfig stageConfig : this) {
             if (stage.equals(stageConfig.name())) {
                 break;
@@ -740,7 +841,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public List<PipelineConfig> allFirstLevelUpstreamPipelines(CruiseConfig cruiseConfig) {
-        List<PipelineConfig> pipelinesForFetchArtifact = new ArrayList<PipelineConfig>();
+        List<PipelineConfig> pipelinesForFetchArtifact = new ArrayList<>();
         for (DependencyMaterialConfig dependencyMaterial : dependencyMaterialConfigs()) {
             pipelinesForFetchArtifact.add(cruiseConfig.pipelineConfigByName(dependencyMaterial.getPipelineName()));
         }
@@ -755,11 +856,10 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
         }
     }
 
-    public void validateNameUniqueness(Map<String, PipelineConfig> pipelineNameMap) {
-        String currentName = name.toLower();
-        PipelineConfig pipelineWithSameName = pipelineNameMap.get(currentName);
+    public void validateNameUniqueness(Map<CaseInsensitiveString, PipelineConfig> pipelineNameMap) {
+        PipelineConfig pipelineWithSameName = pipelineNameMap.get(name);
         if (pipelineWithSameName == null) {
-            pipelineNameMap.put(currentName, this);
+            pipelineNameMap.put(name, this);
         } else {
             pipelineWithSameName.nameConflictError();
             this.nameConflictError();
@@ -771,7 +871,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public List<FetchTask> getFetchTasks() {
-        List<FetchTask> fetchTasks = new ArrayList<FetchTask>();
+        List<FetchTask> fetchTasks = new ArrayList<>();
         for (StageConfig stage : this) {
             for (JobConfig job : stage.getJobs()) {
                 for (Task task : job.tasks()) {
@@ -796,7 +896,7 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public Set<Pair<PipelineConfig, StageConfig>> stagesWithPermissionForRole(CaseInsensitiveString roleName) {
-        Set<Pair<PipelineConfig, StageConfig>> result = new HashSet<Pair<PipelineConfig, StageConfig>>();
+        Set<Pair<PipelineConfig, StageConfig>> result = new HashSet<>();
         for (StageConfig stageConfig : this) {
             if (stageConfig.canBeOperatedBy(new Role(roleName))) {
                 result.add(pair(this, stageConfig));
@@ -816,11 +916,48 @@ public class PipelineConfig extends BaseCollection<StageConfig> implements Param
     }
 
     public List<PackageMaterialConfig> packageMaterialConfigs() {
-        return new ArrayList<PackageMaterialConfig>(select(materialConfigs(), new Predicate() {
+        return new ArrayList<>(select(materialConfigs(), new Predicate() {
             @Override
             public boolean evaluate(Object materialConfig) {
                 return materialConfig instanceof PackageMaterialConfig;
             }
         }));
+    }
+
+    public List<PluggableSCMMaterialConfig> pluggableSCMMaterialConfigs() {
+        return new ArrayList<>(select(materialConfigs(), new Predicate() {
+            @Override
+            public boolean evaluate(Object materialConfig) {
+                return materialConfig instanceof PluggableSCMMaterialConfig;
+            }
+        }));
+    }
+
+    public ConfigOrigin getOrigin() {
+        return origin;
+    }
+
+    @Override
+    public void setOrigins(ConfigOrigin origins) {
+        this.origin = origins;
+    }
+
+    public void setOrigin(ConfigOrigin origin) {
+        this.origin = origin;
+    }
+
+    public boolean isLocal() {
+        return origin == null || this.origin.isLocal();
+    }
+
+    public void setLock(boolean lock) {
+        if(lock)
+            this.lockExplicitly();
+        else
+            this.unlockExplicitly();
+    }
+
+    public String getOriginDisplayName() {
+        return getOrigin() != null ? getOrigin().displayName() : new FileConfigOrigin().displayName();
     }
 }

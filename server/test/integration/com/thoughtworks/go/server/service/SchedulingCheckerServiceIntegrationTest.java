@@ -17,7 +17,7 @@
 package com.thoughtworks.go.server.service;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.domain.JobResult;
 import com.thoughtworks.go.domain.Pipeline;
@@ -59,7 +59,7 @@ import static org.junit.Assert.assertTrue;
         "classpath:WEB-INF/applicationContext-acegi-security.xml"
 })
 public class SchedulingCheckerServiceIntegrationTest {
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private GoConfigService goConfigService;
     @Autowired private SchedulingCheckerService schedulingChecker;
     @Autowired private DatabaseAccessHelper dbHelper;
@@ -87,7 +87,7 @@ public class SchedulingCheckerServiceIntegrationTest {
     @Before
     public void setUp() throws Exception {
         configFileHelper.onSetUp();
-        configFileHelper.usingCruiseConfigDao(goConfigFileDao);
+        configFileHelper.usingCruiseConfigDao(goConfigDao);
 
         pipelineFixture = new PipelineWithMultipleStages(2, materialRepository, transactionTemplate);
         pipelineFixture.usingConfigHelper(configFileHelper).usingDbHelper(dbHelper).onSetUp();
@@ -118,8 +118,6 @@ public class SchedulingCheckerServiceIntegrationTest {
     }
 
     @Test
-    //This test doesn't have an assert. This video gives an insight about Hitler's opinion on Unit testing :)
-    //www.youtube.com/watch?v=T-Qn_-F2x1c
     public void shouldPassCheckingWhenUserHasPermissionForRerun() throws Exception {
         Pipeline pipeline = pipelineFixture.createdPipelineWithAllStagesPassed();
         assertTrue(schedulingChecker.canScheduleStage(pipeline.getIdentifier(), pipelineFixture.ftStage, APPROVED_USER, new ServerHealthStateOperationResult()));

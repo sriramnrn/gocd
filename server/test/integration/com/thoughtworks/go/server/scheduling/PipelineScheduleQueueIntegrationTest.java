@@ -19,10 +19,12 @@ package com.thoughtworks.go.server.scheduling;
 import java.util.List;
 
 import com.thoughtworks.go.config.*;
-import com.thoughtworks.go.config.GoConfigFileDao;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
+import com.thoughtworks.go.config.remote.ConfigRepoConfig;
+import com.thoughtworks.go.config.remote.RepoConfigOrigin;
 import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.buildcause.BuildCause;
+import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.fixture.PipelineWithTwoStages;
 import com.thoughtworks.go.helper.MaterialConfigsMother;
 import com.thoughtworks.go.helper.ModificationsMother;
@@ -60,7 +62,7 @@ import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.assertThat;
-import static org.junit.matchers.JUnitMatchers.containsString;
+import static org.hamcrest.CoreMatchers.containsString;
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = {
         "classpath:WEB-INF/applicationContext-global.xml",
@@ -69,7 +71,7 @@ import static org.junit.matchers.JUnitMatchers.containsString;
 })
 public class PipelineScheduleQueueIntegrationTest {
     @Autowired private GoConfigService goConfigService;
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private PipelineScheduleQueue queue;
     @Autowired private JobInstanceService jobService;
     @Autowired private PipelineDao pipelineDao;
@@ -87,7 +89,7 @@ public class PipelineScheduleQueueIntegrationTest {
         configFileEditor = new GoConfigFileHelper();
         configFileEditor.onSetUp();
         dbHelper.onSetUp();
-        configFileEditor.usingCruiseConfigDao(goConfigFileDao).initializeConfigFile();
+        configFileEditor.usingCruiseConfigDao(goConfigDao).initializeConfigFile();
         fixture = new PipelineWithTwoStages(materialRepository, transactionTemplate);
         fixture.usingDbHelper(dbHelper).usingConfigHelper(configFileEditor).onSetUp();
         newCause = BuildCause.createWithEmptyModifications();
@@ -216,7 +218,7 @@ public class PipelineScheduleQueueIntegrationTest {
         BuildCause cause = modifySomeFiles(pipelineConfig, ModificationsMother.currentRevision());
         queue.schedule(fixture.pipelineName, cause);
         queue.finishSchedule(fixture.pipelineName, cause, cause);
-        
+
         assertThat(queue.createPipeline(cause, pipelineConfig, new DefaultSchedulingContext(cause.getApprover(), new Agents()), "md5-test", new TimeProvider()), is(nullValue()));
     }
 
@@ -408,5 +410,20 @@ public class PipelineScheduleQueueIntegrationTest {
         queue.schedule(fixture.pipelineName, cause);
         Pipeline pipeline = queue.createPipeline(cause, pipelineConfig, new DefaultSchedulingContext(cause.getApprover(), new Agents()), "md5-test", new TimeProvider());
         assertThat(pipeline.getFirstStage().getConfigVersion(), is("md5-test"));
+    }
+
+
+    @Test
+    public void shouldReturnNullWhenPipelineConfigOriginDoesNotMatchBuildCauseRevision() {
+        PipelineConfig pipelineConfig = fixture.pipelineConfig();
+        BuildCause cause = modifySomeFilesAndTriggerAs(pipelineConfig, "cruise-developer");
+        MaterialConfig materialConfig = pipelineConfig.materialConfigs().first();
+        MaterialRevision causeRevision = cause.getMaterialRevisions().findRevisionFor(materialConfig);
+        pipelineConfig.setOrigins(new RepoConfigOrigin(
+                new ConfigRepoConfig(materialConfig,"123"),"plug"));
+        saveRev(cause);
+        queue.schedule(fixture.pipelineName, cause);
+        Pipeline pipeline = queue.createPipeline(cause, pipelineConfig, new DefaultSchedulingContext(cause.getApprover(), new Agents()), "md5-test", new TimeProvider());
+        assertThat(pipeline,is(nullValue()));
     }
 }

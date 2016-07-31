@@ -1,5 +1,5 @@
 ##########################GO-LICENSE-START################################
-# Copyright 2014 ThoughtWorks, Inc.
+# Copyright 2016 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
+require 'spec_helper'
 require 'java'
 
 describe ApplicationController do
 
   before do
-    stub_server_health_messages_for_controllers
     UserHelper.stub(:getUserId).and_return(1)
   end
 
@@ -47,12 +46,6 @@ describe ApplicationController do
     it "should generate run stage url" do
       expect(run_stage_path(pipeline_name: "pipeline_name", stage_name: "stage_name",
                             pipeline_counter: 10)).to eq("/run/pipeline_name/10/stage_name")
-    end
-
-    it "should generate cancel stage url" do
-      expect(post: "/api/stages/10/cancel").to route_to(controller: "api/stages", action: "cancel",
-          id: "10", no_layout: true)
-      expect(cancel_stage_path(id: 10)).to eq("/api/stages/10/cancel")
     end
   end
 
@@ -126,11 +119,6 @@ describe ApplicationController do
       expect(controller.user_search_service).to eq(service)
     end
 
-    it "should load go_license_service" do
-      expect(Spring).to receive(:bean).with('goLicenseService').and_return(service = Object.new)
-      expect(controller.go_license_service).to eq(service)
-    end
-
     it "should load viewRenderingService" do
       expect(Spring).to receive(:bean).with('viewRenderingService').and_return(service = Object.new)
       expect(controller.view_rendering_service).to eq(service)
@@ -144,6 +132,11 @@ describe ApplicationController do
     it "should load mingle_config_service" do
       expect(Spring).to receive(:bean).with('mingleConfigService').and_return(service = Object.new)
       expect(controller.mingle_config_service).to eq(service)
+    end
+
+    it "should load version_info_service" do
+      expect(Spring).to receive(:bean).with('versionInfoService').and_return(service = Object.new)
+      expect(controller.version_info_service).to eq(service)
     end
   end
 
@@ -194,25 +187,12 @@ describe ApplicationController do
     end
 
     it "should populate the config file validity for every request" do
-      @controller.stub(:populate_health_messages)
       go_config_service = stub_service(:go_config_service)
       expect(go_config_service).to receive(:checkConfigFileValid).and_return(com.thoughtworks.go.config.validation.GoConfigValidity.valid())
 
       get :index
 
       expect(assigns[:config_valid]).to eq(true)
-    end
-
-    it "should populate server-health-messages for every request" do
-      health_service = stub_service(:server_health_service)
-      config_service = stub_service(:go_config_service)
-      config_service.should_receive(:getCurrentConfig).and_return(new_config = CruiseConfig.new)
-      config_service.stub(:checkConfigFileValid).and_return(com.thoughtworks.go.config.validation.GoConfigValidity.valid())
-      health_service.should_receive(:getAllValidLogs).with(new_config).and_return(:all_health_messages)
-
-      get :index
-
-      expect(assigns[:current_server_health_states]).to eq(:all_health_messages)
     end
 
     it "should set the siteUrl and secureSiteUrl on the thread" do
@@ -255,10 +235,6 @@ describe ApplicationController do
       @routes.draw do
         get "/anonymous/test_action"
       end
-      controller.stub(:populate_health_messages) do
-        stub_server_health_messages_for_controllers
-      end
-      @controller.stub(:licensed_agent_limit)
       config_service = stub_service(:go_config_service)
       config_service.stub(:checkConfigFileValid).and_return(com.thoughtworks.go.config.validation.GoConfigValidity.valid)
     end

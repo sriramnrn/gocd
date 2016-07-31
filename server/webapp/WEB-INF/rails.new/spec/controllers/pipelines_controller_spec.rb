@@ -14,12 +14,11 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
+require 'spec_helper'
 
 describe PipelinesController do
 
   before(:each)  do
-    controller.stub(:populate_health_messages)
     @stage_service = double('stage service')
     @material_service = double('material service')
     @user = Username.new(CaseInsensitiveString.new("foo"))
@@ -39,6 +38,7 @@ describe PipelinesController do
     controller.stub(:pipeline_lock_service).and_return(@pipieline_lock_service=double())
     controller.stub(:go_config_service).and_return(@go_config_service=double())
     controller.stub(:security_service).and_return(@security_service=double())
+    controller.stub(:pipeline_config_service).and_return(@pipeline_config_service=double())
     @pipeline_identifier = PipelineIdentifier.new("blah", 1, "label")
     controller.stub(:populate_config_validity)
     @pipeline_service = double('pipeline_service')
@@ -89,7 +89,7 @@ describe PipelinesController do
     it "should load the dashboard" do
       @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id,@user_id).and_return(selections=PipelineSelections.new)
       @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user,selections).and_return(:pipeline_group_models)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=PipelineConfigs.new)
+      @pipeline_config_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=BasicPipelineConfigs.new)
       @security_service.should_receive(:canCreatePipelines).with(@user).and_return(true)
 
       get :index
@@ -102,7 +102,6 @@ describe PipelinesController do
     it "should resolve" do
       expect({:get => "/pipelines"}).to route_to(:controller => "pipelines", :action => "index", :format => "html")
       expect({:get => "/pipelines.json"}).to route_to(:controller => "pipelines", :action => "index", :format => "json")
-      expect({:get => "/home"}).to route_to(:controller => "pipelines", :action => "index")
     end
 
     it "should redirect to 'add pipeline wizard' when there are no pipelines in config only if the user is an admin" do
@@ -110,7 +109,7 @@ describe PipelinesController do
       pipeline_group_models.add(PipelineGroupModel.new("bla"))
       @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id,@user_id).and_return(selections=PipelineSelections.new)
       @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user,selections).and_return(pipeline_group_models)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=PipelineConfigs.new())
+      @pipeline_config_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=BasicPipelineConfigs.new())
       @security_service.should_receive(:canCreatePipelines).with(@user).and_return(true)
       controller.stub(:url_for_path).with("/admin/pipeline/new?group=defaultGroup").and_return("/admin/pipeline/new?group=defaultGroup")
 
@@ -124,7 +123,7 @@ describe PipelinesController do
       @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id, @user_id).and_return(selections=PipelineSelections.new)
       @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user,selections).and_return(pipeline_group_models)
       @security_service.should_receive(:canCreatePipelines).with(@user).and_return(false)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=PipelineConfigs.new())
+      @pipeline_config_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=BasicPipelineConfigs.new())
 
       get :index
 
@@ -137,46 +136,11 @@ describe PipelinesController do
       viewable_groups = PipelineConfigMother::createGroup("blah", [PipelineConfigMother::createPipelineConfig("pip1", "stage1", ["job1"].to_java(:string))].to_java('com.thoughtworks.go.config.PipelineConfig'))
       @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id,@user_id).and_return(selections=PipelineSelections.new)
       @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user, selections).and_return(pipeline_group_models)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups)
+      @pipeline_config_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups)
 
       get :index
 
       expect(response).to be_success
-    end
-  end
-
-  describe "dashboard" do
-    before(:each) do
-      @selected_pipeline_id = "456"
-      controller.stub(:cookies).and_return(cookiejar={:selected_pipelines => @selected_pipeline_id})
-    end
-
-    it "should load pipeline information" do
-      @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id,@user_id).and_return(selections=PipelineSelections.new)
-      @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user,selections).and_return(:pipeline_group_models)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=PipelineConfigs.new)
-
-      get :dashboard, :format => "json"
-
-      expect(assigns[:pipeline_groups]).to eq(:pipeline_group_models)
-      expect(assigns[:pipeline_selections]).to eq(selections)
-      expect(assigns[:pipeline_configs]).to eq(viewable_groups)
-    end
-
-    it "should resolve to dashboard" do
-      expect({:get => "/dashboard.json"}).to route_to(:controller => "pipelines", :action => "dashboard", :format => "json")
-    end
-
-    it "should NOT redirect to 'add pipeline wizard' when there are no pipelines in config" do
-      pipeline_group_models = java.util.ArrayList.new
-      pipeline_group_models.add(PipelineGroupModel.new("bla"))
-      @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id,@user_id).and_return(selections=PipelineSelections.new)
-      @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user,selections).and_return(pipeline_group_models)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=PipelineConfigs.new())
-
-      get :dashboard, :format => "json"
-
-      expect(response.code).to eq("200")
     end
   end
 
@@ -292,7 +256,7 @@ describe PipelinesController do
     before do
       @go_config_service.should_receive(:isSecurityEnabled).and_return(false)
     end
-    
+
     it "should set cookies for a selected pipelines" do
       @go_config_service.should_receive(:persistSelectedPipelines).with("456", @user_id, ["pipeline1", "pipeline2"], true).and_return(1234)
       controller.stub(:cookies).and_return(cookiejar={:selected_pipelines => "456"})
@@ -339,7 +303,7 @@ describe PipelinesController do
     before do
       @go_config_service.should_receive(:isSecurityEnabled).and_return(true)
     end
-    
+
     it "should not update set cookies for selected pipelines when security enabled" do
       @go_config_service.should_receive(:persistSelectedPipelines).with("456", @user_id, ["pipeline1", "pipeline2"], true).and_return(1234)
       controller.stub(:cookies).and_return(cookiejar={:selected_pipelines => "456"})
@@ -363,7 +327,7 @@ describe PipelinesController do
     it "should set tab name" do
       @go_config_service.should_receive(:getSelectedPipelines).with(@selected_pipeline_id,@user_id).and_return(selections=PipelineSelections.new)
       @pipeline_history_service.should_receive(:allActivePipelineInstances).with(@user,selections).and_return(:pipeline_group_models)
-      @security_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=PipelineConfigs.new)
+      @pipeline_config_service.should_receive(:viewableGroupsFor).with(@user).and_return(viewable_groups=BasicPipelineConfigs.new)
       @security_service.should_receive(:canCreatePipelines).with(@user).and_return(true)
 
       get :index

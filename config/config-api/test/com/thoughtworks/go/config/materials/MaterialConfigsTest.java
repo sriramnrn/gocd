@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials;
 
@@ -21,18 +21,20 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.materials.git.GitMaterialConfig;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
 import com.thoughtworks.go.config.materials.perforce.P4MaterialConfig;
 import com.thoughtworks.go.config.materials.svn.SvnMaterialConfig;
 import com.thoughtworks.go.config.materials.tfs.TfsMaterialConfig;
+import com.thoughtworks.go.config.remote.ConfigRepoConfig;
+import com.thoughtworks.go.config.remote.FileConfigOrigin;
+import com.thoughtworks.go.config.remote.RepoConfigOrigin;
 import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
+import com.thoughtworks.go.domain.packagerepository.PackageDefinitionMother;
+import com.thoughtworks.go.domain.scm.SCMMother;
 import com.thoughtworks.go.helper.GoConfigMother;
 import com.thoughtworks.go.helper.MaterialConfigsMother;
 import com.thoughtworks.go.security.GoCipher;
@@ -40,10 +42,14 @@ import com.thoughtworks.go.util.command.UrlArgument;
 import org.junit.Before;
 import org.junit.Test;
 
+import static com.thoughtworks.go.util.TestUtils.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNull.nullValue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class MaterialConfigsTest {
     private GoConfigMother goConfigMother;
@@ -59,7 +65,7 @@ public class MaterialConfigsTest {
         DependencyMaterialConfig one = new DependencyMaterialConfig(new CaseInsensitiveString("sameName"), new CaseInsensitiveString("pipeline2"), new CaseInsensitiveString("stage"));
         DependencyMaterialConfig another = new DependencyMaterialConfig(new CaseInsensitiveString("sameName"), new CaseInsensitiveString("pipeline3"), new CaseInsensitiveString("stage"));
         MaterialConfigs materialConfigs = new MaterialConfigs(one, another);
-        ValidationContext validationContext = ValidationContext.forChain(config);
+        ValidationContext validationContext = ConfigSaveValidationContext.forChain(config);
 
         materialConfigs.validate(validationContext);
 
@@ -86,7 +92,7 @@ Above scenario allowed
         DependencyMaterialConfig invalidOne = new DependencyMaterialConfig(new CaseInsensitiveString("pipeline2"), new CaseInsensitiveString("stage"));
 
         MaterialConfigs materials = new MaterialConfigs(one, invalidOne);
-        ValidationContext validationContext = ValidationContext.forChain(config);
+        ValidationContext validationContext = ConfigSaveValidationContext.forChain(config);
 
         materials.validate(validationContext);
 
@@ -98,16 +104,68 @@ Above scenario allowed
 
     @Test
     public void shouldReturnValidWhenThereIsNoCycle() throws Exception {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         PipelineConfig pipeline1 = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
         PipelineConfig pipeline2 = goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
         goConfigMother.setDependencyOn(cruiseConfig, pipeline2, "pipeline1", "stage");
 
-        pipeline1.materialConfigs().validate(ValidationContext.forChain(cruiseConfig));
+        pipeline1.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig));
         assertThat(pipeline1.materialConfigs().errors().isEmpty(), is(true));
 
-        pipeline2.materialConfigs().validate(ValidationContext.forChain(cruiseConfig));
+        pipeline2.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig));
         assertThat(pipeline2.materialConfigs().errors().isEmpty(), is(true));
+    }
+    @Test
+    public void shouldNotAllowToDependOnPipelineDefinedInConfigRepository_WhenDownstreamInFile() throws Exception {
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
+        PipelineConfig pipeline1 = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
+        PipelineConfig pipeline2 = goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
+        goConfigMother.setDependencyOn(cruiseConfig, pipeline2, "pipeline1", "stage");
+
+        pipeline1.setOrigin(new RepoConfigOrigin());
+        pipeline2.setOrigin(new FileConfigOrigin());
+
+        pipeline1.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipeline1));
+        assertThat(pipeline1.materialConfigs().errors().isEmpty(), is(true));
+
+        pipeline2.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipeline2));
+        DependencyMaterialConfig invalidDependency = pipeline2.materialConfigs().findDependencyMaterial(new CaseInsensitiveString("pipeline1"));
+        assertThat(invalidDependency.errors().isEmpty(), is(false));
+        assertThat(invalidDependency.errors().on(DependencyMaterialConfig.ORIGIN),startsWith("Dependency from pipeline defined in"));
+    }
+    @Test
+    public void shouldAllowToDependOnPipelineDefinedInConfigRepository_WhenInConfigRepository() throws Exception {
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
+        PipelineConfig pipeline1 = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
+        PipelineConfig pipeline2 = goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
+        goConfigMother.setDependencyOn(cruiseConfig, pipeline2, "pipeline1", "stage");
+
+        pipeline1.setOrigin(new RepoConfigOrigin(new ConfigRepoConfig(new SvnMaterialConfig("http://mysvn", false), "myplugin"), "123"));
+        pipeline2.setOrigin(new RepoConfigOrigin(new ConfigRepoConfig(new SvnMaterialConfig("http://othersvn", false), "myplugin"), "2222"));
+
+        pipeline1.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipeline1));
+        assertThat(pipeline1.materialConfigs().errors().isEmpty(), is(true));
+
+        pipeline2.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipeline2));
+        DependencyMaterialConfig dep = pipeline2.materialConfigs().findDependencyMaterial(new CaseInsensitiveString("pipeline1"));
+        assertThat(dep.errors().isEmpty(), is(true));
+    }
+    @Test
+    public void shouldAllowToDependOnPipelineDefinedInFile_WhenInFile() throws Exception {
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
+        PipelineConfig pipeline1 = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
+        PipelineConfig pipeline2 = goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
+        goConfigMother.setDependencyOn(cruiseConfig, pipeline2, "pipeline1", "stage");
+
+        pipeline1.setOrigin(new FileConfigOrigin());
+        pipeline2.setOrigin(new FileConfigOrigin());
+
+        pipeline1.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipeline1));
+        assertThat(pipeline1.materialConfigs().errors().isEmpty(), is(true));
+
+        pipeline2.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipeline2));
+        DependencyMaterialConfig dep = pipeline2.materialConfigs().findDependencyMaterial(new CaseInsensitiveString("pipeline1"));
+        assertThat(dep.errors().isEmpty(), is(true));
     }
 
     @Test
@@ -117,7 +175,7 @@ Above scenario allowed
         DependencyMaterialConfig duplicateDependencyMaterial = new DependencyMaterialConfig(new CaseInsensitiveString("pipeline2"), new CaseInsensitiveString("stage"));
         MaterialConfigs materialConfigs = new MaterialConfigs(dependencyMaterial, duplicateDependencyMaterial);
 
-        ValidationContext validationContext = ValidationContext.forChain(config);
+        ValidationContext validationContext = ConfigSaveValidationContext.forChain(config);
         materialConfigs.validate(validationContext);
 
         ConfigErrors errors = duplicateDependencyMaterial.errors();
@@ -132,7 +190,7 @@ Above scenario allowed
         DependencyMaterialConfig one = new DependencyMaterialConfig(new CaseInsensitiveString(""), new CaseInsensitiveString("pipeline2"), new CaseInsensitiveString("stage"));
         DependencyMaterialConfig another = new DependencyMaterialConfig(new CaseInsensitiveString(""), new CaseInsensitiveString("pipeline3"), new CaseInsensitiveString("stage"));
         MaterialConfigs materials = new MaterialConfigs(one, another);
-        ValidationContext validationContext = ValidationContext.forChain(config);
+        ValidationContext validationContext = ConfigSaveValidationContext.forChain(config);
         materials.validate(validationContext);
         assertThat(one.errors().isEmpty(), is(true));
         assertThat(another.errors().isEmpty(), is(true));
@@ -140,10 +198,10 @@ Above scenario allowed
 
     @Test
     public void shouldReturnTrueWhenDependencyPipelineDoesNotExist() throws Exception {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         PipelineConfig pipelineConfig = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
-        goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
-        pipelineConfig.materialConfigs().validate(ValidationContext.forChain(cruiseConfig));
+        goConfigMother.setDependencyOn(cruiseConfig, pipelineConfig, "pipeline2", "stage");
+        pipelineConfig.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig, new BasicPipelineConfigs(), pipelineConfig));
         assertThat(pipelineConfig.materialConfigs().errors().isEmpty(), is(true));
     }
 
@@ -153,15 +211,17 @@ Above scenario allowed
         materialOne.setConfigAttributes(Collections.singletonMap(ScmMaterialConfig.FOLDER, "folder1"));
         HgMaterialConfig materialTwo = new HgMaterialConfig("http://url2", null);
         materialTwo.setConfigAttributes(Collections.singletonMap(ScmMaterialConfig.FOLDER, "folder1"));
+        PluggableSCMMaterialConfig materialThree = new PluggableSCMMaterialConfig(null, SCMMother.create("scm-id"), "folder1", null);
         CruiseConfig config = GoConfigMother.configWithPipelines("one");
         PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
-        pipelineOne.setMaterialConfigs(new MaterialConfigs(materialOne, materialTwo));
+        pipelineOne.setMaterialConfigs(new MaterialConfigs(materialOne, materialTwo, materialThree));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
-        String conflictingDirMessage = "Invalid Destination Directory.Every material needs a different destination directory and the directories should not be nested.";
+        String conflictingDirMessage = "Invalid Destination Directory. Every material needs a different destination directory and the directories should not be nested.";
         assertThat(pipelineOne.materialConfigs().get(0).errors().on(ScmMaterialConfig.FOLDER), is(conflictingDirMessage));
         assertThat(pipelineOne.materialConfigs().get(1).errors().on(ScmMaterialConfig.FOLDER), is(conflictingDirMessage));
+        assertThat(pipelineOne.materialConfigs().get(2).errors().on(PluggableSCMMaterialConfig.FOLDER), is(conflictingDirMessage));
     }
 
     @Test
@@ -174,7 +234,7 @@ Above scenario allowed
         PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
         pipelineOne.setMaterialConfigs(new MaterialConfigs(materialOne, materialTwo));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(pipelineOne.materialConfigs().get(0).errors().isEmpty(), is(true));
         assertThat(pipelineOne.materialConfigs().get(1).errors().isEmpty(), is(true));
@@ -182,25 +242,55 @@ Above scenario allowed
 
     @Test
     public void shouldReturnNullWhenMaterialNotFoundForTheGivenFingerPrint() {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         PipelineConfig pipeline = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
         assertThat(pipeline.materialConfigs().getByFingerPrint("invalid"), is(nullValue()));
     }
-    
+
     @Test
     public void shouldFailIfMultipleMaterialsDoNotHaveDestinationFolderSet() {
         HgMaterialConfig materialConfigOne = new HgMaterialConfig("http://url1", null);
         materialConfigOne.setConfigAttributes(Collections.singletonMap(ScmMaterialConfig.FOLDER, "folder"));
         HgMaterialConfig materialConfigTwo = new HgMaterialConfig("http://url2", null);
+        PluggableSCMMaterialConfig materialConfigThree = new PluggableSCMMaterialConfig(null, SCMMother.create("scm-id"), null, null);
         CruiseConfig config = GoConfigMother.configWithPipelines("one");
         PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
-        pipelineOne.setMaterialConfigs((new MaterialConfigs(materialConfigOne, materialConfigTwo)));
+        pipelineOne.setMaterialConfigs((new MaterialConfigs(materialConfigOne, materialConfigTwo, materialConfigThree)));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(pipelineOne.materialConfigs().get(0).errors().isEmpty(), is(true));
         assertThat(pipelineOne.materialConfigs().get(1).errors().on(ScmMaterialConfig.FOLDER), is("Destination directory is required when specifying multiple scm materials"));
+        assertThat(pipelineOne.materialConfigs().get(2).errors().on(PluggableSCMMaterialConfig.FOLDER), is("Destination directory is required when specifying multiple scm materials"));
     }
+
+    @Test
+    public void shouldAddErrorWhenMatchingScmConfigDoesNotExist(){
+        PluggableSCMMaterialConfig scmMaterialConfig = new PluggableSCMMaterialConfig(null, SCMMother.create("scm-id"), null, null);
+        PackageMaterialConfig packageMaterialConfig = new PackageMaterialConfig(new CaseInsensitiveString("package-name"), "package-id", PackageDefinitionMother.create("package-id"));
+        CruiseConfig config = GoConfigMother.configWithPipelines("one");
+        PipelineConfig pipelineConfig = config.pipelineConfigByName(new CaseInsensitiveString("one"));
+        MaterialConfigs materialConfigs = new MaterialConfigs(scmMaterialConfig,packageMaterialConfig);
+
+        pipelineConfig.setMaterialConfigs(materialConfigs);
+        materialConfigs.validateTree(PipelineConfigSaveValidationContext.forChain(true, "group", config));
+
+        assertThat(pipelineConfig.materialConfigs().get(0).errors().on(scmMaterialConfig.SCM_ID), is("Could not find SCM for given scm-id: [scm-id]."));
+    }
+
+    @Test
+    public void shouldAddErrorWhenMatchingPackageIDDoesNotExist(){
+        PackageMaterialConfig packageMaterialConfig = new PackageMaterialConfig(new CaseInsensitiveString("package-name"), "package-id", PackageDefinitionMother.create("package-id"));
+        CruiseConfig config = GoConfigMother.configWithPipelines("one");
+        PipelineConfig pipelineConfig = config.pipelineConfigByName(new CaseInsensitiveString("one"));
+        MaterialConfigs materialConfigs = new MaterialConfigs(packageMaterialConfig);
+
+        pipelineConfig.setMaterialConfigs(materialConfigs);
+        materialConfigs.validateTree(PipelineConfigSaveValidationContext.forChain(true, "group", config));
+
+        assertThat(pipelineConfig.materialConfigs().get(0).errors().on(packageMaterialConfig.PACKAGE_ID), is("Could not find repository for given package id:[package-id]"));
+    }
+
 
     @Test
     public void shouldNotFailIfMultipleMaterialsHaveUniqueDestinationFolderSet() {
@@ -212,10 +302,27 @@ Above scenario allowed
         PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
         pipelineOne.setMaterialConfigs(new MaterialConfigs(materialOne, materialTwo));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(pipelineOne.materialConfigs().get(0).errors().isEmpty(), is(true));
         assertThat(pipelineOne.materialConfigs().get(1).errors().isEmpty(), is(true));
+    }
+
+    @Test
+    public void shouldCheckSCMMaterialsHaveDestinationCorrectly() {
+        HgMaterialConfig materialConfigOne = new HgMaterialConfig("http://url1", null);
+        materialConfigOne.setConfigAttributes(Collections.singletonMap(ScmMaterialConfig.FOLDER, "folder"));
+
+        CruiseConfig config = GoConfigMother.configWithPipelines("one");
+        PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
+        pipelineOne.setMaterialConfigs((new MaterialConfigs(materialConfigOne)));
+
+        assertThat(pipelineOne.materialConfigs().scmMaterialsHaveDestination(), is(true));
+
+        PluggableSCMMaterialConfig materialConfigTwo = new PluggableSCMMaterialConfig(null, SCMMother.create("scm-id"), null, null);
+        pipelineOne.materialConfigs().add(materialConfigTwo);
+
+        assertThat(pipelineOne.materialConfigs().scmMaterialsHaveDestination(), is(false));
     }
 
     @Test
@@ -230,7 +337,7 @@ Above scenario allowed
         PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
         pipelineOne.setMaterialConfigs(new MaterialConfigs(materialOne, materialTwo));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(pipelineOne.materialConfigs().get(0).errors().getAll().size(), is(1));
         assertThat(pipelineOne.materialConfigs().get(1).errors().getAll().size(), is(1));
@@ -248,7 +355,7 @@ Above scenario allowed
         PipelineConfig pipelineTwo = config.pipelineConfigByName(new CaseInsensitiveString("two"));
         pipelineTwo.setMaterialConfigs(new MaterialConfigs(materialTwo));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(pipelineOne.materialConfigs().get(0).errors().isEmpty(), is(true));
         assertThat(pipelineTwo.materialConfigs().get(0).errors().isEmpty(), is(true));
@@ -256,7 +363,7 @@ Above scenario allowed
 
     @Test
     public void shouldReturnMaterialBasedOnPiplineUniqueFingerPrint() {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         PipelineConfig pipeline1 = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
         HgMaterialConfig expectedMaterial = MaterialConfigsMother.hgMaterialConfig();
         pipeline1.addMaterialConfig(expectedMaterial);
@@ -269,10 +376,10 @@ Above scenario allowed
 
     @Test
     public void shouldReturnTrueWhenNoDependencyDefined() throws Exception {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         PipelineConfig pipelineConfig = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
         goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
-        pipelineConfig.materialConfigs().validate(ValidationContext.forChain(cruiseConfig));
+        pipelineConfig.materialConfigs().validate(ConfigSaveValidationContext.forChain(cruiseConfig));
         assertThat(pipelineConfig.materialConfigs().errors().isEmpty(), is(true));
     }
 
@@ -288,10 +395,29 @@ Above scenario allowed
         PipelineConfig pipelineTwo = config.pipelineConfigByName(new CaseInsensitiveString("two"));
         pipelineTwo.setMaterialConfigs(new MaterialConfigs(materialTwo));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(pipelineOne.materialConfigs().get(0).errors().on(ScmMaterialConfig.AUTO_UPDATE),
-                is("Material of type Mercurial (http://url1) is specified more than once in the configuration with different values for the autoUpdate attribute. All copies of the a material should have the same value for this attribute."));
+                is("Material of type Mercurial (http://url1) is specified more than once in the configuration with different values for the autoUpdate attribute. All copies of this material must have the same value for this attribute."));
+    }
+
+    @Test
+    public void shouldAllowModifyingTheAutoUpdateFieldOfMaterials() throws Exception {
+        GitMaterialConfig gitMaterial = new GitMaterialConfig("https://url", "master");
+        gitMaterial.setAutoUpdate(true);
+
+        GitMaterialConfig modifiedGitMaterial = new GitMaterialConfig("https://url", "master");
+        modifiedGitMaterial.setAutoUpdate(false);
+
+        MaterialConfigs configs = new MaterialConfigs();
+        configs.add(gitMaterial);
+
+        CruiseConfig config = GoConfigMother.configWithPipelines("one");
+        PipelineConfig pipelineOne = config.pipelineConfigByName(new CaseInsensitiveString("one"));
+        pipelineOne.setMaterialConfigs(new MaterialConfigs(modifiedGitMaterial));
+
+        configs.validate(ConfigSaveValidationContext.forChain(config));
+        assertTrue(gitMaterial.errors().isEmpty());
     }
 
     @Test
@@ -303,7 +429,7 @@ Above scenario allowed
         svnMaterialConfig.setFolder(null);
         pipelineOne.setMaterialConfigs(new MaterialConfigs(svnMaterialConfig));
 
-        pipelineOne.materialConfigs().validate(ValidationContext.forChain(config));
+        pipelineOne.materialConfigs().validate(ConfigSaveValidationContext.forChain(config));
 
         assertThat(svnMaterialConfig.errors().toString(), svnMaterialConfig.errors().getAll().size(), is(0));
     }
@@ -451,5 +577,73 @@ Above scenario allowed
         assertThat(new MaterialConfigs(svn, p2).getExistingOrDefaultMaterial(p1).getPackageId(), is("p2"));
 
         assertThat(new MaterialConfigs(svn).getExistingOrDefaultMaterial(p1).getPackageId(), is("p1"));
+    }
+
+    @Test
+    public void shouldSetPluggableSCMMaterialConfigAttributesForMaterial() {
+        String scmId = "scm-id";
+        Map<String, String> hashMap = new HashMap<String, String>();
+        hashMap.put(PluggableSCMMaterialConfig.SCM_ID, scmId);
+
+        Map<String, Object> attributeMap = new HashMap<String, Object>();
+        attributeMap.put(AbstractMaterialConfig.MATERIAL_TYPE, PluggableSCMMaterialConfig.TYPE);
+        attributeMap.put(PluggableSCMMaterialConfig.TYPE, hashMap);
+
+        MaterialConfigs materialConfigs = new MaterialConfigs();
+        materialConfigs.setConfigAttributes(attributeMap);
+
+        assertThat(materialConfigs.size(), is(1));
+        assertThat(((PluggableSCMMaterialConfig) materialConfigs.first()).getScmId(), is(scmId));
+    }
+
+    @Test
+    public void shouldGetExistingOrDefaultPluggableSCMMaterialCorrectly() {
+        SvnMaterialConfig svn = new SvnMaterialConfig("http://test.com", false);
+        PluggableSCMMaterialConfig pluggableSCMMaterialOne = new PluggableSCMMaterialConfig("scm-id-1");
+        PluggableSCMMaterialConfig pluggableSCMMaterialTwo = new PluggableSCMMaterialConfig("scm-id-2");
+
+        assertThat(new MaterialConfigs(svn, pluggableSCMMaterialTwo).getExistingOrDefaultMaterial(pluggableSCMMaterialOne).getScmId(), is("scm-id-2"));
+
+        assertThat(new MaterialConfigs(svn).getExistingOrDefaultMaterial(pluggableSCMMaterialOne).getScmId(), is("scm-id-1"));
+    }
+
+    @Test
+    public void shouldValidateTree(){
+        GitMaterialConfig git = new GitMaterialConfig();
+        git.setName(new CaseInsensitiveString("mat-name"));
+        SvnMaterialConfig svn = new SvnMaterialConfig("url", true);
+        svn.setName(new CaseInsensitiveString("mat-name"));
+        P4MaterialConfig p4 = new P4MaterialConfig();
+        TfsMaterialConfig tfs = new TfsMaterialConfig();
+        HgMaterialConfig hg = new HgMaterialConfig();
+        MaterialConfigs materialConfigs = new MaterialConfigs(git, svn, p4, tfs, hg);
+
+        PipelineConfig pipelineConfig = new PipelineConfig(new CaseInsensitiveString("p1"), new MaterialConfigs(svn));
+        materialConfigs.validateTree(PipelineConfigSaveValidationContext.forChain(true, "group", new BasicCruiseConfig(new BasicPipelineConfigs(pipelineConfig)), pipelineConfig));
+        assertThat(git.errors().on(GitMaterialConfig.MATERIAL_NAME), contains("You have defined multiple materials called 'mat-name'"));
+        assertThat(git.errors().on(GitMaterialConfig.URL), is("URL cannot be blank"));
+        assertThat(svn.errors().on(SvnMaterialConfig.MATERIAL_NAME), contains("You have defined multiple materials called 'mat-name'"));
+        assertThat(p4.errors().on(P4MaterialConfig.VIEW), contains("P4 view cannot be empty."));
+        assertThat(tfs.errors().on(TfsMaterialConfig.URL), contains("URL cannot be blank"));
+        assertThat(hg.errors().on(HgMaterialConfig.URL), is("URL cannot be blank"));
+    }
+
+
+    @Test
+    public void shouldFailValidationInNoMaterialPresent(){
+        MaterialConfigs materialConfigs = new MaterialConfigs();
+        assertThat(materialConfigs.validateTree(PipelineConfigSaveValidationContext.forChain(true, "group", new PipelineConfig())), is(false));
+        assertThat(materialConfigs.errors().firstError(), is("A pipeline must have at least one material"));
+    }
+
+    @Test
+    public void shouldTellWhetherItHasDependencyOnSpecifiedPipeline() throws Exception {
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
+        PipelineConfig pipeline1 = goConfigMother.addPipeline(cruiseConfig, "pipeline1", "stage", "build");
+        PipelineConfig pipeline2 = goConfigMother.addPipeline(cruiseConfig, "pipeline2", "stage", "build");
+        goConfigMother.setDependencyOn(cruiseConfig, pipeline2, "pipeline1", "stage");
+
+        assertTrue(pipeline2.materialConfigs().hasDependencyMaterial(pipeline1));
+        assertFalse(pipeline1.materialConfigs().hasDependencyMaterial(pipeline2));
     }
 }

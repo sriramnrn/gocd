@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/materials/hg/new.html.erb" do
 
@@ -22,7 +22,7 @@ describe "admin/materials/hg/new.html.erb" do
 
   before :each do
     assign(:material, @material = HgMaterial.new("url", nil))
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     ReflectionUtil.setField(@cruise_config, "md5", "abc")
   end
 

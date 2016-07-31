@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/package_repositories/new.html.erb" do
   include GoUtil, FormUI, ReflectiveUtil
@@ -23,7 +23,7 @@ describe "admin/package_repositories/new.html.erb" do
 
   before(:each) do
     view.stub(:package_repositories_create_path).and_return("create_package_repositories_path")
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     set(@cruise_config, "md5", "abc")
     assign(:package_repository, PackageRepository.new)
     assign(:package_repositories, PackageRepositories.new)
@@ -45,7 +45,7 @@ describe "admin/package_repositories/new.html.erb" do
         expect(div).to have_selector("a.add", :text => "Add New Repository")
       end
     end
-    
+
     it "should have ajax_form_submit_errors div" do
       render
 

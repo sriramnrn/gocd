@@ -1,33 +1,33 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.serverhealth;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
-import com.thoughtworks.go.util.json.Json;
-import com.thoughtworks.go.util.json.JsonMap;
+import com.thoughtworks.go.config.CruiseConfig;
 import com.thoughtworks.go.util.Clock;
 import com.thoughtworks.go.util.SystemTimeClock;
 import com.thoughtworks.go.utils.Timeout;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.joda.time.DateTime;
 
+import java.text.SimpleDateFormat;
+import java.util.*;
+
 import static com.thoughtworks.go.util.ExceptionUtils.bombIfNull;
+import static org.apache.commons.lang.StringEscapeUtils.escapeHtml;
 
 public class ServerHealthState {
     private final HealthStateLevel healthStateLevel;
@@ -47,7 +47,7 @@ public class ServerHealthState {
         this(healthStateLevel, type, message, description, Timeout.NEVER);
     }
 
-    public ServerHealthState(HealthStateLevel healthStateLevel, HealthStateType type, String message, String description, Timeout timeout) {
+    private ServerHealthState(HealthStateLevel healthStateLevel, HealthStateType type, String message, String description, Timeout timeout) {
         bombIfNull(description, "description cannot be null");
         bombIfNull(message, "message cannot be null");
         this.healthStateLevel = healthStateLevel;
@@ -58,7 +58,7 @@ public class ServerHealthState {
         this.timestamp = new Date();
     }
 
-    public ServerHealthState(HealthStateLevel healthStateLevel, HealthStateType healthStateType, String message, String description, long milliSeconds) {
+    private ServerHealthState(HealthStateLevel healthStateLevel, HealthStateType healthStateType, String message, String description, long milliSeconds) {
         bombIfNull(description, "description cannot be null");
         bombIfNull(message, "message cannot be null");
         this.healthStateLevel = healthStateLevel;
@@ -82,11 +82,11 @@ public class ServerHealthState {
     }
 
     public static ServerHealthState warning(String message, String description, HealthStateType healthStateType) {
-        return new ServerHealthState(HealthStateLevel.WARNING, healthStateType, message, description);
+        return new ServerHealthState(HealthStateLevel.WARNING, healthStateType, escapeHtml(message), escapeHtml(description));
     }
 
     public static ServerHealthState error(String message, String description, HealthStateType type) {
-        return new ServerHealthState(HealthStateLevel.ERROR, type, message, description);
+        return new ServerHealthState(HealthStateLevel.ERROR, type, escapeHtml(message), escapeHtml(description));
     }
 
     public static ServerHealthState warning(String message, String description, HealthStateType healthStateType, Timeout timeout) {
@@ -94,7 +94,15 @@ public class ServerHealthState {
     }
 
     public static ServerHealthState warning(String message, String description, HealthStateType healthStateType, long milliSeconds) {
-        return new ServerHealthState(HealthStateLevel.WARNING, healthStateType, message, description, milliSeconds);
+        return new ServerHealthState(HealthStateLevel.WARNING, healthStateType, escapeHtml(message), escapeHtml(description), milliSeconds);
+    }
+
+    public static ServerHealthState warningWithHtml(String message, String description, HealthStateType stateType) {
+        return new ServerHealthState(HealthStateLevel.WARNING, stateType, message, description);
+    }
+
+    public static ServerHealthState warningWithHtml(String message, String description, HealthStateType stateType, long milliSeconds) {
+        return new ServerHealthState(HealthStateLevel.WARNING, stateType, message, description, milliSeconds);
     }
 
     public static ServerHealthState failToScheduling(HealthStateType healthStateType, String pipelineName, String description) {
@@ -166,8 +174,8 @@ public class ServerHealthState {
         return result;
     }
 
-    public Json asJson() {
-        JsonMap json = new JsonMap();
+    public Map<String, String> asJson() {
+        Map<String, String> json = new LinkedHashMap<>();
         json.put("message", getMessage());
         json.put("detail", getDescription());
         json.put("level", healthStateLevel.toString());
@@ -203,7 +211,11 @@ public class ServerHealthState {
         return ToStringBuilder.reflectionToString(this);
     }
 
-    public boolean hasExpired() {        
+    public boolean hasExpired() {
         return expiryTime != null && expiryTime.isBefore(clock.currentDateTime());
+    }
+
+    public Set<String> getPipelineNames(CruiseConfig config) {
+        return type.getPipelineNames(config);
     }
 }

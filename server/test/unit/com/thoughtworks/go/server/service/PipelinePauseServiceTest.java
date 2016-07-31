@@ -1,29 +1,22 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
-import com.thoughtworks.go.config.AdminUser;
-import com.thoughtworks.go.config.Authorization;
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.GoConfigFileDao;
-import com.thoughtworks.go.config.GoConfigMigration;
-import com.thoughtworks.go.config.OperationConfig;
-import com.thoughtworks.go.config.PipelineConfigs;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.helper.PipelineConfigMother;
 import com.thoughtworks.go.server.dao.PipelineSqlMapDao;
 import com.thoughtworks.go.server.domain.Username;
@@ -46,7 +39,7 @@ public class PipelinePauseServiceTest {
     private PipelineSqlMapDao pipelineDao;
     public PipelinePauseService pipelinePauseService;
     private GoConfigService goConfigService;
-    private GoConfigFileDao goConfigFileDao;
+    private GoConfigDao goConfigDao;
     private SecurityService securityService;
 
     private static final String VALID_PIPELINE = "some-pipeline";
@@ -57,23 +50,23 @@ public class PipelinePauseServiceTest {
     @Before
     public void setUp() throws Exception {
         pipelineDao = mock(PipelineSqlMapDao.class);
-        goConfigFileDao = mock(GoConfigFileDao.class);
-        goConfigService = new GoConfigService(goConfigFileDao, null, (GoConfigMigration) null, null, null, null, null, null, null);
+        goConfigDao = mock(GoConfigDao.class);
+        goConfigService = new GoConfigService(goConfigDao, null, (GoConfigMigration) null, null, null, null, null, null, null);
         securityService = mock(SecurityService.class);
         pipelinePauseService = new PipelinePauseService(pipelineDao, goConfigService, securityService);
     }
 
     private void setUpValidPipelineWithAuth() {
         Authorization authorization = new Authorization(new OperationConfig(new AdminUser(VALID_USER.getUsername())));
-        CruiseConfig cruiseConfig = new CruiseConfig(new PipelineConfigs("my_group", authorization, PipelineConfigMother.pipelineConfig(VALID_PIPELINE)));
-        when(goConfigFileDao.load()).thenReturn(cruiseConfig);
+        CruiseConfig cruiseConfig = new BasicCruiseConfig(new BasicPipelineConfigs("my_group", authorization, PipelineConfigMother.pipelineConfig(VALID_PIPELINE)));
+        when(goConfigDao.load()).thenReturn(cruiseConfig);
         when(securityService.hasOperatePermissionForGroup(eq(VALID_USER.getUsername()), any(String.class))).thenReturn(true);
     }
 
     private void setUpValidPipelineWithInvalidAuth() {
         Authorization authorization = new Authorization(new OperationConfig(new AdminUser(INVALID_USER.getUsername())));
-        CruiseConfig cruiseConfig = new CruiseConfig(new PipelineConfigs("my_group", authorization, PipelineConfigMother.pipelineConfig(VALID_PIPELINE)));
-        when(goConfigFileDao.load()).thenReturn(cruiseConfig);
+        CruiseConfig cruiseConfig = new BasicCruiseConfig(new BasicPipelineConfigs("my_group", authorization, PipelineConfigMother.pipelineConfig(VALID_PIPELINE)));
+        when(goConfigDao.load()).thenReturn(cruiseConfig);
         when(securityService.hasOperatePermissionForGroup(eq(INVALID_USER.getUsername()), any(String.class))).thenReturn(false);
     }
 
@@ -109,7 +102,7 @@ public class PipelinePauseServiceTest {
     @Test
     public void shouldPopulateHttpResult404WhenPipelineIsNotFoundForPause() throws Exception {
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
-        when(goConfigFileDao.load()).thenReturn(new CruiseConfig());
+        when(goConfigDao.load()).thenReturn(new BasicCruiseConfig());
 
         pipelinePauseService.pause(INVALID_PIPELINE, "cause", VALID_USER, result);
 
@@ -121,7 +114,7 @@ public class PipelinePauseServiceTest {
     @Test
     public void shouldPopulateHttpResult404WhenPipelineIsNotFoundForUnpause() throws Exception {
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
-        when(goConfigFileDao.load()).thenReturn(new CruiseConfig());
+        when(goConfigDao.load()).thenReturn(new BasicCruiseConfig());
 
         pipelinePauseService.unpause(INVALID_PIPELINE, VALID_USER, result);
 

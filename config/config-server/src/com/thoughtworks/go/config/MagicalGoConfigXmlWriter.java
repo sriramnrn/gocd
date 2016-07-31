@@ -1,20 +1,28 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
+
+import com.thoughtworks.go.config.exceptions.GoConfigInvalidException;
+import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
+import com.thoughtworks.go.security.GoCipher;
+import com.thoughtworks.go.util.GoConstants;
+import com.thoughtworks.go.util.XmlUtils;
+import org.apache.log4j.Logger;
+import org.jdom.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,27 +33,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
-import com.thoughtworks.go.metrics.domain.context.Context;
-import com.thoughtworks.go.security.GoCipher;
-import com.thoughtworks.go.metrics.domain.probes.ProbeType;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
-import com.thoughtworks.go.util.GoConstants;
-import com.thoughtworks.go.util.XmlUtils;
-import com.thoughtworks.go.util.XsdErrorTranslator;
-import org.apache.log4j.Logger;
-import org.jdom.Attribute;
-import org.jdom.CDATA;
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.Namespace;
-import org.jdom.input.SAXBuilder;
-
 import static com.thoughtworks.go.config.ConfigCache.annotationFor;
 import static com.thoughtworks.go.config.ConfigCache.isAnnotationPresent;
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 import static com.thoughtworks.go.util.ExceptionUtils.bombIf;
 import static com.thoughtworks.go.util.ObjectUtil.nullSafeEquals;
+import static com.thoughtworks.go.util.XmlUtils.buildXmlDocument;
 import static java.text.MessageFormat.format;
 import static org.apache.commons.io.IOUtils.toInputStream;
 
@@ -53,14 +46,10 @@ public class MagicalGoConfigXmlWriter {
     private static final Logger LOGGER = Logger.getLogger(MagicalGoConfigXmlWriter.class);
     public static final String XML_NS = "http://www.w3.org/2001/XMLSchema-instance";
     private ConfigCache configCache;
-    private SAXBuilder builder;
     private final ConfigElementImplementationRegistry registry;
-    private final MetricsProbeService metricsProbeService;
 
-    public MagicalGoConfigXmlWriter(ConfigCache configCache, ConfigElementImplementationRegistry registry, MetricsProbeService metricsProbeService) {
+    public MagicalGoConfigXmlWriter(ConfigCache configCache, ConfigElementImplementationRegistry registry) {
         this.configCache = configCache;
-        this.metricsProbeService = metricsProbeService;
-        builder = new SAXBuilder();
         this.registry = registry;
     }
 
@@ -80,31 +69,30 @@ public class MagicalGoConfigXmlWriter {
 
     public void write(CruiseConfig configForEdit, OutputStream output, boolean skipPreprocessingAndValidation) throws Exception {
         LOGGER.debug("[Serializing Config] Starting to write. Validation skipped? " + skipPreprocessingAndValidation);
-        Context context = metricsProbeService.begin(ProbeType.WRITE_CONFIG_TO_FILE_SYSTEM);
-        try {
-            if (!skipPreprocessingAndValidation) {
-                new MagicalGoConfigXmlLoader(configCache, registry, metricsProbeService).preprocessAndValidate(configForEdit);
-                LOGGER.debug("[Serializing Config] Done with cruise config validators.");
-            }
-            Document document = createEmptyCruiseConfigDocument();
-            write(configForEdit, document.getRootElement(), configCache, registry);
-
-            LOGGER.debug("[Serializing Config] XSD and DOM validation.");
-            verifyXsdValid(document);
-            MagicalGoConfigXmlLoader.validateDom(document.getRootElement(), registry);
-            LOGGER.info("[Serializing Config] Generating config partial.");
-            XmlUtils.writeXml(document, output);
-            LOGGER.debug("[Serializing Config] Finished writing config partial.");
-        } finally {
-            metricsProbeService.end(ProbeType.WRITE_CONFIG_TO_FILE_SYSTEM, context);
+        MagicalGoConfigXmlLoader loader = new MagicalGoConfigXmlLoader(configCache, registry);
+        if (!configForEdit.getOrigin().isLocal()) {
+            throw new GoConfigInvalidException(configForEdit,"Attempted to save merged configuration with patials");
         }
+        if (!skipPreprocessingAndValidation) {
+            loader.preprocessAndValidate(configForEdit);
+            LOGGER.debug("[Serializing Config] Done with cruise config validators.");
+        }
+        Document document = createEmptyCruiseConfigDocument();
+        write(configForEdit, document.getRootElement(), configCache, registry);
+
+        LOGGER.debug("[Serializing Config] XSD and DOM validation.");
+        verifyXsdValid(document);
+        MagicalGoConfigXmlLoader.validateDom(document.getRootElement(), registry);
+        LOGGER.info("[Serializing Config] Generating config partial.");
+        XmlUtils.writeXml(document, output);
+        LOGGER.debug("[Serializing Config] Finished writing config partial.");
     }
 
     private void verifyXsdValid(Document document) throws Exception {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         XmlUtils.writeXml(document, buffer);
         InputStream content = toInputStream(buffer.toString());
-        XmlUtils.validate(content, GoConfigSchema.getCurrentSchema(), new XsdErrorTranslator(), builder, registry.xsds());
+        buildXmlDocument(content, GoConfigSchema.getCurrentSchema(), registry.xsds());
     }
 
     public String toXmlPartial(Object domainObject) {
@@ -146,7 +134,7 @@ public class MagicalGoConfigXmlWriter {
     }
 
     private static List<XmlFieldWithValue> allFields(Object o, ConfigCache configCache, final ConfigElementImplementationRegistry registry) {
-        List<XmlFieldWithValue> list = new ArrayList<XmlFieldWithValue>();
+        List<XmlFieldWithValue> list = new ArrayList<>();
         Class originalClass = o.getClass();
         for (GoConfigFieldWriter field : allFieldsWithInherited(originalClass, o, configCache, registry)) {
             Field configField = field.getConfigField();
@@ -206,7 +194,7 @@ public class MagicalGoConfigXmlWriter {
             ConfigAttributeValue attributeValue = value.getClass().getAnnotation(ConfigAttributeValue.class);
             if (attributeValue != null) {
                 try {
-                    Field field = value.getClass().getDeclaredField(attributeValue.fieldName());
+                    Field field = getField(value.getClass(), attributeValue);
                     field.setAccessible(true);
                     valueString = field.get(value).toString();
                 } catch (NoSuchFieldException e) {
@@ -221,10 +209,24 @@ public class MagicalGoConfigXmlWriter {
             }
             return valueString;
         }
+
+        private Field getField(Class clazz, ConfigAttributeValue attributeValue) throws NoSuchFieldException {
+            try {
+                return clazz.getDeclaredField(attributeValue.fieldName());
+            } catch (NoSuchFieldException e) {
+                Class klass = clazz.getSuperclass();
+                if (klass == null) {
+                    throw e;
+                }
+                return getField(klass, attributeValue);
+            }
+        }
     }
 
     private static Element elementFor(Class<?> aClass, ConfigCache configCache) {
         ConfigTag configTag = annotationFor(aClass, ConfigTag.class);
+        if(configTag == null)
+            throw bomb(format("Cannot get config tag for {0}",aClass));
         return new Element(configTag.value(), namespaceFor(configTag));
     }
 

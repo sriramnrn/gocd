@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::PipelinesSnippetController do
 
@@ -49,7 +49,6 @@ describe Admin::PipelinesSnippetController do
       controller.stub(:pipeline_configs_service).and_return(@pipeline_configs_service)
       controller.stub(:go_config_service).and_return(@go_config_service)
       controller.should_receive(:populate_config_validity).and_return(true)
-      controller.should_receive(:populate_health_messages)
       controller.should_receive(:load_context)
       @result = HttpLocalizedOperationResult.new
       HttpLocalizedOperationResult.stub(:new).and_return(@result)
@@ -94,7 +93,7 @@ describe Admin::PipelinesSnippetController do
         @result.should_receive(:is_successful).and_return(false)
         @result.should_receive(:httpCode).and_return(401)
         @result.should_receive(:message).with(anything).and_return("Unauthorized")
-        @config = CruiseConfig.new
+        @config = BasicCruiseConfig.new
         group = "valid_group"
         @pipeline_configs_service.should_receive(:getXml).with(group, @user, @result).and_return(nil)
         get :show, {:group_name => group}
@@ -114,7 +113,7 @@ describe Admin::PipelinesSnippetController do
       it "should display the group xml" do
         group = "group"
         @pipeline_configs_service.should_receive(:getXml).with(group, @user, @result).and_return("some valid xml as string")
-        @config = CruiseConfig.new
+        @config = BasicCruiseConfig.new
         @config.should_receive(:getMd5).and_return('md5_value_for_configuration')
         @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
         get :edit, {:group_name => group}
@@ -132,7 +131,7 @@ describe Admin::PipelinesSnippetController do
         @result.should_receive(:is_successful).and_return(false)
         @result.should_receive(:httpCode).and_return(401)
         @result.should_receive(:message).with(anything).and_return("Unauthorized")
-        @config = CruiseConfig.new
+        @config = BasicCruiseConfig.new
         group = "valid_group"
         @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
         @pipeline_configs_service.should_receive(:getXml).with(group, @user, @result).and_return(nil)

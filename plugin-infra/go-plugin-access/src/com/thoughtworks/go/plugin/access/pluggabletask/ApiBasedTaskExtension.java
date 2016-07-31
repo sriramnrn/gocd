@@ -16,6 +16,7 @@
 
 package com.thoughtworks.go.plugin.access.pluggabletask;
 
+import com.thoughtworks.go.plugin.access.common.settings.PluginSettingsConfiguration;
 import com.thoughtworks.go.plugin.api.response.execution.ExecutionResult;
 import com.thoughtworks.go.plugin.api.response.validation.ValidationResult;
 import com.thoughtworks.go.plugin.api.task.Task;
@@ -25,11 +26,27 @@ import com.thoughtworks.go.plugin.infra.ActionWithReturn;
 import com.thoughtworks.go.plugin.infra.PluginManager;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
 
+@Deprecated
 class ApiBasedTaskExtension implements TaskExtensionContract {
     private PluginManager pluginManager;
 
     ApiBasedTaskExtension(PluginManager pluginManager) {
         this.pluginManager = pluginManager;
+    }
+
+    @Override
+    public PluginSettingsConfiguration getPluginSettingsConfiguration(String pluginId) {
+        throw new RuntimeException("not implemented");
+    }
+
+    @Override
+    public String getPluginSettingsView(String pluginId) {
+        throw new RuntimeException("not implemented");
+    }
+
+    @Override
+    public ValidationResult validatePluginSettings(String pluginId, PluginSettingsConfiguration configuration) {
+        throw new RuntimeException("not implemented");
     }
 
     @Override

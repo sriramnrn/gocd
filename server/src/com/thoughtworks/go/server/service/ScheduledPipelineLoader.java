@@ -16,9 +16,9 @@
 
 package com.thoughtworks.go.server.service;
 
+import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.CruiseConfig;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
-import com.thoughtworks.go.config.materials.PasswordAwareMaterial;
 import com.thoughtworks.go.domain.JobInstance;
 import com.thoughtworks.go.domain.MaterialRevision;
 import com.thoughtworks.go.domain.MaterialRevisions;
@@ -32,6 +32,7 @@ import com.thoughtworks.go.serverhealth.HealthStateScope;
 import com.thoughtworks.go.serverhealth.HealthStateType;
 import com.thoughtworks.go.serverhealth.ServerHealthService;
 import com.thoughtworks.go.serverhealth.ServerHealthState;
+import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.utils.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -46,30 +47,30 @@ public class ScheduledPipelineLoader {
     final private GoConfigService goConfigService;
     final private JobInstanceService jobInstanceService;
     final private ServerHealthService serverHealthService;
-    final private ArtifactsService artifactsService;
     final private TransactionSynchronizationManager transactionSynchronizationManager;
     private final ScheduleService scheduleService;
     private MaterialExpansionService materialExpansionService;
+    private ConsoleService consoleService;
 
     @Autowired
     public ScheduledPipelineLoader(TransactionSynchronizationManager transactionSynchronizationManager, PipelineSqlMapDao pipelineDao, GoConfigService goConfigService,
-                                   JobInstanceService jobInstanceService, ServerHealthService serverHealthService, ArtifactsService artifactsService, ScheduleService scheduleService,
-                                   MaterialExpansionService materialExpansionService) {
+                                   JobInstanceService jobInstanceService, ServerHealthService serverHealthService, ScheduleService scheduleService,
+                                   MaterialExpansionService materialExpansionService, ConsoleService consoleService) {
         this.transactionSynchronizationManager = transactionSynchronizationManager;
         this.pipelineDao = pipelineDao;
         this.goConfigService = goConfigService;
         this.jobInstanceService = jobInstanceService;
         this.serverHealthService = serverHealthService;
-        this.artifactsService = artifactsService;
         this.scheduleService = scheduleService;
         this.materialExpansionService = materialExpansionService;
+        this.consoleService = consoleService;
     }
 
     //TODO: Do we need to do this differently than PipelineService#fullPipeline?
     public Pipeline pipelineWithPasswordAwareBuildCauseByBuildId(final long buildId) {
         Pipeline pipeline = pipelineDao.pipelineWithMaterialsAndModsByBuildId(buildId);
         MaterialRevisions scheduledRevs = pipeline.getBuildCause().getMaterialRevisions();
-        MaterialConfigs knownMaterials = knownMaterials(scheduledRevs);
+        MaterialConfigs knownMaterials = knownMaterials(pipeline, scheduledRevs);
         for (MaterialRevision materialRevision : scheduledRevs) {
             MaterialConfig materialConfig = materialFrom(knownMaterials, materialRevision);
             Material usedMaterial = materialRevision.getMaterial();
@@ -89,10 +90,8 @@ public class ScheduledPipelineLoader {
                 });
                 throw new StaleMaterialsOnBuildCause(message);
             }
-            if (materialConfig instanceof PasswordAwareMaterial) {
-                PasswordAwareMaterial configuredMaterial = (PasswordAwareMaterial) materialConfig;
-                ((PasswordAwareMaterial) usedMaterial).setPassword(configuredMaterial.getPassword());
-            }
+
+            usedMaterial.updateFromConfig(materialConfig);
         }
         return pipeline;
     }
@@ -106,25 +105,38 @@ public class ScheduledPipelineLoader {
         return null;
     }
 
-    private MaterialConfigs knownMaterials(MaterialRevisions scheduledRevs) {
+    private MaterialConfigs knownMaterials(Pipeline pipeline, MaterialRevisions scheduledRevs) {
         CruiseConfig currentConfig = goConfigService.getCurrentConfig();
         MaterialConfigs configuredMaterials = new MaterialConfigs();
         for (MaterialRevision revision : scheduledRevs) {
-            MaterialConfig configuredMaterial = currentConfig.materialConfigFor(revision.getMaterial().getFingerprint());
+            String fingerprint = revision.getMaterial().getFingerprint();
+            // first try to find material config from current pipeline config
+            MaterialConfig configuredMaterial = currentConfig.materialConfigFor(new CaseInsensitiveString(pipeline.getName()), fingerprint);
             if (configuredMaterial != null) {
                 configuredMaterials.add(configuredMaterial);
+                continue;
+            }
+
+            //todo: remove the global lookup fallback code after we feel safe
+            if(new SystemEnvironment().get(SystemEnvironment.GO_SERVER_SCHEDULED_PIPELINE_LOADER_GLOBAL_MATERIAL_LOOKUP)) {
+                // fallback to global lookup if material is not in current pipeline config (old behavior)
+                configuredMaterial = currentConfig.materialConfigFor(fingerprint);
+                if (configuredMaterial != null) {
+                    configuredMaterials.add((configuredMaterial));
+                }
             }
         }
         MaterialConfigs knownMaterials = new MaterialConfigs();
         for (MaterialConfig configuredMaterial : configuredMaterials) {
             materialExpansionService.expandForScheduling(configuredMaterial, knownMaterials);
         }
+
         return knownMaterials;
     }
 
     private void appendToConsoleLog(JobInstance jobInstance, String message) {
         try {
-            artifactsService.appendToConsoleLog(jobInstance.getIdentifier(), "\n" + message + "\n");
+            consoleService.appendToConsoleLog(jobInstance.getIdentifier(), "\n" + message + "\n");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

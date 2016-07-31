@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,29 +12,21 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.ui;
 
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
+import com.thoughtworks.go.config.Resource;
 import com.thoughtworks.go.config.Resources;
-import com.thoughtworks.go.domain.AgentInstance;
-import com.thoughtworks.go.domain.AgentStatus;
-import com.thoughtworks.go.domain.DiskSpace;
-import com.thoughtworks.go.domain.IpAddress;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.util.comparator.AlphaAsciiComparator;
 import info.aduna.text.NumericStringComparator;
 import org.apache.commons.lang.StringUtils;
 
 /**
- * @understands agent information for the UI 
+ * @understands agent information for the UI
  */
 public class AgentViewModel implements Comparable<AgentViewModel>{
     static final String MISSING_AGENT_BOOTSTRAPPER_VERSION = "Unknown";
@@ -46,13 +38,13 @@ public class AgentViewModel implements Comparable<AgentViewModel>{
         this(agentInstance, new HashSet<String>());
     }
 
-    public AgentViewModel(AgentInstance agentInstance, Set<String> environments) {
+    public AgentViewModel(AgentInstance agentInstance, Collection<String> environments) {
         this.agentInstance = agentInstance;
-        this.environments = environments;
+        this.environments = new TreeSet<>(environments);
     }
 
     public AgentViewModel(AgentInstance agentInstance, String...  environments) {
-        this(agentInstance, new TreeSet<String>(Arrays.asList(environments)));
+        this(agentInstance, Arrays.asList(environments));
     }
 
     public String getHostname() {
@@ -93,6 +85,14 @@ public class AgentViewModel implements Comparable<AgentViewModel>{
         return agentInstance.getStatus();
     }
 
+    public AgentRuntimeStatus getRuntimeStatus(){
+        return agentInstance.getRuntimeStatus();
+    }
+
+    public AgentConfigStatus getAgentConfigStatus(){
+        return agentInstance.getAgentConfigStatus();
+    }
+
     public String getStatusForDisplay() {
         return isCancelled() ? "Building (Cancelled)" : getStatus().toString();
     }
@@ -112,9 +112,13 @@ public class AgentViewModel implements Comparable<AgentViewModel>{
     public boolean isBuilding(){
         return agentInstance.isBuilding();
     }
-    
+
     public boolean isCancelled(){
         return agentInstance.isCancelled();
+    }
+
+    public boolean isEnabled(){
+        return !agentInstance.isDisabled();
     }
 
     public static Comparator<AgentViewModel> STATUS_COMPARATOR = new Comparator<AgentViewModel>() {
@@ -181,13 +185,13 @@ public class AgentViewModel implements Comparable<AgentViewModel>{
 
     @Override public String toString() {
         return "hostname= " + agentInstance.getHostname() +
-                " location = " + agentInstance.getLocation() + 
+                " location = " + agentInstance.getLocation() +
                 " environments = " + environments +
                 " resources= " + getResources().toString() +
                 " os= " + getOperatingSystem() +
                 " status = " + getStatus() +
                 " ip = " + getIpAddress() +
-                " boostrapperVersion = " + getBootstrapperVersion();
+                " bootstrapperVersion = " + getBootstrapperVersion();
     }
 
     public String getOperatingSystem() {
@@ -228,5 +232,14 @@ public class AgentViewModel implements Comparable<AgentViewModel>{
 
     public boolean needsUpgrade() {
         return agentInstance.needsUpgrade();
+    }
+
+    public ConfigErrors errors() {
+        ConfigErrors configErrors = new ConfigErrors();
+        configErrors.addAll(agentInstance.agentConfig().errors());
+        for (Resource resource : agentInstance.getResources()) {
+            configErrors.addAll(resource.errors());
+        }
+        return configErrors;
     }
 }

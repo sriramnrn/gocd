@@ -1,30 +1,22 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials.tfs;
 
-import java.util.Map;
-import javax.annotation.PostConstruct;
-
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.ConfigAttribute;
-import com.thoughtworks.go.config.ConfigTag;
-import com.thoughtworks.go.config.ParamsAttributeAware;
-import com.thoughtworks.go.config.PasswordEncrypter;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.materials.Filter;
 import com.thoughtworks.go.config.materials.PasswordAwareMaterial;
 import com.thoughtworks.go.config.materials.ScmMaterialConfig;
@@ -37,7 +29,11 @@ import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 
+import javax.annotation.PostConstruct;
+import java.util.Map;
+
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
+import static org.apache.commons.lang.StringUtils.isNotEmpty;
 
 @ConfigTag(value = "tfs", label = "TFS")
 public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttributeAware, PasswordAwareMaterial, PasswordEncrypter {
@@ -67,12 +63,22 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
     public static final String PROJECT_PATH = "projectPath";
     public static final String DOMAIN = "domain";
 
+    public TfsMaterialConfig() {
+        this(new GoCipher());
+    }
 
     public TfsMaterialConfig(GoCipher goCipher) {
         super(TYPE);
         this.goCipher = goCipher;
     }
 
+    public TfsMaterialConfig(GoCipher goCipher, UrlArgument url, String userName, String domain, String projectPath) {
+        this(goCipher);
+        this.url = url;
+        this.userName = userName;
+        this.domain = domain;
+        this.projectPath = projectPath;
+    }
     public TfsMaterialConfig(GoCipher goCipher, UrlArgument url, String userName, String domain, String password, String projectPath) {
         this(goCipher);
         this.url = url;
@@ -83,8 +89,8 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
     }
 
     public TfsMaterialConfig(UrlArgument url, String userName, String domain, String password, String projectPath, GoCipher goCipher, boolean autoUpdate,
-                             Filter filter, String folder, CaseInsensitiveString name) {
-        super(name, filter, folder, autoUpdate, TYPE, new ConfigErrors());
+                             Filter filter, boolean invertFilter, String folder, CaseInsensitiveString name) {
+        super(name, filter, invertFilter, folder, autoUpdate, TYPE, new ConfigErrors());
         this.url = url;
         this.userName = userName;
         this.domain = domain;
@@ -102,9 +108,16 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
         return userName;
     }
 
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
     @Override
     public void setPassword(String password) {
         resetPassword(password);
+    }
+
+    public void setCleartextPassword(String password) {
+        this.password = password;
     }
 
     @Override
@@ -128,7 +141,14 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
 
     @Override
     public String getUrl() {
-        return url == null ? null : url.forCommandline();
+        return url != null ? url.forCommandline() : null;
+    }
+
+    @Override
+    public void setUrl(String url) {
+        if (url != null) {
+            this.url = new UrlArgument(url);
+        }
     }
 
     @Override
@@ -147,8 +167,8 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
     }
 
     @Override
-    protected void validateConcreteScmMaterial(ValidationContext validationContext) {
-        if (StringUtil.isBlank(url.forDisplay())) {
+    public void validateConcreteScmMaterial() {
+        if (url == null || StringUtil.isBlank(url.forDisplay())) {
             errors().add(URL, "URL cannot be blank");
         }
         if (StringUtil.isBlank(userName)) {
@@ -156,6 +176,10 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
         }
         if (StringUtil.isBlank(projectPath)) {
             errors().add(PROJECT_PATH, "Project Path cannot be blank");
+        }
+        if (isNotEmpty(this.password) && isNotEmpty(this.encryptedPassword)){
+            addError("password", "You may only specify `password` or `encrypted_password`, not both!");
+            addError("encryptedPassword", "You may only specify `password` or `encrypted_password`, not both!");
         }
     }
 
@@ -212,8 +236,20 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
         return projectPath;
     }
 
+    public void setProjectPath(String projectPath) {
+        this.projectPath = projectPath;
+    }
+
     public String getDomain() {
         return this.domain;
+    }
+
+    public void setDomain(String domain) {
+        this.domain = domain;
+    }
+
+    public void setEncryptedPassword(String encryptedPassword) {
+        this.encryptedPassword = encryptedPassword;
     }
 
     /* Needed although there is a getUserName above */
@@ -285,4 +321,5 @@ public class TfsMaterialConfig extends ScmMaterialConfig implements ParamsAttrib
         }
 
     }
+
 }

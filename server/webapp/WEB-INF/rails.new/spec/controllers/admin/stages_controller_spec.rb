@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 load File.join(File.dirname(__FILE__), 'stages_controller_examples.rb')
 
 describe Admin::StagesController do
@@ -22,7 +22,6 @@ describe Admin::StagesController do
   include TaskMother
 
   before do
-    controller.stub(:populate_health_messages)
     controller.stub(:pipeline_pause_service).with().and_return(@pipeline_pause_service = double('Pipeline Pause Service'))
     controller.stub(:set_current_user)
   end
@@ -105,8 +104,8 @@ describe Admin::StagesController do
   describe "action" do
     before(:each) do
       controller.stub(:populate_config_validity)
-      
-      @cruise_config = CruiseConfig.new()
+
+      @cruise_config = BasicCruiseConfig.new()
       cruise_config_mother = GoConfigMother.new
       @pipeline_template = PipelineTemplateConfig.new(CaseInsensitiveString.new("template-name"), [StageConfigMother.manualStage("template-stage-name")].to_java(StageConfig))
       @cruise_config.addTemplate(@pipeline_template)
@@ -215,7 +214,7 @@ describe Admin::StagesController do
         @pluggable_task_service.stub(:validate)
         task_view_service = double('Task View Service')
         controller.stub(:task_view_service).and_return(task_view_service)
-        @new_task = PluggableTask.new("", PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("Url", false, nil)].to_java(ConfigurationProperty)))
+        @new_task = PluggableTask.new( PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("Url", false, nil)].to_java(ConfigurationProperty)))
         task_view_service.should_receive(:taskInstanceFor).with("pluggableTask").and_return(@new_task)
         stub_save_for_success
 
@@ -237,7 +236,7 @@ describe Admin::StagesController do
         @pluggable_task_service.stub(:validate) do |task|
           task.getConfiguration().getProperty("key").addError("key", "some error")
         end
-        @new_task = PluggableTask.new("", PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("key", false, nil)].to_java(ConfigurationProperty)))
+        @new_task = PluggableTask.new( PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("key", false, nil)].to_java(ConfigurationProperty)))
         task_view_service.should_receive(:taskInstanceFor).with("pluggableTask").and_return(@new_task)
         stub_save_for_validation_error do |result, cruise_config, pipeline|
           result.badRequest(LocalizedMessage.string("SAVE_FAILED"))

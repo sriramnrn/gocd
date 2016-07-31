@@ -23,6 +23,7 @@ import java.util.Set;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.materials.Materials;
 import com.thoughtworks.go.config.materials.PackageMaterialConfig;
+import com.thoughtworks.go.config.materials.PluggableSCMMaterialConfig;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.materials.git.GitMaterialConfig;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
@@ -36,6 +37,7 @@ import com.thoughtworks.go.domain.materials.git.GitMaterialInstance;
 import com.thoughtworks.go.domain.materials.mercurial.HgMaterialInstance;
 import com.thoughtworks.go.domain.materials.packagematerial.PackageMaterialInstance;
 import com.thoughtworks.go.domain.materials.perforce.P4MaterialInstance;
+import com.thoughtworks.go.domain.materials.scm.PluggableSCMMaterialInstance;
 import com.thoughtworks.go.domain.materials.svn.SvnMaterialInstance;
 import com.thoughtworks.go.domain.materials.tfs.TfsMaterialInstance;
 import org.springframework.stereotype.Component;
@@ -44,7 +46,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class MaterialConfigConverter {
-    private static HashMap<Class, Class> map = new HashMap<Class, Class>();
+    private static HashMap<Class, Class> map = new HashMap<>();
 
     static {
         map.put(SvnMaterialConfig.class, SvnMaterialInstance.class);
@@ -54,6 +56,7 @@ public class MaterialConfigConverter {
         map.put(TfsMaterialConfig.class, TfsMaterialInstance.class);
         map.put(DependencyMaterialConfig.class, DependencyMaterialInstance.class);
         map.put(PackageMaterialConfig.class, PackageMaterialInstance.class);
+        map.put(PluggableSCMMaterialConfig.class, PluggableSCMMaterialInstance.class);
     }
 
     public Material toMaterial(MaterialConfig materialConfig) {
@@ -72,7 +75,7 @@ public class MaterialConfigConverter {
     }
 
     public Set<Material> toMaterials(Set<MaterialConfig> materialConfigs) {
-        HashSet<Material> materials = new HashSet<Material>();
+        HashSet<Material> materials = new HashSet<>();
         for (MaterialConfig materialConfig : materialConfigs) {
             materials.add(toMaterial(materialConfig));
         }

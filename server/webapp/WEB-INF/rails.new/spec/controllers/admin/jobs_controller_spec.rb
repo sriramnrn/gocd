@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::JobsController do
   include ConfigSaveStubbing
@@ -23,10 +23,6 @@ describe Admin::JobsController do
 
   def add_resource(job_name, resource)
     @pipeline.getFirstStageConfig().getJobs().getJob(CaseInsensitiveString.new(job_name)).addResource(resource)
-  end
-
-  before do
-    controller.stub(:populate_health_messages)
   end
 
   describe "routes" do
@@ -67,7 +63,7 @@ describe Admin::JobsController do
     before(:each) do
       controller.stub(:populate_config_validity)
 
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       @pipeline = PipelineConfigMother.createPipelineConfig("pipeline-name", "stage-name", ["job-1", "job-2", "job-3"].to_java(java.lang.String))
       @cruise_config.addPipeline("defaultGroup", @pipeline)
 
@@ -131,7 +127,8 @@ describe Admin::JobsController do
         assigns[:task_view_models].should == tvms
 
         actual_job_assigned = assigns[:job]
-        actual_job_assigned.should == JobConfig.new(CaseInsensitiveString.new(""), nil, nil, com.thoughtworks.go.config.Tasks.new([AntTask.new].to_java(Task)))
+        job_config_new = JobConfig.new(CaseInsensitiveString.new(""), Resources.new, ArtifactPlans.new, com.thoughtworks.go.config.Tasks.new([AntTask.new].to_java(Task)))
+        actual_job_assigned.should == job_config_new
         actual_job_assigned.tasks().first.should == AntTask.new
         assert_template layout: false
       end
@@ -280,7 +277,7 @@ describe Admin::JobsController do
         response.location.should =~ /admin\/pipelines\/pipeline-name\/stages\/stage-name\/job\/job-1\/tabs?.*?fm=(.+)/
         assert_update_command ::ConfigUpdate::JobNode, ::ConfigUpdate::NodeAsSubject, ::ConfigUpdate::RefsAsUpdatedRefs
      end
-        
+
       it "should clear environment variables" do
         stub_save_for_success
 
@@ -330,7 +327,7 @@ describe Admin::JobsController do
         @pluggable_task_service.stub(:validate)
         task_view_service = double('Task View Service')
         controller.stub(:task_view_service).and_return(task_view_service)
-        @new_task = PluggableTask.new("", PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("Url", false, nil)].to_java(ConfigurationProperty)))
+        @new_task = PluggableTask.new(PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("Url", false, nil)].to_java(ConfigurationProperty)))
         task_view_service.should_receive(:taskInstanceFor).with("pluggableTask").and_return(@new_task)
         stub_save_for_success
 
@@ -352,7 +349,7 @@ describe Admin::JobsController do
         @pluggable_task_service.stub(:validate) do |task|
           task.getConfiguration().getProperty("key").addError("key", "some error")
         end
-        @new_task = PluggableTask.new("", PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("key", false, nil)].to_java(ConfigurationProperty)))
+        @new_task = PluggableTask.new( PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("key", false, nil)].to_java(ConfigurationProperty)))
         task_view_service.should_receive(:taskInstanceFor).with("pluggableTask").and_return(@new_task)
         @pipeline_pause_service.should_receive(:pipelinePauseInfo).with("pipeline-name").and_return(@pause_info)
         stub_save_for_validation_error do |result, cruise_config, pipeline|
@@ -422,4 +419,3 @@ describe Admin::JobsController do
     end
   end
 end
-

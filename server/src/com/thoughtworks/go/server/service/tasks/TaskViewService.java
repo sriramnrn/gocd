@@ -16,26 +16,26 @@
 
 package com.thoughtworks.go.server.service.tasks;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.thoughtworks.go.config.pluggabletask.PluggableTask;
 import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
 import com.thoughtworks.go.domain.NullTask;
 import com.thoughtworks.go.domain.Task;
 import com.thoughtworks.go.domain.config.Configuration;
 import com.thoughtworks.go.domain.config.PluginConfiguration;
-import com.thoughtworks.go.plugins.presentation.PluggableViewModel;
-import com.thoughtworks.go.service.TaskFactory;
-import com.thoughtworks.go.util.ListUtil;
 import com.thoughtworks.go.plugin.access.pluggabletask.PluggableTaskConfigStore;
 import com.thoughtworks.go.plugin.access.pluggabletask.TaskPreference;
 import com.thoughtworks.go.plugin.api.config.Property;
 import com.thoughtworks.go.plugin.api.task.TaskConfig;
 import com.thoughtworks.go.plugin.infra.PluginManager;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
+import com.thoughtworks.go.plugins.presentation.PluggableViewModel;
+import com.thoughtworks.go.service.TaskFactory;
+import com.thoughtworks.go.util.ListUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @understands providing view model to render a onCancelTask
@@ -65,7 +65,7 @@ public class TaskViewService implements TaskFactory {
     }
 
     public List<PluggableViewModel> getTaskViewModelsWith(Task given) {
-        List<PluggableViewModel> viewModels = new ArrayList<PluggableViewModel>();
+        List<PluggableViewModel> viewModels = new ArrayList<>();
         for (Task task : allTasks()) {
             if (task.hasSameTypeAs(given)) {
                 viewModels.add(getViewModel(given, "new"));
@@ -90,8 +90,18 @@ public class TaskViewService implements TaskFactory {
         throw new RuntimeException(String.format("Could not find any task of type: %s", type));
     }
 
+    public PluggableTask createPluggableTask(String pluginId) {
+        List<PluggableTask> tasks = allPluginTasks();
+        for (PluggableTask task : tasks) {
+            if (task.getPluginConfiguration().getId().equals(pluginId)) {
+                return task;
+            }
+        }
+        throw new RuntimeException(String.format("Could not find any task with id: %s", pluginId));
+    }
+
     public List<PluggableViewModel<Task>> getOnCancelTaskViewModels(Task given) {
-        List<PluggableViewModel<Task>> viewModels = new ArrayList<PluggableViewModel<Task>>();
+        List<PluggableViewModel<Task>> viewModels = new ArrayList<>();
         for (Task task : allTasks()) {
             if (hasCancelTaskOfType(given, task)) {
                 viewModels.add(getViewModel(given.cancelTask(), "edit"));
@@ -107,7 +117,7 @@ public class TaskViewService implements TaskFactory {
     }
 
     private List<Task> allTasks() {
-        List<Task> result = new ArrayList<Task>();
+        List<Task> result = new ArrayList<>();
         for (Class<? extends Task> aClass : builtinTaskClasses()) {
             try {
                 result.add(aClass.getConstructor().newInstance());
@@ -123,24 +133,26 @@ public class TaskViewService implements TaskFactory {
     private Configuration getConfiguration(TaskConfig taskConfig) {
         Configuration configuration = new Configuration();
         for (Property property : taskConfig.list()) {
-            configuration.addNewConfigurationWithValue(property.getKey(), property.getValue(), false);
+            configuration.addNewConfigurationWithValue(property.getKey(), property.getValue(), property.getOption(Property.SECURE));
         }
         return configuration;
     }
 
-    private List<Task> allPluginTasks() {
-        final ArrayList<Task> tasks = new ArrayList<Task>();
-        for (final String pluginId : PluggableTaskConfigStore.store().pluginsWithPreference()) {
+    private List<PluggableTask> allPluginTasks() {
+        final ArrayList<PluggableTask> tasks = new ArrayList<>();
+        for (final String pluginId : PluggableTaskConfigStore.store().pluginIds()) {
             GoPluginDescriptor pluginDescriptor = pluginManager.getPluginDescriptorFor(pluginId);
             TaskPreference taskPreference = PluggableTaskConfigStore.store().preferenceFor(pluginId);
-            tasks.add(new PluggableTask("", new PluginConfiguration(pluginId, pluginDescriptor.version()), getConfiguration(taskPreference.getConfig())));
+            if (pluginDescriptor != null && taskPreference != null) {
+                tasks.add(new PluggableTask(new PluginConfiguration(pluginId, pluginDescriptor.version()), getConfiguration(taskPreference.getConfig())));
+            }
         }
         return tasks;
     }
 
     private List<Class<? extends Task>> builtinTaskClasses() {
         List<Class<? extends Task>> allTaskClasses = registry.implementersOf(Task.class);
-        List<Class<? extends Task>> builtinTaskClasses = new ArrayList<Class<? extends Task>>();
+        List<Class<? extends Task>> builtinTaskClasses = new ArrayList<>();
 
         for (Class<? extends Task> taskClass : allTaskClasses) {
             if (taskClass != PluggableTask.class) {

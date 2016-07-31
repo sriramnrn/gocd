@@ -1,52 +1,37 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.controller;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectOutputStream;
-import java.util.Arrays;
-import java.util.Map;
-import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import com.thoughtworks.go.config.AgentConfig;
-import com.thoughtworks.go.config.GoConfigFileDao;
-import com.thoughtworks.go.config.update.ApproveAgentCommand;
+import com.thoughtworks.go.config.GoConfigDao;
+import com.thoughtworks.go.config.exceptions.GoConfigInvalidException;
 import com.thoughtworks.go.config.update.UpdateEnvironmentsCommand;
 import com.thoughtworks.go.config.update.UpdateResourceCommand;
+import com.thoughtworks.go.domain.AllConfigErrors;
+import com.thoughtworks.go.domain.ConfigErrors;
+import com.thoughtworks.go.plugin.infra.commons.PluginsZip;
 import com.thoughtworks.go.security.Registration;
-import com.thoughtworks.go.server.controller.actions.JsonAction;
-import com.thoughtworks.go.server.service.AgentRuntimeInfo;
-import com.thoughtworks.go.server.service.AgentService;
-import com.thoughtworks.go.server.service.GoConfigService;
+import com.thoughtworks.go.server.domain.Username;
+import com.thoughtworks.go.server.service.*;
 import com.thoughtworks.go.server.service.result.HttpOperationResult;
-import com.thoughtworks.go.server.util.UserHelper;
-import com.thoughtworks.go.server.web.JsonView;
 import com.thoughtworks.go.util.SystemEnvironment;
-import com.thoughtworks.go.util.json.JsonMap;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -55,62 +40,70 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 
-import static com.thoughtworks.go.util.GoConstants.ERROR_FOR_JSON;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
+import java.util.List;
+import java.util.Map;
+
 import static com.thoughtworks.go.util.FileDigester.copyAndDigest;
 import static com.thoughtworks.go.util.FileDigester.md5DigestOfStream;
+import static org.apache.commons.lang.StringUtils.isBlank;
+import static org.apache.commons.lang.StringUtils.isNotBlank;
 
 @Controller
 public class AgentRegistrationController {
-    private static final Log LOG = LogFactory.getLog(AgentRegistrationController.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AgentRegistrationController.class);
     private final AgentService agentService;
     private final GoConfigService goConfigService;
     private final SystemEnvironment systemEnvironment;
+    private PluginsZip pluginsZip;
+    private final AgentConfigService agentConfigService;
     private volatile String agentChecksum;
     private volatile String agentLauncherChecksum;
-    private volatile String agentPluginsChecksum;
 
     @Autowired
-    public AgentRegistrationController(AgentService agentService, GoConfigService goConfigService, SystemEnvironment systemEnvironment) {
+    public AgentRegistrationController(AgentService agentService, GoConfigService goConfigService, SystemEnvironment systemEnvironment, PluginsZip pluginsZip, AgentConfigService agentConfigService) {
         this.agentService = agentService;
         this.goConfigService = goConfigService;
         this.systemEnvironment = systemEnvironment;
+        this.pluginsZip = pluginsZip;
+        this.agentConfigService = agentConfigService;
     }
 
-    @RequestMapping(value = "/latest-agent.status", method = RequestMethod.HEAD)
-    public void checkAgentStatus(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/admin/latest-agent.status", method = RequestMethod.HEAD)
+    public void checkAgentStatus(HttpServletResponse response) throws IOException {
         populateAgentChecksum();
         response.setHeader(SystemEnvironment.AGENT_CONTENT_MD5_HEADER, agentChecksum);
         populateLauncherChecksum();
         response.setHeader(SystemEnvironment.AGENT_LAUNCHER_CONTENT_MD5_HEADER, agentLauncherChecksum);
-        populateAgentPluginsChecksum();
-        response.setHeader(SystemEnvironment.AGENT_PLUGINS_ZIP_MD5_HEADER, agentPluginsChecksum);
+        response.setHeader(SystemEnvironment.AGENT_PLUGINS_ZIP_MD5_HEADER, pluginsZip.md5());
         setOtherHeaders(response);
     }
 
-    @RequestMapping(value = "/latest-agent.status", method = RequestMethod.GET)
-    public void latestAgentStatus(HttpServletRequest request, HttpServletResponse response) throws IOException {
-
-        checkAgentStatus(request, response);
+    @RequestMapping(value = "/admin/latest-agent.status", method = RequestMethod.GET)
+    public void latestAgentStatus(HttpServletResponse response) throws IOException {
+        checkAgentStatus(response);
     }
 
-    @RequestMapping(value = "/agent", method = RequestMethod.HEAD)
-    public void checkAgentVersion(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/admin/agent", method = RequestMethod.HEAD)
+    public void checkAgentVersion(HttpServletResponse response) throws IOException {
         populateAgentChecksum();
         response.setHeader("Content-MD5", agentChecksum);
         setOtherHeaders(response);
     }
 
-    @RequestMapping(value = "/agent-launcher.jar", method = RequestMethod.HEAD)
-    public void checkAgentLauncherVersion(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/admin/agent-launcher.jar", method = RequestMethod.HEAD)
+    public void checkAgentLauncherVersion(HttpServletResponse response) throws IOException {
         populateLauncherChecksum();
         response.setHeader("Content-MD5", agentLauncherChecksum);
         setOtherHeaders(response);
     }
 
-    @RequestMapping(value = "/agent-plugins.zip", method = RequestMethod.HEAD)
-    public void checkAgentPluginsZipStatus(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        populateAgentPluginsChecksum();
-        response.setHeader("Content-MD5", agentPluginsChecksum);
+    @RequestMapping(value = "/admin/agent-plugins.zip", method = RequestMethod.HEAD)
+    public void checkAgentPluginsZipStatus(HttpServletResponse response) throws IOException {
+        response.setHeader("Content-MD5", pluginsZip.md5());
         setOtherHeaders(response);
     }
 
@@ -143,20 +136,18 @@ public class AgentRegistrationController {
         response.setHeader("Cruise-Server-Ssl-Port", Integer.toString(systemEnvironment.getSslServerPort()));
     }
 
-    @RequestMapping(value = "/agent", method = RequestMethod.GET)
-    public ModelAndView downloadAgent(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/admin/agent", method = RequestMethod.GET)
+    public ModelAndView downloadAgent() throws IOException {
         return getDownload(new AgentJarSrc());
     }
 
-    @RequestMapping(value = "/agent-launcher.jar", method = RequestMethod.GET)
-    public ModelAndView downloadAgentLauncher(HttpServletRequest request,
-                                              HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/admin/agent-launcher.jar", method = RequestMethod.GET)
+    public ModelAndView downloadAgentLauncher() throws IOException {
         return getDownload(new AgentLauncherSrc());
     }
 
-    @RequestMapping(value = "/agent-plugins.zip", method = RequestMethod.GET)
-    public ModelAndView downloadPluginsZip(HttpServletRequest request,
-                                           HttpServletResponse response) throws IOException {
+    @RequestMapping(value = "/admin/agent-plugins.zip", method = RequestMethod.GET)
+    public ModelAndView downloadPluginsZip() throws IOException {
         return getDownload(new AgentPluginsZipSrc());
     }
 
@@ -188,35 +179,73 @@ public class AgentRegistrationController {
         });
     }
 
-    @RequestMapping(value = "/agent", method = RequestMethod.POST)
+    @RequestMapping(value = "/admin/agent", method = RequestMethod.POST)
     public ModelAndView agentRequest(@RequestParam("hostname") String hostname,
                                      @RequestParam("uuid") String uuid,
                                      @RequestParam("location") String location,
-                                     @RequestParam("usablespace") String usablespace,
-                                     @RequestParam("operating_system") String operatingSystem,
+                                     @RequestParam("usablespace") String usablespaceAsString,
+                                     @RequestParam("operatingSystem") String operatingSystem,
                                      @RequestParam("agentAutoRegisterKey") String agentAutoRegisterKey,
                                      @RequestParam("agentAutoRegisterResources") String agentAutoRegisterResources,
                                      @RequestParam("agentAutoRegisterEnvironments") String agentAutoRegisterEnvironments,
-                                     HttpServletRequest request,
-                                     HttpServletResponse response) throws IOException {
+                                     @RequestParam("agentAutoRegisterHostname") String agentAutoRegisterHostname,
+                                     @RequestParam("elasticAgentId") String elasticAgentId,
+                                     @RequestParam("elasticPluginId") String elasticPluginId,
+                                     @RequestParam(value = "supportsBuildCommandProtocol", required = false, defaultValue = "false") boolean supportsBuildCommandProtocol,
+                                     HttpServletRequest request) throws IOException {
         final String ipAddress = request.getRemoteAddr();
         if (LOG.isDebugEnabled()) {
-            LOG.debug(String.format("Processing registration request from agent [%s/%s]", hostname, ipAddress));
+            LOG.debug("Processing registration request from agent [{}/{}]", hostname, ipAddress);
         }
         Registration keyEntry;
+        String preferredHostname = hostname;
+
         try {
             if (goConfigService.serverConfig().shouldAutoRegisterAgentWith(agentAutoRegisterKey)) {
+                preferredHostname = getPreferredHostname(agentAutoRegisterHostname, hostname);
+                LOG.info("[Agent Auto Registration] Auto registering agent with uuid {} ", uuid);
+            } else {
+                if (elasticAgentAutoregistrationInfoPresent(elasticAgentId, elasticPluginId)) {
+                    throw new RuntimeException(String.format("Elastic agent registration requires an auto-register agent key to be setup on the server. Agent-id: [%s], Plugin-id: [%s]", elasticAgentId, elasticPluginId));
+                }
+            }
+
+            AgentConfig agentConfig = new AgentConfig(uuid, preferredHostname, ipAddress);
+
+            if (partialElasticAgentAutoregistrationInfo(elasticAgentId, elasticPluginId)) {
+                throw new RuntimeException("Elastic agents must submit both elasticAgentId and elasticPluginId");
+            }
+
+            if (elasticAgentAutoregistrationInfoPresent(elasticAgentId, elasticPluginId)) {
+                agentConfig.setElasticAgentId(elasticAgentId);
+                agentConfig.setElasticPluginId(elasticPluginId);
+            }
+
+            if (goConfigService.serverConfig().shouldAutoRegisterAgentWith(agentAutoRegisterKey)) {
                 LOG.info(String.format("[Agent Auto Registration] Auto registering agent with uuid %s ", uuid));
-                GoConfigFileDao.CompositeConfigCommand compositeConfigCommand = new GoConfigFileDao.CompositeConfigCommand(
-                        new ApproveAgentCommand(uuid, ipAddress, hostname),
+                GoConfigDao.CompositeConfigCommand compositeConfigCommand = new GoConfigDao.CompositeConfigCommand(
+                        new AgentConfigService.AddAgentCommand(agentConfig),
                         new UpdateResourceCommand(uuid, agentAutoRegisterResources),
                         new UpdateEnvironmentsCommand(uuid, agentAutoRegisterEnvironments)
                 );
-                goConfigService.updateConfig(compositeConfigCommand);
+                HttpOperationResult result = new HttpOperationResult();
+                agentConfig = agentConfigService.updateAgent(compositeConfigCommand, uuid, result, agentService.agentUsername(uuid, ipAddress, preferredHostname));
+                if (!result.isSuccess()) {
+                    List<ConfigErrors> errors = com.thoughtworks.go.config.ErrorCollector.getAllErrors(agentConfig);
+                    throw new GoConfigInvalidException(null, new AllConfigErrors(errors).asString());
+                }
             }
-            keyEntry = agentService.requestRegistration(
-                    AgentRuntimeInfo.fromServer(new AgentConfig(uuid, hostname, ipAddress), goConfigService.hasAgent(uuid), location,
-                            Long.parseLong(usablespace), operatingSystem));
+
+            boolean registeredAlready = goConfigService.hasAgent(uuid);
+            long usablespace = Long.parseLong(usablespaceAsString);
+
+            AgentRuntimeInfo agentRuntimeInfo = AgentRuntimeInfo.fromServer(agentConfig, registeredAlready, location, usablespace, operatingSystem, supportsBuildCommandProtocol);
+
+            if (elasticAgentAutoregistrationInfoPresent(elasticAgentId, elasticPluginId)) {
+                agentRuntimeInfo = ElasticAgentRuntimeInfo.fromServer(agentRuntimeInfo, elasticAgentId, elasticPluginId);
+            }
+
+            keyEntry = agentService.requestRegistration(agentService.agentUsername(uuid, ipAddress, preferredHostname), agentRuntimeInfo);
         } catch (Exception e) {
             keyEntry = Registration.createNullPrivateKeyEntry();
             LOG.error("Error occured during agent registration process: ", e);
@@ -225,61 +254,34 @@ public class AgentRegistrationController {
         final Registration anotherCopy = keyEntry;
         return new ModelAndView(new View() {
             public String getContentType() {
-                return "application/x-java-serialized-object";
+                return "application/json";
             }
 
             public void render(Map model, HttpServletRequest request, HttpServletResponse response) throws IOException {
                 ServletOutputStream servletOutputStream = null;
-                ObjectOutputStream objectOutputStream = null;
                 try {
                     servletOutputStream = response.getOutputStream();
-                    objectOutputStream = new ObjectOutputStream(servletOutputStream);
-                    objectOutputStream.writeObject(anotherCopy);
+                    servletOutputStream.print(anotherCopy.toJson());
                 } finally {
                     IOUtils.closeQuietly(servletOutputStream);
-                    IOUtils.closeQuietly(objectOutputStream);
                 }
             }
         });
     }
 
-    @RequestMapping(value = "/**/registerAgent.json", method = RequestMethod.POST)
-    public ModelAndView registerAgent(HttpServletResponse response,
-                                      @RequestParam("uuid") String uuid) {
-        try {
-            agentService.approve(uuid);
-            JsonMap result = JsonView.getSimpleAjaxResult("result", "success");
-            return JsonAction.jsonCreated(result).respond(response);
-        } catch (Exception ex) {
-            String message = ex.getMessage();
-            LOG.error(String.format("Error approving agent [%s]", uuid), ex);
-            JsonMap result = JsonView.getSimpleAjaxResult("result", "failed");
-            result.put(ERROR_FOR_JSON, message);
-            return JsonAction.jsonNotAcceptable(result).respond(response);
-        }
+    private boolean partialElasticAgentAutoregistrationInfo(String elasticAgentId, String elasticPluginId) {
+        return (isBlank(elasticAgentId) && isNotBlank(elasticPluginId)) || (isNotBlank(elasticAgentId) && isBlank(elasticPluginId));
     }
 
-    @RequestMapping(value = "/**/denyAgent.json", method = RequestMethod.POST)
-    public ModelAndView denyAgent(HttpServletResponse response, @RequestParam("uuid") String uuid) {
-        try {
-            agentService.disableAgents(UserHelper.getUserName(), new HttpOperationResult(), Arrays.asList(uuid));
-            JsonMap result = JsonView.getSimpleAjaxResult("result", "success");
-            return JsonAction.jsonCreated(result).respond(response);
-        } catch (Exception ex) {
-            String message = ex.getMessage();
-            JsonMap result = JsonView.getSimpleAjaxResult("result", "failed");
-            result.put(ERROR_FOR_JSON, message);
-            return JsonAction.jsonNotAcceptable(result).respond(response);
-        }
+    private boolean elasticAgentAutoregistrationInfoPresent(String elasticAgentId, String elasticPluginId) {
+        return isNotBlank(elasticAgentId) && isNotBlank(elasticPluginId);
     }
 
-    private void populateAgentPluginsChecksum() throws IOException {
-        if (agentPluginsChecksum == null) {
-            agentPluginsChecksum = getChecksumFor(new AgentPluginsZipSrc());
-        }
+    private String getPreferredHostname(String agentAutoRegisterHostname, String hostname) {
+        return isNotBlank(agentAutoRegisterHostname) ? agentAutoRegisterHostname : hostname;
     }
 
-    public static interface InputStreamSrc {
+    public interface InputStreamSrc {
         InputStream invoke() throws FileNotFoundException;
     }
 
@@ -300,4 +302,6 @@ public class AgentRegistrationController {
             return new FileInputStream(systemEnvironment.get(SystemEnvironment.ALL_PLUGINS_ZIP_PATH));
         }
     }
+
+
 }

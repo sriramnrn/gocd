@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,27 +12,27 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service.support;
 
 import com.thoughtworks.go.config.CruiseConfig;
 import com.thoughtworks.go.config.validation.GoConfigValidity;
 import com.thoughtworks.go.server.service.GoConfigService;
-import com.thoughtworks.go.server.service.GoLicenseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Component
 public class ConfigInfoProvider implements ServerInfoProvider {
 
     private GoConfigService service;
-    private GoLicenseService licenseService;
 
     @Autowired
-    public ConfigInfoProvider(GoConfigService service, GoLicenseService licenseService) {
+    public ConfigInfoProvider(GoConfigService service) {
         this.service = service;
-        this.licenseService = licenseService;
     }
 
     @Override
@@ -61,9 +61,33 @@ public class ConfigInfoProvider implements ServerInfoProvider {
         boolean passwordEnabled = service.security().passwordFileConfig().isEnabled();
 
         infoCollector.append(String.format("Security:\nLDAP: %s, Password: %s\n", ldapEnabled, passwordEnabled));
+    }
 
-        infoCollector.append(String.format("License: Expire Date: %s, Is Valid: %s, Remote Agents: %s, Number of Users: %s\n",
-                licenseService.getExpirationDate(), licenseService.isLicenseValid(),
-                licenseService.getNumberOfLicensedRemoteAgents(), licenseService.maximumUsersAllowed()));
+    @Override
+    public Map<String, Object> asJson() {
+        LinkedHashMap<String, Object> json = new LinkedHashMap<>();
+        CruiseConfig currentConfig = service.getCurrentConfig();
+
+        LinkedHashMap<String, Object> validConfig = new LinkedHashMap<>();
+        validConfig.put("Number of pipelines", service.getAllPipelineConfigs().size());
+        validConfig.put("Number of agents", service.agents().size());
+        validConfig.put("Number of environments", currentConfig.getEnvironments().size());
+        validConfig.put("Number of unique materials", currentConfig.getAllUniqueMaterials().size());
+        validConfig.put("Number of schedulable materials", service.getSchedulableMaterials().size());
+
+        LinkedHashMap<String, Object> security = new LinkedHashMap<>();
+        security.put("LDAP", service.security().ldapConfig().isEnabled());
+        security.put("Password", service.security().passwordFileConfig().isEnabled());
+
+
+        json.put("Valid Config", validConfig);
+        json.put("Security", security);
+
+        return json;
+    }
+
+    @Override
+    public String name() {
+        return "Config Statistics";
     }
 }

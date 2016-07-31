@@ -16,26 +16,18 @@
 
 package com.thoughtworks.go.config.materials.tfs;
 
-import java.io.File;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import javax.annotation.PostConstruct;
-
 import com.thoughtworks.go.config.PasswordEncrypter;
 import com.thoughtworks.go.config.materials.PasswordAwareMaterial;
 import com.thoughtworks.go.config.materials.ScmMaterial;
 import com.thoughtworks.go.config.materials.ScmMaterialConfig;
 import com.thoughtworks.go.config.materials.SubprocessExecutionContext;
 import com.thoughtworks.go.domain.MaterialInstance;
-import com.thoughtworks.go.domain.materials.MaterialConfig;
-import com.thoughtworks.go.domain.materials.Modification;
-import com.thoughtworks.go.domain.materials.Revision;
-import com.thoughtworks.go.domain.materials.ValidationBean;
+import com.thoughtworks.go.domain.materials.*;
 import com.thoughtworks.go.domain.materials.tfs.TfsCommand;
 import com.thoughtworks.go.domain.materials.tfs.TfsCommandFactory;
 import com.thoughtworks.go.domain.materials.tfs.TfsMaterialInstance;
 import com.thoughtworks.go.security.GoCipher;
+import com.thoughtworks.go.util.GoConstants;
 import com.thoughtworks.go.util.StringUtil;
 import com.thoughtworks.go.util.command.ProcessOutputStreamConsumer;
 import com.thoughtworks.go.util.command.UrlArgument;
@@ -43,6 +35,13 @@ import org.apache.commons.lang.builder.ToStringBuilder;
 import org.apache.commons.lang.builder.ToStringStyle;
 import org.apache.log4j.Logger;
 import org.bouncycastle.crypto.InvalidCipherTextException;
+
+import javax.annotation.PostConstruct;
+import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 import static java.lang.String.format;
@@ -78,13 +77,18 @@ public class TfsMaterial extends ScmMaterial implements PasswordAwareMaterial, P
         this(config.getGoCipher(), config.getUrlArgument(), config.getUserName(), config.getDomain(), config.getPassword(), config.getProjectPath());
         this.autoUpdate = config.getAutoUpdate();
         this.filter = config.rawFilter();
+        this.invertFilter = config.getInvertFilter();
         this.folder = config.getFolder();
         this.name = config.getName();
     }
 
     @Override
     public MaterialConfig config() {
-        return new TfsMaterialConfig(url, userName, domain, getPassword(), projectPath, goCipher, autoUpdate, filter, folder, name);
+        return new TfsMaterialConfig(url, userName, domain, getPassword(), projectPath, goCipher, autoUpdate, filter, invertFilter, folder, name);
+    }
+
+    public String getDomain() {
+        return domain;
     }
 
     @Override public String getUserName() {
@@ -105,6 +109,10 @@ public class TfsMaterial extends ScmMaterial implements PasswordAwareMaterial, P
 
     @Override public String getEncryptedPassword() {
         return encryptedPassword;
+    }
+
+    public String getProjectPath() {
+        return projectPath;
     }
 
     @Override public boolean isCheckExternals() {
@@ -138,16 +146,18 @@ public class TfsMaterial extends ScmMaterial implements PasswordAwareMaterial, P
         appendCriteria(parameters);
     }
 
-    public void updateTo(ProcessOutputStreamConsumer outputStreamConsumer, Revision revision, File baseDir, final SubprocessExecutionContext execCtx) {
-        File workingDir = workingdir(baseDir);
+    public void updateTo(ProcessOutputStreamConsumer outputStreamConsumer, File baseDir, RevisionContext revisionContext, final SubprocessExecutionContext execCtx) {
+        Revision revision = revisionContext.getLatestRevision();
+        File workingDir = execCtx.isServer() ? baseDir : workingdir(baseDir);
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("[TFS] Updating to revision: " + revision + " in workingdirectory " + workingDir);
         }
-        outputStreamConsumer.stdOutput(format("\n[cruise] Start updating %s at revision %s from %s", updatingTarget(), revision.getRevision(), url));
+        outputStreamConsumer.stdOutput(format("[%s] Start updating %s at revision %s from %s", GoConstants.PRODUCT_NAME, updatingTarget(), revision.getRevision(), url));
         tfs(execCtx).checkout(workingDir, revision);
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("[TFS] done with update");
         }
+        outputStreamConsumer.stdOutput(format("[%s] Done.\n", GoConstants.PRODUCT_NAME));
     }
 
     TfsCommand tfs(final SubprocessExecutionContext execCtx) {
@@ -178,6 +188,26 @@ public class TfsMaterial extends ScmMaterial implements PasswordAwareMaterial, P
 
     public String getTypeForDisplay() {
         return "Tfs";
+    }
+
+    @Override
+    public Map<String, Object> getAttributes(boolean addSecureFields) {
+        Map<String, Object> materialMap = new HashMap<>();
+        materialMap.put("type", "tfs");
+        Map<String, Object> configurationMap = new HashMap<>();
+        if (addSecureFields) {
+            configurationMap.put("url", url.forCommandline());
+        } else {
+            configurationMap.put("url", url.forDisplay());
+        }
+        configurationMap.put("domain", domain);
+        configurationMap.put("username", userName);
+        if (addSecureFields) {
+            configurationMap.put("password", getPassword());
+        }
+        configurationMap.put("project-path", projectPath);
+        materialMap.put("tfs-configuration", configurationMap);
+        return materialMap;
     }
 
     public Class getInstanceType() {

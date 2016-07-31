@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,18 +12,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
-
-import java.text.ParseException;
-import java.util.List;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.CruiseConfig;
 import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.config.TimerConfig;
 import com.thoughtworks.go.listener.ConfigChangedListener;
+import com.thoughtworks.go.listener.EntityConfigChangedListener;
 import com.thoughtworks.go.server.scheduling.BuildCauseProducerService;
 import com.thoughtworks.go.server.service.result.ServerHealthStateOperationResult;
 import com.thoughtworks.go.serverhealth.HealthStateScope;
@@ -31,18 +29,12 @@ import com.thoughtworks.go.serverhealth.HealthStateType;
 import com.thoughtworks.go.serverhealth.ServerHealthService;
 import com.thoughtworks.go.serverhealth.ServerHealthState;
 import org.apache.log4j.Logger;
-import org.quartz.CronTrigger;
-import org.quartz.Job;
-import org.quartz.JobDataMap;
-import org.quartz.JobDetail;
-import org.quartz.JobExecutionContext;
-import org.quartz.JobExecutionException;
-import org.quartz.Scheduler;
-import org.quartz.SchedulerException;
-import org.quartz.SchedulerFactory;
-import org.quartz.Trigger;
+import org.quartz.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.text.ParseException;
+import java.util.List;
 
 /**
  * @understands scheduling pipelines based on a timer
@@ -55,8 +47,10 @@ public class TimerScheduler implements ConfigChangedListener {
     private BuildCauseProducerService buildCauseProducerService;
     private SchedulerFactory quartzSchedulerFactory;
     private ServerHealthService serverHealthService;
-    private static final String QUARTZ_GROUP = "CruiseTimers";
     private Scheduler quartzScheduler;
+    protected static final String QUARTZ_GROUP = "CruiseTimers";
+    protected static final String BUILD_CAUSE_PRODUCER_SERVICE = "BuildCauseProducerService";
+    protected static final String PIPELINE_CONFIG = "PipelineConfig";
 
     @Autowired
     public TimerScheduler(SchedulerFactory quartzSchedulerFactory, GoConfigService goConfigService,
@@ -73,9 +67,20 @@ public class TimerScheduler implements ConfigChangedListener {
             quartzScheduler.start();
             scheduleAllJobs(goConfigService.getAllPipelineConfigs());
             goConfigService.register(this);
+            goConfigService.register(pipelineConfigChangedListener());
         } catch (SchedulerException e) {
             showGlobalError("Failed to initialize timer", e);
         }
+    }
+
+    protected EntityConfigChangedListener<PipelineConfig> pipelineConfigChangedListener() {
+        return new EntityConfigChangedListener<PipelineConfig>() {
+            @Override
+            public void onEntityConfigChange(PipelineConfig pipelineConfig) {
+                unscheduleJob(CaseInsensitiveString.str(pipelineConfig.name()));
+                scheduleJob(quartzScheduler, pipelineConfig);
+            }
+        };
     }
 
     private void scheduleAllJobs(List<PipelineConfig> pipelineConfigs) {
@@ -124,8 +129,8 @@ public class TimerScheduler implements ConfigChangedListener {
 
     private JobDataMap jobDataMapFor(PipelineConfig pipelineConfig) {
         JobDataMap map = new JobDataMap();
-        map.put("BuildCauseProducerService", buildCauseProducerService);
-        map.put("PipelineConfig", pipelineConfig);
+        map.put(BUILD_CAUSE_PRODUCER_SERVICE, buildCauseProducerService);
+        map.put(PIPELINE_CONFIG, pipelineConfig);
         return map;
     }
 
@@ -138,6 +143,16 @@ public class TimerScheduler implements ConfigChangedListener {
         try {
             String[] jobNames = quartzScheduler.getJobNames(QUARTZ_GROUP);
             for (String jobName : jobNames) {
+                unscheduleJob(jobName);
+            }
+        } catch (SchedulerException e) {
+            LOG.error("Could not unschedule quartz jobs", e);
+        }
+    }
+
+    private void unscheduleJob(String jobName) {
+        try {
+            if (quartzScheduler.getJobDetail(jobName, QUARTZ_GROUP) != null) {
                 quartzScheduler.unscheduleJob(jobName, QUARTZ_GROUP);
                 quartzScheduler.deleteJob(jobName, QUARTZ_GROUP);
             }
@@ -149,8 +164,8 @@ public class TimerScheduler implements ConfigChangedListener {
     public static class SchedulePipelineQuartzJob implements Job {
         public void execute(JobExecutionContext context) throws JobExecutionException {
             JobDataMap jobDataMap = context.getJobDetail().getJobDataMap();
-            BuildCauseProducerService buildCauseProducerService = (BuildCauseProducerService) jobDataMap.get("BuildCauseProducerService");
-            PipelineConfig pipelineConfig = (PipelineConfig) jobDataMap.get("PipelineConfig");
+            BuildCauseProducerService buildCauseProducerService = (BuildCauseProducerService) jobDataMap.get(BUILD_CAUSE_PRODUCER_SERVICE);
+            PipelineConfig pipelineConfig = (PipelineConfig) jobDataMap.get(PIPELINE_CONFIG);
             buildCauseProducerService.timerSchedulePipeline(pipelineConfig, new ServerHealthStateOperationResult());
         }
     }

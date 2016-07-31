@@ -40,8 +40,7 @@ public class  User extends PersistentObject {
     private String email;
     private boolean emailMe;
     private boolean enabled;
-    private List<NotificationFilter> notificationFilters = new ArrayList<NotificationFilter>();
-    private boolean disableLicenseExpiryWarning;
+    private List<NotificationFilter> notificationFilters = new ArrayList<>();
 
     public User() {
     }
@@ -103,6 +102,9 @@ public class  User extends PersistentObject {
         this.name = StringUtils.trim(name);
     }
 
+    public Username getUsername() {
+        return Username.valueOf(name);
+    }
     /**
      * only used by ibatis
      *
@@ -200,7 +202,7 @@ public class  User extends PersistentObject {
     }
 
     public String toString() {
-        return String.format("User[name=%s, displayName= %s, matcher=%s, email=%s, emailMe=%s, disableLicenseExpiryWarning=%s]", name, displayName, matcher, email, emailMe, disableLicenseExpiryWarning);
+        return String.format("User[name=%s, displayName= %s, matcher=%s, email=%s, emailMe=%s]", name, displayName, matcher, email, emailMe);
     }
 
     public List<NotificationFilter> getNotificationFilters() {
@@ -242,6 +244,10 @@ public class  User extends PersistentObject {
         validate(Validator.EMAIL, getEmail());
     }
 
+    public void validateLoginName() throws ValidationException {
+        validate(Validator.presenceValidator("Login name field must be non-blank."), getName());
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -256,14 +262,6 @@ public class  User extends PersistentObject {
 
     public boolean isAnonymous() {
         return this.name.equals(CaseInsensitiveString.str(Username.ANONYMOUS.getUsername()));
-    }
-
-    public boolean hasDisabledLicenseExpiryWarning() {
-        return disableLicenseExpiryWarning;
-    }
-
-    public void disableLicenseExpiryWarning() {
-        disableLicenseExpiryWarning = true;
     }
 
     public void addNotificationFilter(NotificationFilter another) {
@@ -281,7 +279,7 @@ public class  User extends PersistentObject {
     }
 
     public void removeNotificationFilter(final long filterId) {
-        ArrayList<NotificationFilter> toBeDeleted = new ArrayList<NotificationFilter>();
+        ArrayList<NotificationFilter> toBeDeleted = new ArrayList<>();
         ListUtil.filterInto(toBeDeleted,notificationFilters, new Filter<NotificationFilter>() {
             @Override
             public boolean matches(NotificationFilter filter) {

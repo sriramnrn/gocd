@@ -14,20 +14,19 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
+require 'spec_helper'
 
 describe AgentsController do
 
   before do
     controller.stub(:set_locale)
-    controller.stub(:licensed_agent_limit)
     controller.stub(:populate_config_validity)
   end
 
   describe "GET 'index'" do
 
     before(:all) do
-      config = ConfigMigrator.migrate(ConfigFileFixture::WITH_VARITY_OF_AGENTS)
+      config = ConfigMigrator.migrate(ConfigFileFixture::WITH_VARIETY_OF_AGENTS)
       cachedGoConfig = Spring.bean("cachedGoConfig")
       cachedGoConfig.save(config, false)
     end
@@ -138,8 +137,8 @@ describe AgentsController do
       controller.should_receive(:bulk_edit).and_return(bulk_edit_result)
       bulk_edit_result.stub(:message).and_return("successfuly managed to edit")
       bulk_edit_result.stub(:canContinue).and_return(false)
-      get :edit_agents, :column => "foo", :order => "bar"
-      expect(response).to redirect_to("/agents?column=foo&order=bar")
+      get :edit_agents, :column => "foo", :order => "bar", :filter => "criteria"
+      expect(response).to redirect_to("/agents?column=foo&filter=criteria&order=bar")
     end
   end
 

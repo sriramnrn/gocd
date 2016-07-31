@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "/pipelines/_pipeline_selector_pipelines.html.erb" do
   include PipelineModelMother
@@ -36,12 +36,6 @@ describe "/pipelines/_pipeline_selector_pipelines.html.erb" do
     @groups = [@group1, @group2, @groupx]
     assign(:pipeline_configs, @groups)
     assign(:pipeline_selections, PipelineSelections.new())
-  end
-
-  it "should have the same contents as the jsunit fixture" do
-    render :partial => "pipelines/pipelines_selector", :locals => {:scope => {}}
-
-    assert_fixture_equal("pipelines_selector_test_rails_new.html", response.body)
   end
 
   describe "/pipelines/pipeline_selector_pipelines.html.erb" do

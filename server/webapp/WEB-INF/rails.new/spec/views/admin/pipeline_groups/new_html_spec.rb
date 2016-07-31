@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/pipeline_groups/new.html.erb" do
 
@@ -23,13 +23,13 @@ describe "admin/pipeline_groups/new.html.erb" do
 
   before(:each) do
     assign(:user, Username.new(CaseInsensitiveString.new("loser")))
-    assign(:cruise_config, cruise_config = CruiseConfig.new)
+    assign(:cruise_config, cruise_config = BasicCruiseConfig.new)
     set(cruise_config, "md5", "abcd1234")
     view.stub(:pipeline_group_create_path).and_return("pipeline_group_create_path")
   end
 
   it "should display form to create a new template" do
-    assign(:group, PipelineConfigs.new)
+    assign(:group, BasicPipelineConfigs.new)
 
     render
 

@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe "_form.html.erb" do
   include GoUtil, FormUI
@@ -29,7 +29,7 @@ describe "_form.html.erb" do
     @ignored_file = IgnoredFiles.new("/sugar")
     @material_config.setFilter(Filter.new([@ignored_file, IgnoredFiles.new("/jaggery")].to_java(IgnoredFiles)))
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     set(@cruise_config, "md5", "abc")
   end
 
@@ -56,7 +56,7 @@ describe "_form.html.erb" do
 
     render :partial => "admin/materials/p4/form.html", :locals => {:scope => {:material => @material_config, :url => "http://google.com", :method => "POST", :submit_label => "FOO", :edit_mode => true}}
 
-    expect(response.body).to have_selector(".popup_form input[disabled='disabled'][type='password'][name='material[#{com.thoughtworks.go.config.materials.svn.SvnMaterialConfig::PASSWORD}]'][value='secret']")
+    expect(response.body).to have_selector(".popup_form input[disabled='disabled'][type='password'][name='material[#{com.thoughtworks.go.config.materials.svn.SvnMaterialConfig::PASSWORD}]'][value='']")
     expect(response.body).to have_selector(".popup_form input[type='checkbox'][name='material[#{com.thoughtworks.go.config.materials.svn.SvnMaterialConfig::PASSWORD_CHANGED}]']")
   end
 
@@ -80,7 +80,7 @@ describe "_form.html.erb" do
     expect(response.body).to have_selector(".password")
     expect(response.body).to have_selector(".url")
     expect(response.body).to have_selector(".popup_form button#check_connection_p4", :text => "CHECK CONNECTION")
-    expect(response.body).to have_selector(".popup_form #vcsconnection-message_p4", :text => "")
+    expect(response.body).to have_selector(".popup_form #vcsconnection-message_p4", :text => "", visible: false)
   end
 
   it "should display new p4 material view with errors" do

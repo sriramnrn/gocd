@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "pipelines/index.html.erb" do
   include PipelineModelMother
@@ -35,7 +35,7 @@ describe "pipelines/index.html.erb" do
     @pipeline_group_model_empty = PipelineGroupModel.new("group-3-empty")
     assign(:pipeline_selections, PipelineSelections.new())
     assign(:pipeline_groups, [@pipeline_group_model, @pipeline_group_model_other, @pipeline_group_model_empty])
-    assign(:pipeline_configs, PipelineConfigs.new)
+    assign(:pipeline_configs, BasicPipelineConfigs.new)
     class << view
       include StagesHelper
     end
@@ -175,12 +175,6 @@ describe "pipelines/index.html.erb" do
     expect(response).to have_selector("button[value='Trigger'][id='deploy-pipeline-2']")
     expect(response).to have_selector("button[value='Trigger'][id='deploy-pipeline-3']")
     expect(response).to have_selector("button[value='Trigger'][id='deploy-pipeline-4']")
-  end
-
-  it "should have the same contents as the jsunit fixture" do
-    render
-
-    assert_fixture_equal("pipeline_dashboard_test_rails_new.html", response.body)
   end
 
   it "should render changes popup content holder" do

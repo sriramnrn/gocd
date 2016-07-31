@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- *************************GO-LICENSE-START******************************
- * Copyright 2014 ThoughtWorks, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *************************GO-LICENSE-END******************************* -->
+<!--
+  ~ Copyright 2015 ThoughtWorks, Inc.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
 
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -37,19 +37,22 @@
             <value>
                 CONVERT_URL_TO_LOWERCASE_BEFORE_COMPARISON
                 PATTERN_TYPE_APACHE_ANT
-                /rails/cas_errors/**=performanceLoggingFilter,i18nlocaleResolver,anonymousProcessingFilter,flashLoader,urlRewriter
-                /remoting/**=performanceLoggingFilter,artifactSizeEnforcementFilter,i18nlocaleResolver,x509ProcessingFilter,x509AccessDenied,agentRemotingFilterInvocationInterceptor,flashLoader,urlRewriter
-                /api/feeds/**=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
-                /api/pipelines.xml=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
-                /api/*/*.xml=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
-                /api/pipelines/*/*.xml=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /api/config-repository.git/**=performanceLoggingFilter,modeAwareFilter,httpSessionContextIntegrationFilter,apiSessionFilter,removeAdminPermissionFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor
 
-                /gadgets/**=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /rails/cas_errors/**=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,anonymousProcessingFilter,flashLoader,urlRewriter
+                /remoting/**=performanceLoggingFilter,modeAwareFilter,artifactSizeEnforcementFilter,i18nlocaleResolver,x509ProcessingFilter,x509AccessDenied,agentRemotingFilterInvocationInterceptor,flashLoader,urlRewriter
+                /agent-websocket/**=performanceLoggingFilter,modeAwareFilter,artifactSizeEnforcementFilter,i18nlocaleResolver,x509ProcessingFilter,x509AccessDenied,agentRemotingFilterInvocationInterceptor
+                /api/feeds/**=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,apiSessionFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /api/pipelines.xml=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,apiSessionFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /api/*/*.xml=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,apiSessionFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /api/pipelines/*/*.xml=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,apiSessionFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
 
-                /cctray.xml=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
-                /api/**=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
-                /files/**=performanceLoggingFilter,artifactSizeEnforcementFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,cruiseLoginOrBasicAuthentication,filterInvocationInterceptor,flashLoader,urlRewriter
-                /**=performanceLoggingFilter,i18nlocaleResolver,configValidityFilter,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,cruiseLoginOrBasicAuthentication,filterInvocationInterceptor,flashLoader,urlRewriter
+                /gadgets/**=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+
+                /cctray.xml=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,apiSessionFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /api/**=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,apiSessionFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,basicAuthenticationAccessDenied,filterInvocationInterceptor,flashLoader,urlRewriter
+                /files/**=performanceLoggingFilter,modeAwareFilter,artifactSizeEnforcementFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,cruiseLoginOrBasicAuthentication,filterInvocationInterceptor,flashLoader,urlRewriter
+                /**=performanceLoggingFilter,modeAwareFilter,i18nlocaleResolver,httpSessionContextIntegrationFilter,goLogoutFilter,removeAdminPermissionFilter,casAuthProcessingFilter,oauthProcessingFilter,basicProcessingFilter,authenticationProcessingFilter,userEnabledCheckFilter,anonymousProcessingFilter,cruiseLoginOrBasicAuthentication,filterInvocationInterceptor,flashLoader,urlRewriter
             </value>
         </property>
     </bean>
@@ -60,9 +63,10 @@
 
     <bean id="i18nlocaleResolver" class="com.thoughtworks.go.server.web.i18n.LocaleResolver" autowire="autodetect"/>
 
-    <bean id="configValidityFilter" class="com.thoughtworks.go.server.web.ConfigValidityFilter" autowire="autodetect"/>
+    <bean id="apiSessionFilter" class="com.thoughtworks.go.server.web.ApiSessionFilter"/>
 
     <bean id="anonymousProcessingFilter" class="com.thoughtworks.go.server.security.AnonymousProcessingFilter" autowire="autodetect"/>
+    <bean id="modeAwareFilter" class="com.thoughtworks.go.server.security.ModeAwareFilter" autowire="autodetect"/>
     <bean id="performanceLoggingFilter" class="com.thoughtworks.go.server.security.PerformanceLoggingFilter" >
         <constructor-arg ref="webRequestPerformanceLogger"/>
     </bean>
@@ -95,28 +99,32 @@
         </constructor-arg>
      </bean>
 
-    <bean id="licenseEnforcementProviderFactory" class="com.thoughtworks.go.server.security.providers.UserLicenseEnforcementProviderFactory">
+    <bean id="goAuthenticationProviderFactory" class="com.thoughtworks.go.server.security.providers.GoAuthenticationProviderFactory">
         <constructor-arg index="0">
             <bean class="com.thoughtworks.go.server.service.UserService" autowire="autodetect"/>
         </constructor-arg>
-        <constructor-arg ref="goConfigService" index="1" />
     </bean>
 
     <bean id="goAuthenticationManager" class="org.springframework.security.providers.ProviderManager">
         <property name="providers">
             <list>
-                <bean factory-bean="licenseEnforcementProviderFactory" factory-method="setProvider">
+                <bean factory-bean="goAuthenticationProviderFactory" factory-method="setProvider">
                     <constructor-arg index="0">
                         <bean class="com.thoughtworks.go.server.security.providers.OauthAuthenticationProvider" autowire="autodetect"/>
                     </constructor-arg>
                 </bean>
-                <bean factory-bean="licenseEnforcementProviderFactory" factory-method="setProvider">
+                <bean factory-bean="goAuthenticationProviderFactory" factory-method="setProvider">
                     <constructor-arg index="0">
                         <bean class="com.thoughtworks.go.server.security.providers.FileAuthenticationProvider" autowire="autodetect"/>
                     </constructor-arg>
                 </bean>
-                <bean factory-bean="licenseEnforcementProviderFactory" factory-method="setProvider">
+                <bean factory-bean="goAuthenticationProviderFactory" factory-method="setProvider">
                     <constructor-arg index="0" ref="ldapAuthProvider"/>
+                </bean>
+                <bean factory-bean="goAuthenticationProviderFactory" factory-method="setProvider">
+                    <constructor-arg index="0">
+                        <bean class="com.thoughtworks.go.server.security.providers.PluginAuthenticationProvider" autowire="autodetect"/>
+                    </constructor-arg>
                 </bean>
                 <bean class="org.springframework.security.providers.anonymous.AnonymousAuthenticationProvider" p:key="anonymousKey"/>
             </list>
@@ -127,13 +135,7 @@
         <property name="authenticationManager">
             <ref bean="goAuthenticationManager"/>
         </property>
-        <property name="authenticationEntryPoint">
-            <bean class="org.springframework.security.ui.basicauth.BasicProcessingFilterEntryPoint">
-                <property name="realmName">
-                    <value>Cruise</value>
-                </property>
-            </bean>
-        </property>
+        <property name="authenticationEntryPoint" ref="basicProcessingFilterEntryPoint" />
     </bean>
 
     <bean id="oauthProcessingFilter" class="com.thoughtworks.go.server.security.OauthAuthenticationFilter">
@@ -212,6 +214,7 @@
                 CONVERT_URL_TO_LOWERCASE_BEFORE_COMPARISON
                 PATTERN_TYPE_APACHE_ANT
                 /remoting/**=ROLE_AGENT
+                /agent-websocket/**=ROLE_AGENT
             ]]></value>
         </property>
     </bean>
@@ -234,25 +237,16 @@
             <value><![CDATA[
                 CONVERT_URL_TO_LOWERCASE_BEFORE_COMPARISON
                 PATTERN_TYPE_APACHE_ANT
-                /auth/*=IS_AUTHENTICATED_ANONYMOUSLY
-                /api/server.xml=IS_AUTHENTICATED_ANONYMOUSLY
-                /shine/sparql.xml=IS_AUTHENTICATED_ANONYMOUSLY
+                /auth/login=IS_AUTHENTICATED_ANONYMOUSLY
+                /auth/logout=IS_AUTHENTICATED_ANONYMOUSLY
+                /auth/security_check=IS_AUTHENTICATED_ANONYMOUSLY
                 /compressed/*=IS_AUTHENTICATED_ANONYMOUSLY
                 /assets/**=IS_AUTHENTICATED_ANONYMOUSLY
-                /css/**=IS_AUTHENTICATED_ANONYMOUSLY
-                /**/*.css=IS_AUTHENTICATED_ANONYMOUSLY
-                /**/*.js=IS_AUTHENTICATED_ANONYMOUSLY
-                /stylesheets/**=IS_AUTHENTICATED_ANONYMOUSLY
-                /images/**=IS_AUTHENTICATED_ANONYMOUSLY
-                /help/**=IS_AUTHENTICATED_ANONYMOUSLY
-                /static/**=IS_AUTHENTICATED_ANONYMOUSLY
-                /is_backup_finished.json=IS_AUTHENTICATED_ANONYMOUSLY
                 /images/cruise.ico=IS_AUTHENTICATED_ANONYMOUSLY
                 /admin/agent=IS_AUTHENTICATED_ANONYMOUSLY
                 /admin/latest-agent.status=IS_AUTHENTICATED_ANONYMOUSLY
                 /admin/agent-launcher.jar=IS_AUTHENTICATED_ANONYMOUSLY
                 /admin/agent-plugins.zip=IS_AUTHENTICATED_ANONYMOUSLY
-                /tab/admin/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
                 /admin/configuration/file/**=ROLE_SUPERVISOR
                 /admin/configuration/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
                 /admin/restful/configuration/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
@@ -262,9 +256,19 @@
                 /admin/commands/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR, ROLE_TEMPLATE_SUPERVISOR
                 /admin/plugins=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
                 /admin/pipeline/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /admin/materials/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
                 /admin/package_repositories/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
                 /admin/package_definitions/**=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /api/admin/material_test=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /api/admin/internal/pipelines=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /api/admin/internal/resources=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /api/admin/internal/environments=ROLE_SUPERVISOR
+                /api/admin/pipelines=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /api/admin/pipelines/*=ROLE_SUPERVISOR,ROLE_GROUP_SUPERVISOR
+                /api/admin/scms/**=ROLE_SUPERVISOR, ROLE_GROUP_SUPERVISOR
+                /api/admin/plugin_info/**=ROLE_SUPERVISOR, ROLE_GROUP_SUPERVISOR
                 /api/admin/**=ROLE_SUPERVISOR
+                /api/config-repository.git/**=ROLE_SUPERVISOR
                 /api/jobs/scheduled.xml=ROLE_SUPERVISOR
                 /admin/**=ROLE_SUPERVISOR
                 /**/addresources.json=ROLE_SUPERVISOR
@@ -272,9 +276,13 @@
                 /api/feeds/**=ROLE_SUPERVISOR
                 /api/support=ROLE_SUPERVISOR
                 /api/pipelines.xml=ROLE_USER
+                /api/version=IS_AUTHENTICATED_ANONYMOUSLY
                 /api/*/*.xml=ROLE_USER
-                /api/users.xml=ROLE_SUPERVISOR
                 /api/pipelines/*/*.xml=ROLE_USER,ROLE_OAUTH_USER
+                /api/agents/**=ROLE_USER
+                /api/users/**=ROLE_USER
+                /api/material_test/**=ROLE_USER
+                /api/version_infos/**=ROLE_USER
                 /*/environments/*=ROLE_SUPERVISOR
 
                 /oauth/admin/**=ROLE_SUPERVISOR
@@ -289,11 +297,13 @@
                 /gadgets/remote_materials.xml=IS_AUTHENTICATED_ANONYMOUSLY
                 /gadgets/remote_materials/**=ROLE_OAUTH_USER,ROLE_USER
 
+                /plugin/interact/**=IS_AUTHENTICATED_ANONYMOUSLY
+
                 /agents/*/job_run_history*=ROLE_SUPERVISOR
                 /agents/*/job_run_history/*=ROLE_SUPERVISOR
-                /metrics=ROLE_SUPERVISOR
-                /metrics/*=ROLE_SUPERVISOR
                 /config_view/templates/*=ROLE_GROUP_SUPERVISOR, ROLE_SUPERVISOR
+                /add-on/*/admin/**=ROLE_SUPERVISOR
+                /add-on/*/api/**=ROLE_OAUTH_USER
                 /**=ROLE_USER
             ]]></value>
         </property>
@@ -349,10 +359,7 @@
     </bean>
 
     <bean id="basicProcessingFilterEntryPoint"
-          class="org.springframework.security.ui.basicauth.BasicProcessingFilterEntryPoint">
-        <property name="realmName">
-            <value>Cruise</value>
-        </property>
+          class="com.thoughtworks.go.server.security.BasicProcessingFilterEntryPoint">
     </bean>
 
 </beans>

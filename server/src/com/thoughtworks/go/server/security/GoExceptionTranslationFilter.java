@@ -34,12 +34,11 @@ import org.springframework.security.context.SecurityContextHolder;
 import org.springframework.security.ui.AbstractProcessingFilter;
 import org.springframework.security.ui.AuthenticationEntryPoint;
 import org.springframework.security.ui.ExceptionTranslationFilter;
-import org.springframework.security.ui.basicauth.BasicProcessingFilterEntryPoint;
 import org.springframework.security.ui.savedrequest.SavedRequest;
 
 public class GoExceptionTranslationFilter extends ExceptionTranslationFilter {
     private String urlPatternsThatShouldNotBeRedirectedToAfterLogin;
-    private BasicProcessingFilterEntryPoint basicAuthenticationEntryPoint;
+    private AuthenticationEntryPoint basicAuthenticationEntryPoint;
     public static final String REQUEST__FORMAT = "format";
     private SecurityService securityService;
 
@@ -48,7 +47,7 @@ public class GoExceptionTranslationFilter extends ExceptionTranslationFilter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        //TODO: This is a hack for bug #3175, we should revisit this code in V2.0 
+        //TODO: This is a hack for bug #3175, we should revisit this code in V2.0
         if (isJson(httpRequest) || isJsonFormat(httpRequest)) {
             httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
@@ -111,12 +110,8 @@ public class GoExceptionTranslationFilter extends ExceptionTranslationFilter {
         urlPatternsThatShouldNotBeRedirectedToAfterLogin = value;
     }
 
-    public void setBasicAuthenticationEntryPoint(BasicProcessingFilterEntryPoint basicAuthenticationEntryPoint) {
+    public void setBasicAuthenticationEntryPoint(AuthenticationEntryPoint basicAuthenticationEntryPoint) {
         this.basicAuthenticationEntryPoint = basicAuthenticationEntryPoint;
-    }
-
-    public BasicProcessingFilterEntryPoint getBasicAuthenticationEntryPoint() {
-        return basicAuthenticationEntryPoint;
     }
 
     public void setSecurityService(SecurityService service) {

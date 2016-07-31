@@ -14,14 +14,10 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::MaterialsController do
   include MockRegistryModule
-  before do
-    controller.stub(:populate_health_messages)
-  end
-  
   include ConfigSaveStubbing
 
   describe "routes" do
@@ -64,7 +60,7 @@ describe Admin::MaterialsController do
 
     before :each do
       controller.stub(:populate_config_validity)
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       @cruise_config_mother = GoConfigMother.new
       @material_config = GitMaterialConfig.new("http://git.thoughtworks.com")
 

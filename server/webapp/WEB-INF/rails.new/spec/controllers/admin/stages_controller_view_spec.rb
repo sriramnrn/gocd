@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::StagesController, "view" do
   include GoUtil
@@ -24,13 +24,10 @@ describe Admin::StagesController, "view" do
     render_views
 
     before do
-      controller.stub(:populate_health_messages) do
-        controller.instance_variable_set(:@current_server_health_states,com.thoughtworks.go.serverhealth.ServerHealthStates.new)
-      end
       controller.stub(:populate_config_validity)
       controller.stub(:checkConfigFileValid)
 
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       cruise_config_mother = GoConfigMother.new
       @pipeline = cruise_config_mother.addPipeline(@cruise_config, "pipeline-name", "stage-name", ["build-name"].to_java(java.lang.String))
       second_stage = StageConfig.new(CaseInsensitiveString.new("stage-second"), JobConfigs.new([JobConfig.new(CaseInsensitiveString.new("build-2")), JobConfig.new(CaseInsensitiveString.new("build-3"))].to_java(JobConfig)))

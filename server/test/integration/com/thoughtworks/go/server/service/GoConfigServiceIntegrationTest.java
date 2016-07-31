@@ -22,7 +22,7 @@ import java.io.IOException;
 import com.rits.cloning.Cloner;
 import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.CachedGoConfig;
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.update.ConfigUpdateResponse;
 import com.thoughtworks.go.config.update.UpdateConfigFromUI;
@@ -66,7 +66,7 @@ import static org.junit.Assert.assertThat;
 })
 public class GoConfigServiceIntegrationTest {
     @Autowired private SecurityService securityService;
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private GoConfigService goConfigService;
     @Autowired private DatabaseAccessHelper dbHelper;
     @Autowired private Localizer localizer;
@@ -80,7 +80,7 @@ public class GoConfigServiceIntegrationTest {
     public void setup() throws Exception {
         configHelper = new GoConfigFileHelper();
         dbHelper.onSetUp();
-        configHelper.usingCruiseConfigDao(goConfigFileDao).initializeConfigFile();
+        configHelper.usingCruiseConfigDao(goConfigDao).initializeConfigFile();
         configHelper.onSetUp();
         goConfigService.forceNotifyListeners();
     }
@@ -146,7 +146,7 @@ public class GoConfigServiceIntegrationTest {
         securityConfig.adminsConfig().add(new AdminUser(new CaseInsensitiveString("root")));
         configHelper.addSecurity(securityConfig);
         configHelper.addPipeline("my-pipeline", "my-stage");
-        configHelper.setAdminPermissionForGroup(PipelineConfigs.DEFAULT_GROUP, "pipeline_admin");
+        configHelper.setAdminPermissionForGroup(BasicPipelineConfigs.DEFAULT_GROUP, "pipeline_admin");
     }
 
     @Test
@@ -184,7 +184,7 @@ public class GoConfigServiceIntegrationTest {
 
         configHelper.addTemplate("pipeline", "stage");
 
-        cachedGoConfig.onTimer();
+        cachedGoConfig.forceReload();
 
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         goConfigService.loadCruiseConfigForEdit(new Username(new CaseInsensitiveString("loser")), result);
@@ -202,7 +202,7 @@ public class GoConfigServiceIntegrationTest {
 
         configHelper.addTemplate("pipeline", new Authorization(new AdminsConfig(new AdminUser(new CaseInsensitiveString("template-admin")))), "stage");
 
-        cachedGoConfig.onTimer();
+        cachedGoConfig.forceReload();
 
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         CruiseConfig config = goConfigService.loadCruiseConfigForEdit(new Username(new CaseInsensitiveString("template-admin")), result);
@@ -219,7 +219,7 @@ public class GoConfigServiceIntegrationTest {
 
         configHelper.addTemplate("pipeline", "stage");
 
-        cachedGoConfig.onTimer();
+        cachedGoConfig.forceReload();
 
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         CruiseConfig config = goConfigService.loadCruiseConfigForEdit(new Username(new CaseInsensitiveString("hero")), result);
@@ -508,7 +508,7 @@ public class GoConfigServiceIntegrationTest {
 
     @Test
     public void shouldLoadConfigFileOnlyWhenModifiedOnDisk() throws InterruptedException {
-        cachedGoConfig.onTimer();
+        cachedGoConfig.forceReload();
         Thread.sleep(1000);
         goConfigService.updateConfig(new UpdateConfigCommand() {
             public CruiseConfig update(CruiseConfig cruiseConfig) throws Exception {
@@ -517,7 +517,7 @@ public class GoConfigServiceIntegrationTest {
             }
         });
         CruiseConfig cruiseConfig = cachedGoConfig.loadForEditing();
-        cachedGoConfig.onTimer();
+        cachedGoConfig.forceReload();
         assertThat(cruiseConfig, sameInstance(cachedGoConfig.loadForEditing()));
     }
 
@@ -583,7 +583,7 @@ public class GoConfigServiceIntegrationTest {
     @Test
     public void shouldThrowUpOnConfigSaveMergeConflict_ViaMergeFlow() throws Exception {
         // User 1 loads page
-        CruiseConfig user1SeeingConfig = goConfigFileDao.loadForEditing();
+        CruiseConfig user1SeeingConfig = goConfigDao.loadForEditing();
         String user1SeeingMd5 = user1SeeingConfig.getMd5();
 
         // User 2 edits config
@@ -607,7 +607,7 @@ public class GoConfigServiceIntegrationTest {
     @Test
     public void shouldThrowUpOnConfigSavePreValidationError_ViaMergeFlow() throws Exception {
         // User 1 loads page
-        CruiseConfig user1SeeingConfig = goConfigFileDao.loadForEditing();
+        CruiseConfig user1SeeingConfig = goConfigDao.loadForEditing();
         String user1SeeingMd5 = user1SeeingConfig.getMd5();
 
         // User 2 edits config
@@ -664,7 +664,7 @@ public class GoConfigServiceIntegrationTest {
     @Test
     public void shouldThrowUpOnConfigSaveValidationError_ViaNormalFlow() throws Exception {
         // User 1 loads page
-        CruiseConfig user1SeeingConfig = goConfigFileDao.loadForEditing();
+        CruiseConfig user1SeeingConfig = goConfigDao.loadForEditing();
         String user1SeeingMd5 = user1SeeingConfig.getMd5();
 
         // User 1 edits old config
@@ -749,7 +749,7 @@ public class GoConfigServiceIntegrationTest {
         }
 
         // User 1 loads page
-        CruiseConfig user1SeeingConfig = goConfigFileDao.loadForEditing();
+        CruiseConfig user1SeeingConfig = goConfigDao.loadForEditing();
         String user1SeeingMd5 = user1SeeingConfig.getMd5();
 
         // User 2 edits config
@@ -771,7 +771,7 @@ public class GoConfigServiceIntegrationTest {
     @Test
     public void shouldNotThrowUpOnConfigSave_ViaNormalFlow() throws Exception {
         // User 1 loads page
-        CruiseConfig user1SeeingConfig = goConfigFileDao.loadForEditing();
+        CruiseConfig user1SeeingConfig = goConfigDao.loadForEditing();
 
         // User 2 edits config
         configHelper.addPipelineWithGroup("defaultGroup", "user2_pipeline", "user2_stage", "user2_job");

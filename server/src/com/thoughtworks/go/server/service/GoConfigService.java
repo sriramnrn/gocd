@@ -1,45 +1,45 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
 import com.rits.cloning.Cloner;
 import com.thoughtworks.go.config.*;
+import com.thoughtworks.go.config.commands.EntityConfigUpdateCommand;
 import com.thoughtworks.go.config.exceptions.*;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
+import com.thoughtworks.go.config.remote.ConfigOrigin;
 import com.thoughtworks.go.config.update.*;
 import com.thoughtworks.go.config.validation.GoConfigValidity;
 import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.config.Admin;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
+import com.thoughtworks.go.domain.scm.SCM;
 import com.thoughtworks.go.i18n.LocalizedMessage;
-import com.thoughtworks.go.licensing.LicenseValidity;
 import com.thoughtworks.go.listener.BaseUrlChangeListener;
 import com.thoughtworks.go.listener.ConfigChangedListener;
-import com.thoughtworks.go.metrics.domain.context.Context;
-import com.thoughtworks.go.metrics.domain.probes.ProbeType;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
 import com.thoughtworks.go.presentation.ConfigForEdit;
 import com.thoughtworks.go.presentation.TriStateSelection;
 import com.thoughtworks.go.server.cache.GoCache;
-import com.thoughtworks.go.server.dao.UserDao;
+import com.thoughtworks.go.server.domain.AgentInstances;
 import com.thoughtworks.go.server.domain.PipelineConfigDependencyGraph;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.domain.user.PipelineSelections;
+import com.thoughtworks.go.server.initializers.Initializer;
 import com.thoughtworks.go.server.persistence.PipelineRepository;
 import com.thoughtworks.go.server.security.GoAcl;
 import com.thoughtworks.go.server.service.result.HttpLocalizedOperationResult;
@@ -47,12 +47,13 @@ import com.thoughtworks.go.server.service.result.LocalizedOperationResult;
 import com.thoughtworks.go.serverhealth.HealthStateScope;
 import com.thoughtworks.go.serverhealth.HealthStateType;
 import com.thoughtworks.go.service.ConfigRepository;
-import com.thoughtworks.go.util.*;
-import org.apache.commons.lang.StringUtils;
+import com.thoughtworks.go.util.Clock;
+import com.thoughtworks.go.util.ExceptionUtils;
+import com.thoughtworks.go.util.SystemTimeClock;
+import com.thoughtworks.go.util.TriState;
 import org.apache.log4j.Logger;
 import org.dom4j.DocumentFactory;
 import org.dom4j.Element;
-import org.dom4j.Node;
 import org.dom4j.io.SAXReader;
 import org.jdom.input.JDOMParseException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,12 +66,11 @@ import java.util.*;
 
 import static com.thoughtworks.go.config.validation.GoConfigValidity.invalid;
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
-import static com.thoughtworks.go.util.ExceptionUtils.bombIf;
 import static java.lang.String.format;
 
 @Service
-public class GoConfigService {
-    private GoConfigFileDao goConfigFileDao;
+public class GoConfigService implements Initializer, CruiseConfigProvider {
+    private GoConfigDao goConfigDao;
     private PipelineRepository pipelineRepository;
     private GoConfigMigration upgrader;
     private GoCache goCache;
@@ -84,35 +84,36 @@ public class GoConfigService {
 
     public static final String INVALID_CRUISE_CONFIG_XML = "Invalid Configuration";
     private final ConfigElementImplementationRegistry registry;
-    private MetricsProbeService metricsProbeService;
     private InstanceFactory instanceFactory;
+    private final CachedGoPartials cachedGoPartials;
 
     @Autowired
-    public GoConfigService(GoConfigFileDao goConfigFileDao, PipelineRepository pipelineRepository, GoConfigMigration upgrader, GoCache goCache,
+    public GoConfigService(GoConfigDao goConfigDao, PipelineRepository pipelineRepository, GoConfigMigration upgrader, GoCache goCache,
                            ConfigRepository configRepository, ConfigCache configCache, ConfigElementImplementationRegistry registry,
-                           MetricsProbeService metricsProbeService, InstanceFactory instanceFactory) {
-        this.goConfigFileDao = goConfigFileDao;
+                           InstanceFactory instanceFactory, CachedGoPartials cachedGoPartials) {
+        this.goConfigDao = goConfigDao;
         this.pipelineRepository = pipelineRepository;
         this.goCache = goCache;
         this.configRepository = configRepository;
         this.configCache = configCache;
         this.registry = registry;
         this.upgrader = upgrader;
-        this.metricsProbeService = metricsProbeService;
         this.instanceFactory = instanceFactory;
+        this.cachedGoPartials = cachedGoPartials;
     }
 
     //for testing
-    public GoConfigService(GoConfigFileDao goConfigFileDao, PipelineRepository pipelineRepository, Clock clock, GoConfigMigration upgrader, GoCache goCache,
-                           ConfigRepository configRepository, UserDao userDao, ConfigElementImplementationRegistry registry,
-                           MetricsProbeService metricsProbeService, InstanceFactory instanceFactory) {
-        this(goConfigFileDao, pipelineRepository, upgrader, goCache, configRepository, new ConfigCache(), registry, metricsProbeService, instanceFactory);
+    public GoConfigService(GoConfigDao goConfigDao, PipelineRepository pipelineRepository, Clock clock, GoConfigMigration upgrader, GoCache goCache,
+                           ConfigRepository configRepository, ConfigElementImplementationRegistry registry,
+                           InstanceFactory instanceFactory, CachedGoPartials cachedGoPartials) {
+        this(goConfigDao, pipelineRepository, upgrader, goCache, configRepository, new ConfigCache(), registry, instanceFactory, cachedGoPartials);
         this.clock = clock;
     }
 
+    @Override
     public void initialize() {
-        this.goConfigFileDao.load();
-        register(new BaseUrlChangeListener(serverConfig(), goCache));
+        this.goConfigDao.load();
+        register(new BaseUrlChangeListener(serverConfig().getSiteUrl(), serverConfig().getSecureSiteUrl(), goCache));
         File dir = artifactsDir();
         if (!dir.exists()) {
             boolean success = dir.mkdirs();
@@ -135,14 +136,17 @@ public class GoConfigService {
         GoConfigHolder configHolder = getConfigHolder();
         configHolder = cloner.deepClone(configHolder);
         PipelineConfig config = configHolder.configForEdit.pipelineConfigByName(new CaseInsensitiveString(pipelineName));
-        return new ConfigForEdit<PipelineConfig>(config, configHolder);
+        return new ConfigForEdit<>(config, configHolder);
     }
 
     private boolean canEditPipeline(String pipelineName, Username username, LocalizedOperationResult result) {
+        return canEditPipeline(pipelineName, username, result, findGroupNameByPipeline(new CaseInsensitiveString(pipelineName)));
+    }
+
+    public boolean canEditPipeline(String pipelineName, Username username, LocalizedOperationResult result, String groupName) {
         if (!doesPipelineExist(pipelineName, result)) {
             return false;
         }
-        String groupName = findGroupNameByPipeline(new CaseInsensitiveString(pipelineName));
         if (!isUserAdminOfGroup(username.getUsername(), groupName)) {
             result.unauthorized(LocalizedMessage.string("UNAUTHORIZED_TO_EDIT_PIPELINE", pipelineName), HealthStateType.unauthorisedForPipeline(pipelineName));
             return false;
@@ -158,54 +162,40 @@ public class GoConfigService {
         return true;
     }
 
-    public GoMailSender mailSender() {
-        return GoSmtpMailSender.createSender(currentCruiseConfig().mailHost());
-    }
-
     public Agents agents() {
         return getCurrentConfig().agents();
     }
 
+    @Deprecated()
     public CruiseConfig currentCruiseConfig() {
         return getCurrentConfig();
     }
 
-    public int getNumberOfApprovedRemoteAgents() {
-        return agents().countApprovedRemoteAgents();
+    public EnvironmentsConfig getEnvironments() {
+        return cruiseConfig().getEnvironments();
     }
 
+    @Deprecated()
     public CruiseConfig getCurrentConfig() {
         return cruiseConfig();
     }
 
+    @Deprecated()
     public CruiseConfig getConfigForEditing() {
-        return goConfigFileDao.loadForEditing();
+        return goConfigDao.loadForEditing();
     }
 
-    private CruiseConfig cruiseConfig() {
-        return goConfigFileDao.load();
+    @Deprecated()
+    public CruiseConfig getMergedConfigForEditing() {
+        return goConfigDao.loadMergedForEditing();
     }
 
-    public void populateLicenseAndConfigValidityInfo(Map<String, Object> model) {
-        GoConfigValidity configValidity = goConfigFileDao.checkConfigFileValid();
-        if (!configValidity.isValid()) {
-            model.put(GoConstants.ERROR_FOR_PAGE, configValidity.errorMessage());
-        } else {
-            LicenseValidity validLicense = LicenseValidity.VALID_LICENSE;
-            validLicense.populateModel(model);
-        }
+    CruiseConfig cruiseConfig() {
+        return goConfigDao.load();
     }
 
     public AgentConfig agentByUuid(String uuid) {
         return agents().getAgentByUuid(uuid);
-    }
-
-    public boolean agentExists(String uuid) {
-        return agents().hasAgent(uuid);
-    }
-
-    public boolean isPipelineEmpty() {
-        return getCurrentConfig().hasPipeline();
     }
 
     public StageConfig stageConfigNamed(String pipelineName, String stageName) {
@@ -234,7 +224,7 @@ public class GoConfigService {
     }
 
     public String fileLocation() {
-        return goConfigFileDao.fileLocation();
+        return goConfigDao.fileLocation();
     }
 
     public File artifactsDir() {
@@ -247,12 +237,12 @@ public class GoConfigService {
         return getCurrentConfig().hasStageConfigNamed(new CaseInsensitiveString(pipelineName), new CaseInsensitiveString(stageName), true);
     }
 
-    public void addAgent(AgentConfig agentConfig) {
-        goConfigFileDao.addAgent(agentConfig);
+    public ConfigSaveState updateConfig(UpdateConfigCommand command) {
+        return goConfigDao.updateConfig(command);
     }
 
-    public ConfigSaveState updateConfig(UpdateConfigCommand command) {
-        return goConfigFileDao.updateConfig(command);
+    public void updateConfig(EntityConfigUpdateCommand command, Username currentUser) {
+        goConfigDao.updateConfig(command, currentUser);
     }
 
     public long getUnresponsiveJobTerminationThreshold(JobIdentifier identifier) {
@@ -268,7 +258,7 @@ public class GoConfigService {
         JobConfig jobConfig = null;
         try {
             jobConfig = cruiseConfig().findJob(identifier.getPipelineName(), identifier.getStageName(), identifier.getBuildName());
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
         return jobConfig;
     }
@@ -293,8 +283,7 @@ public class GoConfigService {
     }
 
     public ConfigUpdateResponse updateConfigFromUI(final UpdateConfigFromUI command, final String md5, Username username, final LocalizedOperationResult result) {
-        Context context = metricsProbeService.begin(ProbeType.SAVE_CONFIG_XML_THROUGH_CLICKY_ADMIN);
-        UiBasedConfigUpdateCommand updateCommand = new UiBasedConfigUpdateCommand(md5, command, result);
+        UiBasedConfigUpdateCommand updateCommand = new UiBasedConfigUpdateCommand(md5, command, result, cachedGoPartials);
         UpdatedNodeSubjectResolver updatedConfigResolver = new UpdatedNodeSubjectResolver();
         try {
             ConfigSaveState configSaveState = updateConfig(updateCommand);
@@ -318,14 +307,12 @@ public class GoConfigService {
                 CruiseConfig badConfig = ex.getCruiseConfig();
                 setMD5(md5, badConfig);
                 Validatable node = updatedConfigResolver.getNode(command, updateCommand.cruiseConfig());
-                CruiseConfig.copyErrors(command.updatedNode(badConfig), node);
+                BasicCruiseConfig.copyErrors(command.updatedNode(badConfig), node);
                 result.badRequest(LocalizedMessage.string("SAVE_FAILED"));
                 return new ConfigUpdateResponse(badConfig, node, subjectFromNode(command, updatedConfigResolver, node), updateCommand, null);
             } else {
                 result.badRequest(LocalizedMessage.string("SAVE_FAILED_WITH_REASON", e.getMessage()));
             }
-        }finally {
-            metricsProbeService.end(ProbeType.SAVE_CONFIG_XML_THROUGH_CLICKY_ADMIN, context);
         }
 
         CruiseConfig newConfigSinceNoOtherConfigExists = clonedConfigForEdit();
@@ -334,7 +321,7 @@ public class GoConfigService {
     }
 
     private CruiseConfig handleMergeException(String md5, UiBasedConfigUpdateCommand updateCommand) {
-        CruiseConfig updatedConfig = null;
+        CruiseConfig updatedConfig;
         try {
             updateCommand.update(clonedConfigForEdit());
             updatedConfig = updateCommand.cruiseConfig();
@@ -350,9 +337,7 @@ public class GoConfigService {
     private void setMD5(String md5, CruiseConfig badConfig) {
         try {
             MagicalGoConfigXmlLoader.setMd5(badConfig, md5);
-        } catch (NoSuchFieldException e) {
-            // Ignore
-        } catch (IllegalAccessException e) {
+        } catch (NoSuchFieldException | IllegalAccessException e) {
             // Ignore
         }
     }
@@ -374,17 +359,13 @@ public class GoConfigService {
         return new ConfigUpdateResponse(config, node, subject, updateCommand, configSaveState);
     }
 
-    public void updateMailHost(MailHost mailHost) {
-        goConfigFileDao.updateMailHost(mailHost);
-    }
-
     public ConfigSaveState updateServerConfig(final MailHost mailHost, final LdapConfig ldapConfig, final PasswordFileConfig passwordFileConfig, final boolean shouldAllowAutoLogin,
                                               final String md5, final String artifactsDir, final Double purgeStart, final Double purgeUpto, final String jobTimeout,
                                               final String siteUrl, final String secureSiteUrl, final String taskRepositoryLocation) {
-        final List<ConfigSaveState> result = new ArrayList<ConfigSaveState>();
+        final List<ConfigSaveState> result = new ArrayList<>();
         result.add(updateConfig(
-                new GoConfigFileDao.NoOverwriteCompositeConfigCommand(md5,
-                        goConfigFileDao.mailHostUpdater(mailHost),
+                new GoConfigDao.NoOverwriteCompositeConfigCommand(md5,
+                        goConfigDao.mailHostUpdater(mailHost),
                         securityUpdater(ldapConfig, passwordFileConfig, shouldAllowAutoLogin),
                         serverConfigUpdater(artifactsDir, purgeStart, purgeUpto, jobTimeout, siteUrl, secureSiteUrl, taskRepositoryLocation))));
         //should not reach here with empty result
@@ -419,28 +400,16 @@ public class GoConfigService {
         };
     }
 
-    public void addEnvironment(EnvironmentConfig environmentConfig) {
-        goConfigFileDao.addEnvironment(environmentConfig);
+    public void addEnvironment(BasicEnvironmentConfig environmentConfig) {
+        goConfigDao.addEnvironment(environmentConfig);
     }
 
     public void addPipeline(PipelineConfig pipeline, String groupName) {
-        goConfigFileDao.addPipeline(pipeline, groupName);
-    }
-
-    public void updateAgentResources(String uuid, Resources newResources) {
-        goConfigFileDao.updateAgentResources(uuid, newResources);
-    }
-
-    public void updateAgentIpByUuid(String uuid, String ipAddress, String userName) {
-        goConfigFileDao.updateAgentIp(uuid, ipAddress, userName);
-    }
-
-    public void updateAgentApprovalStatus(String uuid, Boolean isDenied) {
-        goConfigFileDao.updateAgentApprovalStatus(uuid, isDenied);
+        goConfigDao.addPipeline(pipeline, groupName);
     }
 
     public void register(ConfigChangedListener listener) {
-        goConfigFileDao.registerListener(listener);
+        goConfigDao.registerListener(listener);
     }
 
     GoAcl readAclBy(String pipelineName, String stageName) {
@@ -452,7 +421,7 @@ public class GoConfigService {
     }
 
     private List<CaseInsensitiveString> getAuthorizedUsers(AdminsConfig authorizedAdmins) {
-        ArrayList<CaseInsensitiveString> users = new ArrayList<CaseInsensitiveString>();
+        ArrayList<CaseInsensitiveString> users = new ArrayList<>();
         for (Admin admin : authorizedAdmins) {
             if (admin instanceof AdminRole) {
                 addRoleUsers(users, admin.getName());
@@ -477,14 +446,14 @@ public class GoConfigService {
     }
 
     public List<String> allGroups() {
-        List<String> allGroup = new ArrayList<String>();
+        List<String> allGroup = new ArrayList<>();
         getCurrentConfig().groups(allGroup);
         return allGroup;
     }
 
-	public PipelineGroups groups() {
-		return getCurrentConfig().getGroups();
-	}
+    public PipelineGroups groups() {
+        return getCurrentConfig().getGroups();
+    }
 
     public List<Task> tasksForJob(String pipelineName, String stageName, String jobName) {
         return getCurrentConfig().tasksForJob(pipelineName, stageName, jobName);
@@ -492,10 +461,6 @@ public class GoConfigService {
 
     public boolean isSmtpEnabled() {
         return currentCruiseConfig().isSmtpEnabled();
-    }
-
-    public boolean isInFirstGroup(String pipelineName) {
-        return currentCruiseConfig().isInFirstGroup(new CaseInsensitiveString(pipelineName));
     }
 
     public void accept(PiplineConfigVisitor visitor) {
@@ -553,6 +518,13 @@ public class GoConfigService {
         return getCurrentConfig().getAllPipelineConfigs();
     }
 
+    /* NOTE: this is called from rails environments controller to build a list of pipelines which user can assign in environment.
+       We don't want user to select or unselect any pipeline which is already selected in a remote configuration repository.
+     */
+    public List<PipelineConfig> getAllLocalPipelineConfigs() {
+        return getCurrentConfig().getAllLocalPipelineConfigs(true);
+    }
+
     public List<PipelineConfig> getAllPipelineConfigsForEdit() {
         return getConfigForEditing().getAllPipelineConfigs();
     }
@@ -561,37 +533,8 @@ public class GoConfigService {
         return getCurrentConfig().adminEmail();
     }
 
-    public void disableAgents(boolean disabled, AgentInstance... instances) {
-        GoConfigFileDao.CompositeConfigCommand command = new GoConfigFileDao.CompositeConfigCommand();
-        for (AgentInstance agentInstance : instances) {
-            String uuid = agentInstance.getUuid();
-
-            if (this.agents().hasAgentIdentifiedWith(uuid)) {
-                command.addCommand(GoConfigFileDao.updateApprovalStatus(uuid, disabled));
-            } else {
-                AgentConfig agentConfig = agentInstance.agentConfig();
-                agentConfig.disable(disabled);
-                command.addCommand(GoConfigFileDao.createAddAgentCommand(agentConfig));
-            }
-        }
-        updateConfig(command);
-    }
-
-    public void deleteAgents(AgentInstance... agentInstances) {
-        goConfigFileDao.deleteAgents(agentInstances);
-    }
-
-    public void approvePendingAgent(AgentInstance agentInstance) {
-        agentInstance.enable();
-        if (this.agents().hasAgentIdentifiedWith(agentInstance.getUuid())) {
-            LOGGER.warn("Registered agent with the same uuid [" + agentInstance + "] already approved.");
-        } else {
-            this.addAgent(agentInstance.agentConfig());
-        }
-    }
-
     public Set<MaterialConfig> getSchedulableMaterials() {
-        return getCurrentConfig().getAllUniqueMaterialsBelongingToAutoPipelines();
+        return getCurrentConfig().getAllUniqueMaterialsBelongingToAutoPipelinesAndConfigRepos();
     }
 
     public Stage scheduleStage(String pipelineName, String stageName, SchedulingContext context) {
@@ -638,45 +581,33 @@ public class GoConfigService {
         return getCurrentConfig().isPipelineLocked(pipelineName);
     }
 
-    public void modifyResources(AgentInstance[] instances, List<TriStateSelection> selections) {
-        GoConfigFileDao.CompositeConfigCommand command = new GoConfigFileDao.CompositeConfigCommand();
-        for (AgentInstance agentInstance : instances) {
-            String uuid = agentInstance.getUuid();
-            if (this.agents().hasAgentIdentifiedWith(uuid)) {
-                for (TriStateSelection selection : selections) {
-                    command.addCommand(new GoConfigFileDao.ModifyResourcesCommand(uuid, new Resource(selection.getValue()), selection.getAction()));
-                }
-            }
-        }
-        updateConfig(command);
-    }
 
-    public GoConfigFileDao.CompositeConfigCommand modifyRolesCommand(List<String> users, List<TriStateSelection> roleSelections) {
-        GoConfigFileDao.CompositeConfigCommand command = new GoConfigFileDao.CompositeConfigCommand();
+    public GoConfigDao.CompositeConfigCommand modifyRolesCommand(List<String> users, List<TriStateSelection> roleSelections) {
+        GoConfigDao.CompositeConfigCommand command = new GoConfigDao.CompositeConfigCommand();
         for (String user : users) {
             for (TriStateSelection roleSelection : roleSelections) {
-                command.addCommand(new GoConfigFileDao.ModifyRoleCommand(user, roleSelection));
+                command.addCommand(new GoConfigDao.ModifyRoleCommand(user, roleSelection));
             }
         }
         return command;
     }
 
     public UpdateConfigCommand modifyAdminPrivilegesCommand(List<String> users, TriStateSelection adminPrivilege) {
-        GoConfigFileDao.CompositeConfigCommand command = new GoConfigFileDao.CompositeConfigCommand();
+        GoConfigDao.CompositeConfigCommand command = new GoConfigDao.CompositeConfigCommand();
         for (String user : users) {
-            command.addCommand(new GoConfigFileDao.ModifyAdminPrivilegeCommand(user, adminPrivilege));
+            command.addCommand(new GoConfigDao.ModifyAdminPrivilegeCommand(user, adminPrivilege));
         }
         return command;
     }
 
 
     public void modifyEnvironments(List<AgentInstance> agents, List<TriStateSelection> selections) {
-        GoConfigFileDao.CompositeConfigCommand command = new GoConfigFileDao.CompositeConfigCommand();
+        GoConfigDao.CompositeConfigCommand command = new GoConfigDao.CompositeConfigCommand();
         for (AgentInstance agentInstance : agents) {
             String uuid = agentInstance.getUuid();
-            if (this.agents().hasAgentIdentifiedWith(uuid)) {
+            if (hasAgent(uuid)) {
                 for (TriStateSelection selection : selections) {
-                    command.addCommand(new GoConfigFileDao.ModifyEnvironmentCommand(uuid, selection.getValue(), selection.getAction()));
+                    command.addCommand(new ModifyEnvironmentCommand(uuid, selection.getValue(), selection.getAction()));
                 }
             }
         }
@@ -688,7 +619,7 @@ public class GoConfigService {
     }
 
     public List<String> getResourceList() {
-        ArrayList<String> resources = new ArrayList<String>();
+        ArrayList<String> resources = new ArrayList<>();
         for (Resource res : getCurrentConfig().getAllResources()) {
             resources.add(res.getName());
         }
@@ -697,19 +628,19 @@ public class GoConfigService {
 
     public List<CaseInsensitiveString> pipelines(String group) {
         PipelineConfigs configs = getCurrentConfig().pipelines(group);
-        List<CaseInsensitiveString> pipelines = new ArrayList<CaseInsensitiveString>();
+        List<CaseInsensitiveString> pipelines = new ArrayList<>();
         for (PipelineConfig config : configs) {
             pipelines.add(config.name());
         }
         return pipelines;
     }
 
-	public PipelineConfigs getAllPipelinesInGroup(String group) {
-		return getCurrentConfig().pipelines(group);
-	}
+    public PipelineConfigs getAllPipelinesInGroup(String group) {
+        return getCurrentConfig().pipelines(group);
+    }
 
     public GoConfigValidity checkConfigFileValid() {
-        return goConfigFileDao.checkConfigFileValid();
+        return goConfigDao.checkConfigFileValid();
     }
 
     public boolean isSecurityEnabled() {
@@ -732,10 +663,6 @@ public class GoConfigService {
         return getCurrentConfig().hasPreviousStage(new CaseInsensitiveString(pipelineName), new CaseInsensitiveString(lastStageName));
     }
 
-    public Iterable<PipelineConfig> getDownstreamPipelines(String pipelineName) {
-        return getCurrentConfig().getDownstreamPipelines(pipelineName);
-    }
-
     public boolean isFirstStage(String pipelineName, String stageName) {
         boolean hasPreviousStage = getCurrentConfig().hasPreviousStage(new CaseInsensitiveString(pipelineName), new CaseInsensitiveString(stageName));
         return !hasPreviousStage;
@@ -743,11 +670,6 @@ public class GoConfigService {
 
     public boolean requiresApproval(final CaseInsensitiveString pipelineName, final CaseInsensitiveString stageName) {
         return getCurrentConfig().requiresApproval(pipelineName, stageName);
-    }
-
-    public boolean isFirstStageRequiresApproval(final CaseInsensitiveString pipelineName) {
-        StageConfig stageConfig = findFirstStageOfPipeline(pipelineName);
-        return requiresApproval(pipelineName, stageConfig.name());
     }
 
     public StageConfig findFirstStageOfPipeline(final CaseInsensitiveString pipelineName) {
@@ -762,10 +684,6 @@ public class GoConfigService {
         return getCurrentConfig().previousStage(new CaseInsensitiveString(pipelineName), new CaseInsensitiveString(lastStageName));
     }
 
-    public boolean anonymousAccess() {
-        return serverConfig().anonymousAccess();
-    }
-
     public Tabs getCustomizedTabs(String pipelineName, String stageName, String buildName) {
         try {
             JobConfig plan = getCurrentConfig().jobConfigByName(pipelineName, stageName, buildName, false);
@@ -773,18 +691,6 @@ public class GoConfigService {
         } catch (Exception e) {
             return new Tabs();
         }
-    }
-
-    public XmlPartialSaver buildSaver(String pipeline, String stage, int buildIndex) {
-        return new XmlPartialBuildSaver(pipeline, stage, buildIndex, registry);
-    }
-
-    public XmlPartialSaver stageSaver(String pipelineName, int stageIndex) {
-        return new XmlPartialStageSaver(pipelineName, stageIndex);
-    }
-
-    public XmlPartialSaver pipelineSaver(String groupName, int pipelineIndex) {
-        return new XmlPartialPipelineSaver(groupName, pipelineIndex, registry);
     }
 
     public XmlPartialSaver groupSaver(String groupName) {
@@ -796,11 +702,11 @@ public class GoConfigService {
     }
 
     public String configFileMd5() {
-        return goConfigFileDao.md5OfConfigFile();
+        return goConfigDao.md5OfConfigFile();
     }
 
     public List<PipelineConfig> downstreamPipelinesOf(String pipelineName) {
-        List<PipelineConfig> dependencies = new ArrayList<PipelineConfig>();
+        List<PipelineConfig> dependencies = new ArrayList<>();
         for (PipelineConfig config : getAllPipelineConfigs()) {
             if (config.dependsOn(new CaseInsensitiveString(pipelineName))) {
                 dependencies.add(config);
@@ -827,7 +733,7 @@ public class GoConfigService {
     }
 
     private PipelineConfigDependencyGraph findUpstream(PipelineConfig currentPipeline) {
-        List<PipelineConfigDependencyGraph> graphs = new ArrayList<PipelineConfigDependencyGraph>();
+        List<PipelineConfigDependencyGraph> graphs = new ArrayList<>();
         for (CaseInsensitiveString name : currentPipeline.upstreamPipelines()) {
             PipelineConfig pipelineConfig = getCurrentConfig().pipelineConfigByName(name);
             graphs.add(findUpstream(pipelineConfig));
@@ -865,7 +771,7 @@ public class GoConfigService {
     }
 
     private List<String> invertSelections(List<String> selectedPipelines) {
-        List<String> unselectedPipelines = new ArrayList<String>();
+        List<String> unselectedPipelines = new ArrayList<>();
         List<PipelineConfig> pipelineConfigList = cruiseConfig().getAllPipelineConfigs();
         for (PipelineConfig pipelineConfig : pipelineConfigList) {
             String pipelineName = CaseInsensitiveString.str(pipelineConfig.name());
@@ -923,11 +829,12 @@ public class GoConfigService {
         return serverConfig().security().passwordFileConfig();
     }
 
-    public ConfigSaveState updateEnvironment(final String named, final EnvironmentConfig newEnvDefinition, final String md5) {
-        return goConfigFileDao.updateConfig(new NoOverwriteUpdateConfigCommand() {
+    @Deprecated
+    public ConfigSaveState updateEnvironment(final String named, final EnvironmentConfig newEnvDefinition, final Username username, final String md5) {
+        return goConfigDao.updateConfig(new NoOverwriteUpdateConfigCommand() {
             public CruiseConfig update(CruiseConfig cruiseConfig) throws Exception {
                 EnvironmentsConfig environments = cruiseConfig.getEnvironments();
-                EnvironmentConfig oldConfig = environments.named(new CaseInsensitiveString(named));
+                EnvironmentConfig oldConfig = environments.find(new CaseInsensitiveString(named));
                 int index = environments.indexOf(oldConfig);
                 environments.remove(index);
                 environments.add(index, newEnvDefinition);
@@ -990,10 +897,12 @@ public class GoConfigService {
         return true;
     }
 
+    @Deprecated()
     public GoConfigHolder getConfigHolder() {
-        return goConfigFileDao.loadConfigHolder();
+        return goConfigDao.loadConfigHolder();
     }
 
+    @Deprecated()
     public CruiseConfig loadCruiseConfigForEdit(Username username, HttpLocalizedOperationResult result) {
         if (!isUserAdmin(username) && !isUserTemplateAdmin(username)) {
             result.unauthorized(LocalizedMessage.string("UNAUTHORIZED_TO_ADMINISTER"), HealthStateType.unauthorised());
@@ -1015,7 +924,7 @@ public class GoConfigService {
             return null;
         }
         PipelineConfigs config = cloner.deepClone(configForEdit.configForEdit.findGroup(groupName));
-        return new ConfigForEdit<PipelineConfigs>(config, configForEdit);
+        return new ConfigForEdit<>(config, configForEdit);
     }
 
     public boolean doesMd5Match(String md5) {
@@ -1053,6 +962,26 @@ public class GoConfigService {
         }
     }
 
+    public boolean isPipelineEditableViaUI(String pipelineName) {
+        PipelineConfig pipelineConfig = this.pipelineConfigNamed(new CaseInsensitiveString(pipelineName));
+        if(pipelineConfig == null)
+            return false;
+        return isOriginLocal(pipelineConfig.getOrigin());
+    }
+
+    private boolean isOriginLocal(ConfigOrigin origin) {
+        // when null we assume that it comes from file or UI
+        return origin == null || origin.isLocal();
+    }
+
+    public ArrayList<SCM> getSCMs() {
+        return cruiseConfig().getSCMs();
+    }
+
+    public boolean isAdministrator(CaseInsensitiveString username) {
+        return isAdministrator(username.toString());
+    }
+
     public abstract class XmlPartialSaver<T> {
         protected final SAXReader reader;
         private final ConfigElementImplementationRegistry registry;
@@ -1081,15 +1010,16 @@ public class GoConfigService {
 
         }
 
-        protected ConfigSaveState saveConfig(String xmlString, final String md5) throws Exception {
+        protected ConfigSaveState saveConfig(final String xmlString, final String md5) throws Exception {
             LOGGER.debug("[Config Save] Started saving XML");
-            MagicalGoConfigXmlLoader configXmlLoader = new MagicalGoConfigXmlLoader(configCache, registry, metricsProbeService);
-            final CruiseConfig config = configXmlLoader.loadConfigHolder(xmlString).configForEdit;
+            final MagicalGoConfigXmlLoader configXmlLoader = new MagicalGoConfigXmlLoader(configCache, registry);
 
             LOGGER.debug("[Config Save] Updating config");
-            ConfigSaveState configSaveState = goConfigFileDao.updateConfig(new NoOverwriteUpdateConfigCommand() {
+            final CruiseConfig deserializedConfig = configXmlLoader.deserializeConfig(xmlString);
+            ConfigSaveState configSaveState = goConfigDao.updateConfig(new NoOverwriteUpdateConfigCommand() {
                 public CruiseConfig update(CruiseConfig cruiseConfig) throws Exception {
-                    return config;
+                    deserializedConfig.setPartials(cruiseConfig.getPartials());
+                    return deserializedConfig;
                 }
 
                 public String unmodifiedMd5() {
@@ -1102,11 +1032,11 @@ public class GoConfigService {
         }
 
         protected org.dom4j.Document documentRoot() throws Exception {
-            CruiseConfig cruiseConfig = goConfigFileDao.loadForEditing();
+            CruiseConfig cruiseConfig = goConfigDao.loadForEditing();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            new MagicalGoConfigXmlWriter(configCache, registry, metricsProbeService).write(cruiseConfig, out, false);
+            new MagicalGoConfigXmlWriter(configCache, registry).write(cruiseConfig, out, true);
             org.dom4j.Document document = reader.read(new StringReader(out.toString()));
-            Map<String, String> map = new HashMap<String, String>();
+            Map<String, String> map = new HashMap<>();
             map.put("go", MagicalGoConfigXmlWriter.XML_NS);
             //TODO: verify this doesn't cache the factory
             DocumentFactory factory = DocumentFactory.getInstance();
@@ -1117,7 +1047,7 @@ public class GoConfigService {
         protected abstract T valid();
 
         public String asXml() {
-            return new MagicalGoConfigXmlWriter(configCache, registry, metricsProbeService).toXmlPartial(valid());
+            return new MagicalGoConfigXmlWriter(configCache, registry).toXmlPartial(valid());
         }
 
         public GoConfigValidity saveXml(String xmlPartial, String expectedMd5) {
@@ -1167,88 +1097,6 @@ public class GoConfigService {
         }
     }
 
-    private class XmlPartialStageSaver extends XmlPartialSaver<StageConfig> {
-        private final String pipeline;
-        private final int stageIndex;
-
-        public XmlPartialStageSaver(String pipeline, int stageIndex) {
-            super(registry);
-            this.pipeline = pipeline;
-            this.stageIndex = stageIndex;
-        }
-
-        protected StageConfig valid() {
-            CruiseConfig config = configForEditing();
-            PipelineConfig pipelineConfig = config.pipelineConfigByName(new CaseInsensitiveString(pipeline));
-            bombIf(pipelineConfig.hasTemplate(), String.format("Pipeline '%s' references template '%s'. Cannot edit stage.", pipeline, pipelineConfig.getTemplateName()));
-            bombIf(pipelineConfig.size() <= stageIndex, "Stage does not exist.");
-            return pipelineConfig.get(stageIndex);
-        }
-
-        @Override
-        protected String getXpath() {
-            return String.format("/cruise/pipelines/pipeline[@name='%s']/stage[%s]", pipeline, stageIndex + 1);
-        }
-    }
-
-    private class XmlPartialBuildSaver extends XmlPartialSaver<JobConfig> {
-        private final String pipeline;
-        private final String stage;
-        private final int buildIndex;
-
-        public XmlPartialBuildSaver(String pipeline, String stage, int buildIndex, final ConfigElementImplementationRegistry registry) {
-            super(registry);
-            this.pipeline = pipeline;
-            this.stage = stage;
-            this.buildIndex = buildIndex;
-        }
-
-        protected JobConfig valid() {
-            CruiseConfig config = configForEditing();
-            PipelineConfig pipelineConfig = config.pipelineConfigByName(new CaseInsensitiveString(pipeline));
-            bombIf(pipelineConfig.hasTemplate(), String.format("Pipeline '%s' references template '%s'. Cannot edit job.", pipeline, pipelineConfig.getTemplateName()));
-            JobConfigs jobConfigs = config.stageConfigByName(new CaseInsensitiveString(pipeline), new CaseInsensitiveString(stage)).allBuildPlans();
-            bombIf(jobConfigs.size() <= buildIndex, "Build does not exist.");
-            return jobConfigs.get(buildIndex);
-        }
-
-        @Override
-        protected String getXpath() {
-            return String.format("/cruise/pipelines/pipeline[@name='%s']//stage[@name='%s']//job[%s]", pipeline, stage, buildIndex + 1);
-        }
-    }
-
-    private class XmlPartialPipelineSaver extends XmlPartialSaver<PipelineConfig> {
-        private final int pipelineIndex;
-        private final String groupName;
-
-        public XmlPartialPipelineSaver(String groupName, int pipelineIndex, final ConfigElementImplementationRegistry registry) {
-            super(registry);
-            this.groupName = groupName;
-            this.pipelineIndex = pipelineIndex;
-        }
-
-        protected PipelineConfig valid() {
-            CruiseConfig config = configForEditing();
-            bombIf(!config.exist(pipelineIndex), "Pipeline does not exist.");
-            PipelineConfig originalConfig = config.find(groupName, pipelineIndex);
-            return originalConfig.getCopyForEditing();
-        }
-
-        @Override
-        protected String getXpath() {
-            return String.format("/cruise/pipelines[@group='%s']/pipeline[%s]", groupName, pipelineIndex + 1);
-        }
-
-    }
-
-    public XmlPartialSaver templateSaver(int pipelineIndex) {
-        return new XmlPartialTemplateSaver(pipelineIndex);
-    }
-
-    public XmlPartialSaver templatesSaver() {
-        return new XmlPartialTemplatesSaver();
-    }
 
     private class XmlPartialFileSaver extends XmlPartialSaver<CruiseConfig> {
         private final boolean shouldUpgrade;
@@ -1281,82 +1129,10 @@ public class GoConfigService {
     private String configAsXml(CruiseConfig cruiseConfig) {
         final ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         try {
-            new MagicalGoConfigXmlWriter(configCache, registry, metricsProbeService).write(cruiseConfig, outStream, true);
+            new MagicalGoConfigXmlWriter(configCache, registry).write(cruiseConfig, outStream, true);
             return outStream.toString();
         } catch (Exception e) {
             throw bomb(e);
-        }
-    }
-
-    private class XmlPartialTemplateSaver extends XmlPartialSaver<PipelineTemplateConfig> {
-        private final int pipelineIndex;
-
-        public XmlPartialTemplateSaver(int pipelineIndex) {
-            super(registry);
-            this.pipelineIndex = pipelineIndex;
-        }
-
-        @Override
-        protected PipelineTemplateConfig valid() {
-            CruiseConfig config = configForEditing();
-            TemplatesConfig templates = config.getTemplates();
-            bombIf(templates.size() <= pipelineIndex, "Template does not exist.");
-            PipelineTemplateConfig templateConfig = templates.get(pipelineIndex);
-            return templateConfig;
-        }
-
-        @Override
-        protected String getXpath() {
-            return String.format("/cruise/templates/pipeline[%s]", pipelineIndex + 1);
-        }
-    }
-
-    private class XmlPartialTemplatesSaver extends XmlPartialSaver<TemplatesConfig> {
-
-        private XmlPartialTemplatesSaver() {
-            super(registry);
-        }
-
-        protected TemplatesConfig valid() {
-            CruiseConfig config = configForEditing();
-            return config.getTemplates();
-        }
-
-        @Override
-        protected ConfigSaveState updatePartial(String xmlPartial, String md5) throws Exception {
-            org.dom4j.Document document = documentRoot();
-            Element root = document.getRootElement();
-            Element oldTemplatesDefinition = ((Element) root.selectSingleNode("//cruise/templates"));
-            List nodesUnderRoot = root.content();
-            if (StringUtils.isBlank(xmlPartial) && oldTemplatesDefinition != null) {
-                root.remove(oldTemplatesDefinition);
-            } else {
-                Element newTemplatesDefinition = reader.read(new StringReader(xmlPartial)).getRootElement();
-                if (oldTemplatesDefinition == null) {
-                    List<Node> pipelinesNodes = root.selectNodes("//cruise/pipelines");
-                    bombIf(pipelinesNodes.size() == 0, "There are no pipelines configured. Please add at least one pipeline in order to use templates.");
-                    Node lastPipeline = pipelinesNodes.get(pipelinesNodes.size() - 1);
-                    int index = root.indexOf(lastPipeline);
-                    nodesUnderRoot.add(index + 1, newTemplatesDefinition);
-                } else {
-                    int index = nodesUnderRoot.indexOf(oldTemplatesDefinition);
-                    nodesUnderRoot.set(index, newTemplatesDefinition);
-                }
-            }
-            return saveConfig(document.asXML(), md5);
-        }
-
-        @Override
-        protected String getXpath() {
-            return "//cruise/templates";
-        }
-
-        private void addTemplatesPlaceHolderTo(CruiseConfig cruiseConfig) {
-            TemplatesConfig templates = new TemplatesConfig();
-            JobConfigs jobConfigs = new JobConfigs();
-            jobConfigs.add(new JobConfig(new CaseInsensitiveString("tempJob"), new Resources(), new ArtifactPlans()));
-            templates.add(new PipelineTemplateConfig(new CaseInsensitiveString("tempPipeline"), new StageConfig(new CaseInsensitiveString("tempStage"), jobConfigs)));
-            cruiseConfig.setTemplates(templates);
         }
     }
 
@@ -1370,7 +1146,6 @@ public class GoConfigService {
 
         protected Object valid() {
             CruiseConfig config = configForEditing();
-            bombIf(!config.hasPipelineGroup(groupName), "Pipeline group does not exist.");
             PipelineConfigs group = config.findGroup(groupName);
             return group.getCopyForEditing();
         }
@@ -1381,18 +1156,9 @@ public class GoConfigService {
         }
     }
 
-    public void saveOrUpdateAgent(AgentInstance agent) {
-        AgentConfig agentConfig = agent.agentConfig();
-        if (this.agents().hasAgentIdentifiedWith(agentConfig.getUuid())) {
-            this.updateAgentApprovalStatus(agentConfig.getUuid(), agentConfig.isDisabled());
-        } else {
-            this.addAgent(agentConfig);
-        }
-    }
-
     // for test
     public void forceNotifyListeners() throws Exception {
-        goConfigFileDao.reloadListeners();
+        goConfigDao.reloadListeners();
     }
 
     public ConfigElementImplementationRegistry getRegistry() {

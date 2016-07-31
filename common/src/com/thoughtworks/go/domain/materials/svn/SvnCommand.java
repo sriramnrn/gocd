@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
 
 
     private final SvnLogXmlParser svnLogXmlParser;
-    private transient final static ThreadLocal<SAXBuilder> saxBuilderThreadLocal = new ThreadLocal<SAXBuilder>();
+    private transient final static ThreadLocal<SAXBuilder> saxBuilderThreadLocal = new ThreadLocal<>();
 
     public SvnCommand(String materialFingerprint, String repositoryUrl) {
         this(materialFingerprint, repositoryUrl, null, null, false);
@@ -82,7 +82,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
             executeCommand(command);
             return ValidationBean.valid();
         } catch (Exception e) {
-            try{    
+            try{
                 version();
                 LOG.error("failed to connect to " + getUrlForDisplay(), e);
                 return ValidationBean.notValid("svn: Malformed URL " + getUrlForDisplay() + " : \n" + e.getMessage());
@@ -99,10 +99,12 @@ public class SvnCommand extends SCMCommand implements Subversion {
                 .withArg(repositoryUrl);
         ConsoleResult result = executeCommand(svnExternalCommand);
         String svnExternalConsoleOut = result.outputAsString();
-        String repoUrl = remoteInfo(new SAXBuilder(false)).getUrl();
+        SvnInfo remoteInfo = remoteInfo(new SAXBuilder());
+        String repoUrl = remoteInfo.getUrl();
+        String repoRoot = remoteInfo.getRoot();
         List<SvnExternal> svnExternalList = null;
         try {
-            svnExternalList = new SvnExternalParser().parse(svnExternalConsoleOut, repoUrl);
+            svnExternalList = new SvnExternalParser().parse(svnExternalConsoleOut, repoUrl, repoRoot);
         } catch (RuntimeException e) {
             throw (RuntimeException) result.smudgedException(e);
         }
@@ -155,7 +157,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
     private SAXBuilder getBuilder() {
         SAXBuilder saxBuilder = saxBuilderThreadLocal.get();
         if(saxBuilder == null){
-            saxBuilder = new SAXBuilder(false);
+            saxBuilder = new SAXBuilder();
             saxBuilderThreadLocal.set(saxBuilder);
         }
         return saxBuilder;
@@ -253,10 +255,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
     private void addCredentials(CommandLine line, StringArgument svnUserName, PasswordArgument svnPassword) {
         if (!StringUtils.isBlank(svnUserName.forCommandline())) {
             line.withArgs("--username", svnUserName.forCommandline());
-            if (StringUtils.isBlank(svnPassword.forCommandline())) {
-                line.withArg(String.format("--password="));
-            }
-            else {
+            if (!StringUtils.isBlank(svnPassword.forCommandline())) {
                 line.withArg("--password");
                 line.withArg(svnPassword);
             }
@@ -282,7 +281,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
     }
 
     public HashMap<String, String> createUrlToRemoteUUIDMap(Set<SvnMaterial> svnMaterials) {
-        HashMap<String, String> urlToUUIDMap = new HashMap<String, String>();
+        HashMap<String, String> urlToUUIDMap = new HashMap<>();
         for (SvnMaterial svnMaterial : svnMaterials) {
             CommandLine command = svnExecutable().withArgs("info", "--xml");
             addCredentials(command, new StringArgument(svnMaterial.getUserName()), new PasswordArgument(svnMaterial.getPassword()));
@@ -302,6 +301,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
     static class SvnInfo {
         private String path = "";
         private String encodedUrl = "";
+        private String root = "";
         private static final String ENCODING = "UTF-8";
 
 
@@ -324,6 +324,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
             String encodedPath = StringUtils.replace(encodedUrl, root, "");
 
             this.path = URLDecoder.decode(encodedPath, ENCODING);
+            this.root = root;
             this.encodedUrl = encodedUrl;
         }
 
@@ -334,5 +335,7 @@ public class SvnCommand extends SCMCommand implements Subversion {
         public String getUrl() {
             return encodedUrl;
         }
+
+        public String getRoot() { return root; }
     }
 }

@@ -49,13 +49,13 @@ public class MacAboutBox extends JFrame implements ActionListener {
         getContentPane().setLayout(new BorderLayout(15, 15));
 
 
-        List<JLabel> aboutLabels = new ArrayList<JLabel>();
+        List<JLabel> aboutLabels = new ArrayList<>();
         aboutLabels.add(emptyLabel());
         aboutLabels.add(titleLabel("Go Agent"));
         aboutLabels.add(bodyLabel("Bootstrapper Version " + getBootstrapperVersion()));
         aboutLabels.add(emptyLabel());
         aboutLabels.add(bodyLabel("Java Version " + System.getProperty("java.version")));
-        aboutLabels.add(bodyLabel("Copyright (C) 2013 ThoughtWorks Inc."));
+        aboutLabels.add(bodyLabel("Copyright (C) 2015 ThoughtWorks Inc."));
         aboutLabels.add(emptyLabel());
 
         Panel textPanel2 = new Panel(new GridLayout(aboutLabels.size(), 1));

@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
+require 'spec_helper'
 
 describe ServerController do
   before :each do
@@ -30,15 +30,10 @@ describe ServerController do
     second = ServerHealthState.error("second error", "second description", HealthStateType.invalidConfig())
     third = ServerHealthState.warning("first warning", "third description", HealthStateType.artifactsDirChanged())
     states = ServerHealthStates.new([first, second, third])
-    config = CruiseConfig.new()
 
     @server_health_service = double('server health service')
-    @go_config_service = double('go config service')
     controller.stub(:server_health_service).and_return(@server_health_service)
-    controller.stub(:go_config_service).and_return(@go_config_service)
-
-    @go_config_service.should_receive(:getCurrentConfig).and_return(config)
-    @server_health_service.should_receive(:getAllValidLogs).with(config).and_return(states)
+    @server_health_service.should_receive(:logs).and_return(states)
 
     get 'messages', :format => 'json'
 

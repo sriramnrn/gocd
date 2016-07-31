@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/pipelines/new.html.erb" do
   include GoUtil, FormUI, ReflectiveUtil
@@ -29,7 +29,7 @@ describe "admin/pipelines/new.html.erb" do
     @material_config.setName(CaseInsensitiveString.new("Svn Material Name"))
     @pipeline.materialConfigs().clear()
     @pipeline.addMaterialConfig(@material_config)
-    @pipeline_group = PipelineConfigs.new
+    @pipeline_group = BasicPipelineConfigs.new
     @pipeline_group.add(@pipeline)
 
     assign(:pipeline, @pipeline)
@@ -41,7 +41,7 @@ describe "admin/pipelines/new.html.erb" do
     assign(:task_view_models, tvms)
     assign(:config_context, create_config_context(MockRegistryModule::MockRegistry.new))
 
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     assign(:cruise_config, @cruise_config)
     assign(:original_cruise_config, @cruise_config)
     set(@cruise_config, "md5", "abc")
@@ -114,7 +114,7 @@ describe "admin/pipelines/new.html.erb" do
     it "should show dropdown for group name if user is a group admin" do
       assign(:groups_list, ["foo.bar", "some_other_group"])
       view.stub(:is_user_a_group_admin?).and_return(true)
-      
+
       render
 
       Capybara.string(response.body).find("form[method='post'][action='create_path']").tap do |form|
@@ -209,16 +209,16 @@ describe "admin/pipelines/new.html.erb" do
         render
 
         expect(response.body).to have_selector("button#check_connection_svn", :text => "CHECK CONNECTION")
-        expect(response.body).to have_selector("#vcsconnection-message_svn", :text => "")
+        expect(response.body).to have_selector("#vcsconnection-message_svn", :text => "", visible: false)
 
         expect(response.body).to have_selector("button#check_connection_hg", :text => "CHECK CONNECTION")
-        expect(response.body).to have_selector("#vcsconnection-message_hg", :text => "")
+        expect(response.body).to have_selector("#vcsconnection-message_hg", :text => "", visible: false)
 
         expect(response.body).to have_selector("button#check_connection_git", :text => "CHECK CONNECTION")
-        expect(response.body).to have_selector("#vcsconnection-message_git", :text => "")
+        expect(response.body).to have_selector("#vcsconnection-message_git", :text => "", visible: false)
 
         expect(response.body).to have_selector("button#check_connection_p4", :text => "CHECK CONNECTION")
-        expect(response.body).to have_selector("#vcsconnection-message_p4", :text => "")
+        expect(response.body).to have_selector("#vcsconnection-message_p4", :text => "", visible: false)
       end
 
       it "should display new svn material view with errors" do

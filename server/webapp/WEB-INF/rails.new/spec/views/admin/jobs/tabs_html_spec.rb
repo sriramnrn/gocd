@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 load File.join(File.dirname(__FILE__), "..", "environment_variables_form_example.rb")
 
 describe "admin/jobs/tabs.html.erb" do
@@ -30,7 +30,7 @@ describe "admin/jobs/tabs.html.erb" do
     assign(:stage, stage)
     assign(:job, @job)
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     @cruise_config.addPipeline("group-1", pipeline)
     set(@cruise_config, "md5", "abc")
     in_params(:stage_parent => "pipelines", :pipeline_name => "pipline-name", :stage_name => "stage-name", :action => "edit", :controller => "admin/jobs", :job_name => "job-name", :current_tab => "tabs")
@@ -66,5 +66,5 @@ describe "admin/jobs/tabs.html.erb" do
 #      expect(form).to have_selector("div.name_value_error", :text => "bad value")
 #    end
 #  end
-  
+
 end

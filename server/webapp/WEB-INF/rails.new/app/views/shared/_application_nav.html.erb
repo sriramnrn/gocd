@@ -1,13 +1,10 @@
 <div class="application_nav">
   <%= hidden_field_tag("server_time", Time.now.to_i, :id => "server_timestamp") -%>
-    <% if @user.anonymous? %>
         <ul class="user">
-            <li class="help">
-                <%= link_to(l.string("HELP_SMALL"), "http://www.go.cd/documentation/user/current", :target => "_blank") %>
-            </li>
-        </ul>
-    <% else %>
-        <ul class="user">
+          <li class="help">
+            <%= link_to(l.string("HELP_SMALL"), "https://go.cd/help", :target => "_blank") %>
+          </li>
+          <% unless @user.anonymous? %>
             <li class="current_user icon">
                 <a href="#" class="current_user_name dropdown-arrow-icon"><%= @user.display_name %></a>
                 <ul class='enhanced_dropdown hidden'>
@@ -19,10 +16,18 @@
                     </li>
                 </ul>
             </li>
-            <li class="help">
-                <%= link_to(l.string("HELP_SMALL"), "http://www.go.cd/documentation/user/current", :target => "_blank") %>
-            </li>
+            <% end %>
         </ul>
+
+    <% if check_go_updates? and go_update %>
+        <div class="notifications">
+            <span class="bell"></span>
+            <div class="hover-container">
+                <div class="hover">
+                    <span>A new release of GoCD - <a href="http://www.go.cd/download/" target="_blank"><%= go_update %></a> is available.</span>
+                </div>
+            </div>
+        </div>
     <% end %>
 
   <% unless @no_tabs %>
@@ -57,7 +62,6 @@
         </li>
     </ul>
     <%= render :partial => "shared/error_messaging_counter" %>
-    <%= render :partial => "shared/go_license_about_to_expire.html" %>
   <% end %>
 </div>
-<div class="back_to_top" title="Scroll to Top">Top</div>
+<div id="back_to_top" class='back_to_top' title="Scroll to Top">Top</div>

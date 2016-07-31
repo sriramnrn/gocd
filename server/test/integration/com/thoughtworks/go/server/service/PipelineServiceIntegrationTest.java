@@ -19,7 +19,7 @@ package com.thoughtworks.go.server.service;
 import java.io.File;
 import java.util.Date;
 
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.materials.Materials;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterial;
 import com.thoughtworks.go.domain.MaterialRevisions;
@@ -36,6 +36,7 @@ import com.thoughtworks.go.server.persistence.MaterialRepository;
 import com.thoughtworks.go.server.transaction.TransactionTemplate;
 import com.thoughtworks.go.util.GoConfigFileHelper;
 import com.thoughtworks.go.util.ReflectionUtil;
+import org.apache.commons.lang.time.DateUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -58,7 +59,7 @@ import static org.junit.Assert.assertThat;
 public class PipelineServiceIntegrationTest {
     @Autowired private DatabaseAccessHelper dbHelper;
     @Autowired private GoCache goCache;
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private PipelineService pipelineService;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private PipelineSqlMapDao pipelineSqlMapDao;
@@ -70,7 +71,7 @@ public class PipelineServiceIntegrationTest {
     @Before
     public void setUp() throws Exception {
         goCache.clear();
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         configHelper.onSetUp();
 
         dbHelper.onSetUp();
@@ -124,11 +125,12 @@ public class PipelineServiceIntegrationTest {
         File file3 = new File("file3");
         File file4 = new File("file4");
         Material hg1 = new HgMaterial("url1", "Dest1");
-        String[] hgRevs = new String[]{"h1"};
+        String[] hgRevs = new String[]{"hg1_2"};
 
         Date latestModification = new Date();
-        u.checkinFiles(hg1, "h1", a(file1, file2, file3, file4), ModifiedAction.added, org.apache.commons.lang.time.DateUtils.addDays(latestModification, -1));
-        u.checkinFiles(hg1, "h1", a(file1, file2, file3, file4), ModifiedAction.added, latestModification);
+        Date older = DateUtils.addDays(latestModification, -1);
+        u.checkinFiles(hg1, "hg1_1", a(file1, file2, file3, file4), ModifiedAction.added, older);
+        u.checkinFiles(hg1, "hg1_2", a(file1, file2, file3, file4), ModifiedAction.modified, latestModification);
 
 
         ScheduleTestUtil.AddedPipeline pair01 = u.saveConfigWith("pair01", "stageName", u.m(hg1));

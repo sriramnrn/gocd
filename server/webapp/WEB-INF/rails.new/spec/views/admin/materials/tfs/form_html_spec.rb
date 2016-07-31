@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe "_form.html.erb" do
   include GoUtil, FormUI, ReflectiveUtil
@@ -27,7 +27,7 @@ describe "_form.html.erb" do
     @ignored_file = IgnoredFiles.new("/sugar")
     @material_config.setFilter(Filter.new([@ignored_file, IgnoredFiles.new("/jaggery")].to_java(IgnoredFiles)))
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     set(@cruise_config, "md5", "abc")
   end
 
@@ -58,7 +58,7 @@ describe "_form.html.erb" do
 
     render :partial => "admin/materials/tfs/form.html", :locals => {:scope => {:material => @material_config, :url => "http://google.com", :method => "POST", :submit_label => "FOO", :edit_mode => true}}
 
-    expect(response.body).to have_selector(".popup_form input[disabled='disabled'][type='password'][name='material[#{com.thoughtworks.go.config.materials.ScmMaterialConfig::PASSWORD}]'][value='passwd']")
+    expect(response.body).to have_selector(".popup_form input[disabled='disabled'][type='password'][name='material[#{com.thoughtworks.go.config.materials.ScmMaterialConfig::PASSWORD}]'][value='']")
     expect(response.body).to have_selector(".popup_form input[type='checkbox'][name='material[#{com.thoughtworks.go.config.materials.ScmMaterialConfig::PASSWORD_CHANGED}]']")
   end
 
@@ -79,7 +79,7 @@ describe "_form.html.erb" do
     render :partial => "admin/materials/tfs/form.html", :locals => {:scope => {:material => @material_config, :url => "http://google.com", :method => "POST", :submit_label => "FOO"}}
 
     expect(response.body).to have_selector(".popup_form button#check_connection_tfs", :text => "CHECK CONNECTION")
-    expect(response.body).to have_selector(".popup_form #vcsconnection-message_tfs", :text => "")
+    expect(response.body).to have_selector(".popup_form #vcsconnection-message_tfs", :text => "", visible: false)
     expect(response.body).to have_selector(".url")
     expect(response.body).to have_selector(".username")
     expect(response.body).to have_selector(".password")

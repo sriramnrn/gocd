@@ -60,7 +60,7 @@ public class ConsoleActivityMonitorTest {
     private ServerHealthService serverHealthService;
     private GoConfigService goConfigService;
     private ScheduleService scheduleService;
-    private ArtifactsService artifactService;
+    private ConsoleService consoleService;
 
     @Before public void setUp() throws Exception {
         timeProvider = mock(TimeProvider.class);
@@ -69,7 +69,7 @@ public class ConsoleActivityMonitorTest {
         jobInstanceService = mock(JobInstanceService.class);
         scheduleService = mock(ScheduleService.class);
         goConfigService = mock(GoConfigService.class);
-        artifactService = mock(ArtifactsService.class);
+        consoleService = mock(ConsoleService.class);
 
         when(goConfigService.getUnresponsiveJobTerminationThreshold(any(JobIdentifier.class))).thenReturn(UNRESPONSIVE_JOB_KILL_THRESHOLD);//5 mins
         when(systemEnvironment.getUnresponsiveJobWarningThreshold()).thenReturn(UNRESPONSIVE_JOB_WARNING_THRESHOLD);//2 mins
@@ -81,7 +81,7 @@ public class ConsoleActivityMonitorTest {
                 return null;
             }
         }).when(jobInstanceService).registerJobStateChangeListener(Mockito.any(JobStatusListener.class));
-        consoleActivityMonitor = new ConsoleActivityMonitor(timeProvider, systemEnvironment, jobInstanceService, serverHealthService, goConfigService, artifactService);
+        consoleActivityMonitor = new ConsoleActivityMonitor(timeProvider, systemEnvironment, jobInstanceService, serverHealthService, goConfigService, consoleService);
         consoleActivityMonitor.populateActivityMap();
         stubInitializerCallsForActivityMonitor(jobInstanceService);
     }
@@ -235,7 +235,8 @@ public class ConsoleActivityMonitorTest {
 
         JobInstanceService jobInstanceService = mock(JobInstanceService.class);
         when(jobInstanceService.allBuildingJobs()).thenReturn(Arrays.asList(firstJob, secondJob));
-        consoleActivityMonitor = new ConsoleActivityMonitor(timeProvider, systemEnvironment, jobInstanceService, serverHealthService, goConfigService, artifactService);
+        consoleActivityMonitor = new ConsoleActivityMonitor(timeProvider, systemEnvironment, jobInstanceService,
+                serverHealthService, goConfigService, consoleService);
         consoleActivityMonitor.populateActivityMap();
         stubInitializerCallsForActivityMonitor(jobInstanceService);
 
@@ -262,14 +263,14 @@ public class ConsoleActivityMonitorTest {
         when(timeProvider.currentTimeMillis()).thenReturn(now.plusMinutes(2).plusSeconds(1).getMillis());//just over warning time limit i.e. 2 minutes
         consoleActivityMonitor.cancelUnresponsiveJobs(scheduleService);
 
-        verify(serverHealthService).update(ServerHealthState.warning("Job 'foo/stage/job' is not responding",
+        verify(serverHealthService).update(ServerHealthState.warningWithHtml("Job 'foo/stage/job' is not responding",
                 "Job <a href='/go/tab/build/detail/foo/12/stage/2/job'>foo/stage/job</a> is currently running but has not shown any console activity in the last 2 minute(s). This job may be hung.",
                 HealthStateType.general(HealthStateScope.forJob("foo", "stage", "job"))));
 
         when(timeProvider.currentTimeMillis()).thenReturn(now.plusMinutes(4).plusSeconds(1).getMillis());//after 4 minutes
         consoleActivityMonitor.cancelUnresponsiveJobs(scheduleService);
 
-        verify(serverHealthService).update(ServerHealthState.warning("Job 'foo/stage/job' is not responding",
+        verify(serverHealthService).update(ServerHealthState.warningWithHtml("Job 'foo/stage/job' is not responding",
                 "Job <a href='/go/tab/build/detail/foo/12/stage/2/job'>foo/stage/job</a> is currently running but has not shown any console activity in the last 4 minute(s). This job may be hung.",
                 HealthStateType.general(HealthStateScope.forJob("foo", "stage", "job"))));
 
@@ -277,7 +278,7 @@ public class ConsoleActivityMonitorTest {
         when(timeProvider.currentTimeMillis()).thenReturn(now.plusHours(1).plusMinutes(2).plusSeconds(1).getMillis());//after 62 minutes
         consoleActivityMonitor.cancelUnresponsiveJobs(scheduleService);
 
-        verify(serverHealthService).update(ServerHealthState.warning("Job 'foo/stage/job' is not responding",
+        verify(serverHealthService).update(ServerHealthState.warningWithHtml("Job 'foo/stage/job' is not responding",
                 "Job <a href='/go/tab/build/detail/foo/12/stage/2/job'>foo/stage/job</a> is currently running but has not shown any console activity in the last 62 minute(s). This job may be hung.",
                 HealthStateType.general(HealthStateScope.forJob("foo", "stage", "job"))));
     }
@@ -329,7 +330,7 @@ public class ConsoleActivityMonitorTest {
         when(timeProvider.currentTimeMillis()).thenReturn(new DateTime(1972, 1, 1, 1, 1, 0, 0).getMillis());
         consoleActivityMonitor.cancelUnresponsiveJobs(scheduleService);
 
-        verify(artifactService).appendToConsoleLog(unresponsiveJob, "Go cancelled this job as it has not generated any console output for more than 5 minute(s)");
+        verify(consoleService).appendToConsoleLog(unresponsiveJob, "Go cancelled this job as it has not generated any console output for more than 5 minute(s)");
     }
 
     @Test

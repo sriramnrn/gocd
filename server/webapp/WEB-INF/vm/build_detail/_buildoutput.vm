@@ -14,22 +14,6 @@
  * limitations under the License.
  *************************GO-LICENSE-END***********************************#
 
-<div id="tab-content-of-console" $buildoutput_extra_attrs>
-    #if($presenter.isCompleted())
-        <div class="console_iframe_container"></div>
-        <iframe id="build-output-console-iframe" style="display: none;"></iframe>
-        <div class="widget" id="build-output-console-warnning" style="display: none;">No console output.</div>
-    #else
-        <div class="widget">
-            <pre id="buildoutput_pre"></pre>
-        </div>
-    #end
+<div id="tab-content-of-console" class="ansi-color-toggle" $buildoutput_extra_attrs>
+    #parse("build_detail/_build_output_raw.vm")
 </div>
-
-<script type="text/javascript">
-    if(navigator && navigator.userAgent && navigator.userAgent.include('Firefox/2') && $('buildoutput_pre')){
-        (function(){
-            $('buildoutput_pre').up('div').setStyle({overflow: 'visible'});
-        }).delay(0.1);
-    }
-</script>

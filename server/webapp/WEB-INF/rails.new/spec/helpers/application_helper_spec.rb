@@ -1,5 +1,5 @@
 ##########################GO-LICENSE-START################################
-# Copyright 2014 ThoughtWorks, Inc.
+# Copyright 2016 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
+require 'spec_helper'
 
 describe ApplicationHelper do
   include ApplicationHelper, RailsLocalizer
@@ -266,25 +266,31 @@ describe ApplicationHelper do
                                            :url => api_pipeline_action_path(:pipeline_name => "SOME_NAME", :action => 'releaseLock'),
                                            :update => {:failure => "message_pane", :success => 'function(){}'},
                                            :html => {},
+                                           :headers => {Confirm: 'true'},
                                            :before => "spinny('unlock');"
 
-      exp = %q|<a href="#"  onclick="AjaxRefreshers.disableAjax();spinny('unlock');; new Ajax.Updater({success:'function(){}',failure:'message_pane'}, '/api/pipelines/SOME_NAME/releaseLock', {asynchronous:true, evalScripts:true, method:'post', on401:function(request){redirectToLoginPage('/auth/login');}, onComplete:function(request){AjaxRefreshers.enableAjax();}}); return false;">&nbsp;</a>|
+      exp = %q|<a href="#"  onclick="AjaxRefreshers.disableAjax();spinny('unlock');; new Ajax.Updater({success:'function(){}',failure:'message_pane'}, '/api/pipelines/SOME_NAME/releaseLock', {asynchronous:true, evalScripts:true, method:'post', on401:function(request){redirectToLoginPage('/auth/login');}, onComplete:function(request){AjaxRefreshers.enableAjax();}, requestHeaders:{'Confirm':'true'}}); return false;">&nbsp;</a>|
       expect(actual).to eq(exp)
     end
 
     it "should create a blocking link to a remote location with extra HTML provided" do
       actual = blocking_link_to_remote_new :name => "&nbsp;",
                                            :url => api_pipeline_action_path(:pipeline_name => "SOME_NAME", :action => 'releaseLock'),
+                                           :headers => {Confirm: 'true'},
                                            :update => {:failure => "message_pane", :success => 'function(){}'},
                                            :html => {:class => "ABC", :title => "TITLE", :id => "SOME-ID" },
                                            :before => "spinny('unlock');"
 
-      exp = %q|<a href="#"  class="ABC" id="SOME-ID" title="TITLE" onclick="AjaxRefreshers.disableAjax();spinny('unlock');; new Ajax.Updater({success:'function(){}',failure:'message_pane'}, '/api/pipelines/SOME_NAME/releaseLock', {asynchronous:true, evalScripts:true, method:'post', on401:function(request){redirectToLoginPage('/auth/login');}, onComplete:function(request){AjaxRefreshers.enableAjax();}}); return false;">&nbsp;</a>|
+      exp = %q|<a href="#"  class="ABC" id="SOME-ID" title="TITLE" onclick="AjaxRefreshers.disableAjax();spinny('unlock');; new Ajax.Updater({success:'function(){}',failure:'message_pane'}, '/api/pipelines/SOME_NAME/releaseLock', {asynchronous:true, evalScripts:true, method:'post', on401:function(request){redirectToLoginPage('/auth/login');}, onComplete:function(request){AjaxRefreshers.enableAjax();}, requestHeaders:{'Confirm':'true'}}); return false;">&nbsp;</a>|
       expect(actual).to eq(exp)
     end
   end
 
   describe 'submit button' do
+    before :each do
+      should_receive(:system_environment).and_return(env = double('sys_env'))
+      env.should_receive(:isServerActive).and_return(true)
+    end
 
     it "should have class 'image' and type 'submit' for image button" do
       submit_button("name", :type => 'image', :id=> 'id', :class=> "class", :onclick => "onclick", :disabled => "true").should ==
@@ -351,6 +357,21 @@ describe ApplicationHelper do
 
     it "should add onclick handler with the passed in onclick_lambda" do
       submit_button("name", :onclick_lambda => 'pavan_likes_this').should =~ /.*?function\(evt\) \{ pavan_likes_this\(evt\).*/
+    end
+  end
+
+  describe 'disable submit button' do
+    before :each do
+      should_receive(:system_environment).and_return(env = double('sys_env'))
+      env.should_receive(:isServerActive).and_return(false)
+    end
+
+    it "should make submit button disabled if server is in passive state" do
+      submit_button("name").should == "<button class=\"submit disabled\" disabled=\"disabled\" type=\"submit\" value=\"name\">" +
+          "<span>" +
+          "NAME" +
+          "</span>" +
+          "</button>"
     end
   end
 
@@ -434,7 +455,7 @@ describe ApplicationHelper do
   end
 
   it "should mark defaultable field by adding a hidden input" do
-    expect(register_defaultable_list("foo>bar>baz")).to eq('<input type="hidden" name="default_as_empty_list[]" value="foo>bar>baz"/>')
+    assert_dom_equal(register_defaultable_list("foo>bar>baz"), '<input type="hidden" name="default_as_empty_list[]" value="foo&gt;bar&gt;baz"/>')
   end
 
   describe "unauthorized_access" do
@@ -581,7 +602,21 @@ describe ApplicationHelper do
      )
      expect(actual).to eq(expected)
    end
-
   end
 
+  describe :go_update do
+    it 'should fetch the new go release' do
+      version_info_service.should_receive(:getGoUpdate).and_return("1.2.3-1")
+
+      expect(go_update).to eq("1.2.3-1")
+    end
+  end
+
+  describe :check_go_updates? do
+    it 'should return true if go version update check is enabled' do
+      version_info_service.should_receive(:isGOUpdateCheckEnabled).and_return(true)
+
+      expect(check_go_updates?).to be_true
+    end
+  end
 end

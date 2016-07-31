@@ -14,12 +14,11 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe Admin::Plugins::PluginsController do
 
   describe :routes do
-
     it "should resolve the route_for_index" do
       {:get => "/admin/plugins"}.should route_to(:controller => "admin/plugins/plugins", :action => "index")
       plugins_listing_path.should == "/admin/plugins"
@@ -30,13 +29,21 @@ describe Admin::Plugins::PluginsController do
       upload_plugin_path.should == "/admin/plugins"
     end
 
+    it "should resolve_the_route_for_get plugin settings" do
+      {:get => "/admin/plugins/settings/plugin.id"}.should route_to(:controller => "admin/plugins/plugins", :action => "edit_settings", :plugin_id => "plugin.id")
+      edit_settings_path(:plugin_id => 'plugin.id').should == "/admin/plugins/settings/plugin.id"
+    end
+
+    it "should resolve_the_route_for_update plugin settings" do
+      {:post => "/admin/plugins/settings/plugin.id"}.should route_to(:controller => "admin/plugins/plugins", :action => "update_settings", :plugin_id => "plugin.id")
+      update_settings_path(:plugin_id => 'plugin.id').should == "/admin/plugins/settings/plugin.id"
+    end
   end
 
   describe :upload do
-
     before :each do
       controller.stub(:default_plugin_manager).and_return(@plugin_manager = double('plugin_manager'))
-      expect(Toggles).to receive(:isToggleOn).with(Toggles.PLUGIN_UPLOAD_FEATURE_TOGGLE_KEY).and_return(true)
+      controller.stub(:system_environment).and_return(@system_environment = double("system_environment", :isPluginUploadEnabled => true))
     end
 
     it "should show success message when upload is successful" do
@@ -84,8 +91,7 @@ describe Admin::Plugins::PluginsController do
     end
 
     it "should refuse to upload when feature is turned off" do
-      RSpec::Mocks.proxy_for(Toggles).reset
-      expect(Toggles).to receive(:isToggleOn).with(Toggles.PLUGIN_UPLOAD_FEATURE_TOGGLE_KEY).and_return(false)
+      @system_environment.should_receive(:isPluginUploadEnabled).and_return(false)
 
       post :upload, :plugin => nil
 
@@ -96,7 +102,6 @@ describe Admin::Plugins::PluginsController do
   end
 
   describe :index do
-
     before :each do
       controller.stub(:default_plugin_manager).and_return(@plugin_manager = double('plugin_manager'))
       @plugin_1 = plugin("id", "name")
@@ -118,8 +123,10 @@ describe Admin::Plugins::PluginsController do
 
     it "should populate the current list of plugins and the external plugins path" do
       @plugin_manager.should_receive(:plugins).and_return([@plugin_1, @plugin_2])
-      controller.should_receive(:system_environment).and_return(@system_environment = double("system_environment"))
+      controller.stub(:system_environment).and_return(@system_environment = double("system_environment"))
+
       @system_environment.should_receive(:getExternalPluginAbsolutePath).and_return("some_path")
+      @system_environment.should_receive(:isPluginUploadEnabled).and_return(true)
 
       get :index
 
@@ -144,7 +151,11 @@ describe Admin::Plugins::PluginsController do
     end
 
     it "should populate the feature toggle flag for upload plugin" do
-      expect(Toggles).to receive(:isToggleOn).with(Toggles.PLUGIN_UPLOAD_FEATURE_TOGGLE_KEY).and_return(true)
+      controller.stub(:system_environment).and_return(@system_environment = double("system_environment"))
+
+      @system_environment.should_receive(:getExternalPluginAbsolutePath).and_return("some_path")
+      @system_environment.should_receive(:isPluginUploadEnabled).and_return(true)
+
       @plugin_manager.should_receive(:plugins).and_return([])
 
       get :index
@@ -162,4 +173,48 @@ describe Admin::Plugins::PluginsController do
     end
   end
 
+  describe :edit_settings do
+    before :each do
+      controller.stub(:plugin_service).and_return(@plugin_service = double('plugin service'))
+      expect(@plugin_service).to receive(:getPluginSettingsFor).with('plugin.id').and_return(@plugin_settings = double('plugin settings'))
+    end
+
+    it "should render settings template with required data" do
+      get :edit_settings, :plugin_id => 'plugin.id'
+
+      assigns[:meta_data_store].should == PluginSettingsMetadataStore.getInstance()
+      assigns[:plugin_settings].should == @plugin_settings
+      assert_template "admin/plugins/plugins/settings"
+      assert_template layout: false
+    end
+  end
+
+  describe :update_settings do
+    before :each do
+      controller.stub(:plugin_service).and_return(@plugin_service = double('plugin service'))
+      expect(@plugin_service).to receive(:getPluginSettingsFor).with('plugin.id', anything()).and_return(@plugin_settings = double('plugin settings'))
+      expect(@plugin_service).to receive(:validatePluginSettingsFor).with(@plugin_settings)
+    end
+
+    it "should render settings template with required data on error" do
+      expect(@plugin_settings).to receive(:hasErrors).and_return(true)
+
+      post :update_settings, :plugin_id => 'plugin.id'
+
+      assigns[:meta_data_store].should == PluginSettingsMetadataStore.getInstance()
+      assigns[:plugin_settings].should == @plugin_settings
+      assert_template "admin/plugins/plugins/settings"
+      assert_template layout: false
+    end
+
+    it "should redirect to plugin listing on success" do
+      expect(@plugin_settings).to receive(:hasErrors).and_return(false)
+      expect(@plugin_service).to receive(:savePluginSettingsFor).with(@plugin_settings)
+
+      post :update_settings, :plugin_id => 'plugin.id'
+
+      response.body.should == 'Saved successfully'
+      URI.parse(response.location).path.should == plugins_listing_path
+    end
+  end
 end

@@ -1,18 +1,18 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END**********************************/
+ */
 
 /* Pipeline Observer: check the pipeline status in specific interval. */
 var PipelineObserver = Class.create();
@@ -364,6 +364,9 @@ var PipelineActions = Class.create({
 
             new Ajax.Request(url, {
                 method: 'put',
+                requestHeaders: {
+                    Confirm: 'true'
+                },
                 onComplete: function() {
                     dashboard_periodical_executer.fireNow();
                 }
@@ -384,6 +387,9 @@ var PipelineActions = Class.create({
 
         new Ajax.Request(url, {
             method: 'post',
+            requestHeaders: {
+                Confirm: 'true'
+            },
             onComplete: function() {
                 dashboard_periodical_executer.fireNow();
             },
@@ -410,7 +416,8 @@ var PipelineActions = Class.create({
             return;/* Can't duplicate submit when submitting */
         }
 
-        var url = contextPath + "/pausePipeline.json?pipelineName=" + pipelineName;
+        var url = contextPath + "/api/pipelines/" + pipelineName + "/pause";
+
         var cause = prompt("Specify the reason why you want to stop scheduling on this pipeline (only a-z, A-Z, 0-9, fullstop, underscore, hyphen and pipe is valid) :");
         while (!this.isPauseReasonValid(cause).result) {
             cause = prompt(this.isPauseReasonValid(cause).reason);
@@ -426,6 +433,9 @@ var PipelineActions = Class.create({
             new Ajax.Request(url, {
                 method: 'post',
                 parameters : 'pauseCause=' + cause,
+                requestHeaders: {
+                    Confirm: 'true'
+                },
                 onComplete: function() {
                     dashboard_periodical_executer.fireNow();
                 }
@@ -442,7 +452,7 @@ var PipelineActions = Class.create({
 
         $('pause-' + pipelineName).removeClassName('pause-build-link').addClassName('submiting-link');
 
-        var url = contextPath + "/unpausePipeline.json?pipelineName=" + pipelineName;
+        var url = contextPath + "/api/pipelines/" + pipelineName + "/unpause";
 
         this.rememberButtonIsSpinning('Pause', pipelineName);
 
@@ -452,6 +462,9 @@ var PipelineActions = Class.create({
         
         new Ajax.Request(url, {
             method: 'post',
+            requestHeaders: {
+                Confirm: 'true'
+            },
             onComplete: function() {
                 dashboard_periodical_executer.fireNow();
             }
@@ -487,6 +500,9 @@ var StageActions = Class.create({
             var url = contextPath + "/run/" + pipelineName + "/" + pipelineLabel + "/" + stageName;
             new Ajax.Request(url, {
                 method: 'post',
+                requestHeaders: {
+                    Confirm: 'true'
+                },
                 onComplete: function() {
                     dashboard_periodical_executer.fireNow();
                 },

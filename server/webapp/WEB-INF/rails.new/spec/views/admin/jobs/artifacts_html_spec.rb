@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/jobs/artifacts.html.erb" do
   include GoUtil, FormUI
@@ -27,7 +27,7 @@ describe "admin/jobs/artifacts.html.erb" do
     assign(:stage, stage)
     assign(:job, @job)
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     @cruise_config.addPipeline("group-1", pipeline)
 
     in_params(:stage_parent => "pipelines", :pipeline_name => "foo_bar", :stage_name => "stage-name", :action => "edit", :controller => "admin/stages", :job_name => "foo_bar_baz", :current_tab => "environment_variables")
@@ -38,7 +38,7 @@ describe "admin/jobs/artifacts.html.erb" do
 
     expect(response.body).to have_selector("form input[type='hidden'][name='default_as_empty_list[]'][value='job>artifactPlans']")
   end
-  
+
   it "should have a heading as Artifacts with a title tooltip" do
     render
 

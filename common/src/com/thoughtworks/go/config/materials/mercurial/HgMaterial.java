@@ -16,34 +16,28 @@
 
 package com.thoughtworks.go.config.materials.mercurial;
 
+import com.thoughtworks.go.config.materials.ScmMaterial;
+import com.thoughtworks.go.config.materials.ScmMaterialConfig;
+import com.thoughtworks.go.config.materials.SubprocessExecutionContext;
+import com.thoughtworks.go.domain.MaterialInstance;
+import com.thoughtworks.go.domain.materials.*;
+import com.thoughtworks.go.domain.materials.mercurial.HgCommand;
+import com.thoughtworks.go.domain.materials.mercurial.HgMaterialInstance;
+import com.thoughtworks.go.domain.materials.svn.MaterialUrl;
+import com.thoughtworks.go.util.FileUtil;
+import com.thoughtworks.go.util.GoConstants;
+import com.thoughtworks.go.util.command.*;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import com.thoughtworks.go.config.materials.ScmMaterial;
-import com.thoughtworks.go.config.materials.ScmMaterialConfig;
-import com.thoughtworks.go.config.materials.SubprocessExecutionContext;
-import com.thoughtworks.go.domain.MaterialInstance;
-import com.thoughtworks.go.domain.materials.MaterialConfig;
-import com.thoughtworks.go.domain.materials.Modification;
-import com.thoughtworks.go.domain.materials.Revision;
-import com.thoughtworks.go.domain.materials.ValidationBean;
-import com.thoughtworks.go.domain.materials.mercurial.HgCommand;
-import com.thoughtworks.go.domain.materials.mercurial.HgMaterialInstance;
-import com.thoughtworks.go.domain.materials.svn.MaterialUrl;
-import com.thoughtworks.go.util.GoConstants;
-import com.thoughtworks.go.util.FileUtil;
-import com.thoughtworks.go.util.command.ConsoleResult;
-import com.thoughtworks.go.util.command.HgUrlArgument;
-import com.thoughtworks.go.util.command.InMemoryStreamConsumer;
-import com.thoughtworks.go.util.command.ProcessOutputStreamConsumer;
-import com.thoughtworks.go.util.command.UrlArgument;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.math.NumberUtils;
-import org.apache.log4j.Logger;
 
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 import static com.thoughtworks.go.util.ExceptionUtils.bombIfFailedToRunCommandLine;
@@ -55,7 +49,7 @@ import static java.lang.String.format;
  */
 public class HgMaterial extends ScmMaterial {
     private static final Pattern HG_VERSION_PATTERN = Pattern.compile(".*\\(.*\\s+(\\d(\\.\\d)+.*)\\)");
-    private static final Logger LOG = Logger.getLogger(HgMaterial.class);
+    private static final Logger LOGGER = Logger.getLogger(HgMaterial.class);
     private HgUrlArgument url;
 
     //TODO: use iBatis to set the type for us, and we can get rid of this field.
@@ -81,12 +75,13 @@ public class HgMaterial extends ScmMaterial {
         this(config.getUrl(), config.getFolder());
         this.autoUpdate = config.getAutoUpdate();
         this.filter = config.rawFilter();
+        this.invertFilter = config.getInvertFilter();
         this.name = config.getName();
     }
 
     @Override
     public MaterialConfig config() {
-        return new HgMaterialConfig(url, autoUpdate, filter, folder, name);
+        return new HgMaterialConfig(url, autoUpdate, filter, invertFilter, folder, name);
     }
 
     public List<Modification> latestModification(File baseDir, final SubprocessExecutionContext execCtx) {
@@ -126,12 +121,13 @@ public class HgMaterial extends ScmMaterial {
         return hgCommand;
     }
 
-    public void updateTo(ProcessOutputStreamConsumer outputStreamConsumer, Revision revision, File baseDir, final SubprocessExecutionContext execCtx) {
+    public void updateTo(ProcessOutputStreamConsumer outputStreamConsumer, File baseDir, RevisionContext revisionContext, final SubprocessExecutionContext execCtx) {
+        Revision revision = revisionContext.getLatestRevision();
         try {
-            outputStreamConsumer.stdOutput(
-                    format("\n[%s] Start updating %s at revision %s from %s", GoConstants.PRODUCT_NAME, updatingTarget(),
-                            revision.getRevision(), url.forDisplay()));
-            hg(baseDir, outputStreamConsumer).updateTo(revision, outputStreamConsumer);
+            outputStreamConsumer.stdOutput(format("[%s] Start updating %s at revision %s from %s", GoConstants.PRODUCT_NAME, updatingTarget(), revision.getRevision(), url.forDisplay()));
+            File workingDir = execCtx.isServer() ? baseDir : workingdir(baseDir);
+            hg(workingDir, outputStreamConsumer).updateTo(revision, outputStreamConsumer);
+            outputStreamConsumer.stdOutput(format("[%s] Done.\n", GoConstants.PRODUCT_NAME));
         } catch (Exception e) {
             bomb(e);
         }
@@ -194,18 +190,17 @@ public class HgMaterial extends ScmMaterial {
                 return defaultResponse;
             }
         } catch (Exception e1) {
-            LOG.debug("Problem validating HG", e);
+            LOGGER.debug("Problem validating HG", e);
             return defaultResponse;
         }
     }
 
 
-    private HgCommand hg(File baseDir, ProcessOutputStreamConsumer outputStreamConsumer) throws Exception {
-        File workingFolder = workingdir(baseDir);
-        HgCommand hgCommand = new HgCommand(getFingerprint(), workingFolder, getBranch());
-        if (!isHgRepository(workingFolder) || isRepositoryChanged(hgCommand, workingFolder)) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Invalid hg working copy or repository changed. Delete folder: " + workingFolder);
+    private HgCommand hg(File workingFolder, ProcessOutputStreamConsumer outputStreamConsumer) throws Exception {
+        HgCommand hgCommand = new HgCommand(getFingerprint(), workingFolder, getBranch(), getUrl());
+        if (!isHgRepository(workingFolder) || isRepositoryChanged(hgCommand)) {
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug("Invalid hg working copy or repository changed. Delete folder: " + workingFolder);
             }
             FileUtil.deleteFolder(workingFolder);
         }
@@ -221,13 +216,9 @@ public class HgMaterial extends ScmMaterial {
         return new File(workingFolder, ".hg").isDirectory();
     }
 
-    private boolean isRepositoryChanged(HgCommand hgCommand, File workingDirectory) {
+    private boolean isRepositoryChanged(HgCommand hgCommand) {
         ConsoleResult result = hgCommand.workingRepositoryUrl();
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("Current repository url of [" + workingDirectory + "]: " + result.outputForDisplayAsString());
-            LOG.trace("Target repository url: " + url);
-        }
-        return !MaterialUrl.sameUrl(url.forCommandline(), result.outputAsString());
+        return !MaterialUrl.sameUrl(url.defaultRemoteUrl(), new HgUrlArgument(result.outputAsString()).defaultRemoteUrl());
     }
 
     public String getUserName() {
@@ -298,6 +289,20 @@ public class HgMaterial extends ScmMaterial {
         if (revision == null) return null;
         if (revision.length()<12) return revision;
         return revision.substring(0,12);
+    }
+
+    @Override
+    public Map<String, Object> getAttributes(boolean addSecureFields) {
+        Map<String, Object> materialMap = new HashMap<>();
+        materialMap.put("type", "mercurial");
+        Map<String, Object> configurationMap = new HashMap<>();
+        if (addSecureFields) {
+            configurationMap.put("url", url.forCommandline());
+        } else {
+            configurationMap.put("url", url.forDisplay());
+        }
+        materialMap.put("mercurial-configuration", configurationMap);
+        return materialMap;
     }
 
     public Class getInstanceType() {

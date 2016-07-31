@@ -64,6 +64,11 @@ public class PackageMaterialPoller implements MaterialPoller<PackageMaterial> {
         return getModifications(packageRevision);
     }
 
+    @Override
+    public void checkout(PackageMaterial material, File baseDir, Revision revision, SubprocessExecutionContext execCtx) {
+        throw new RuntimeException("not supported");
+    }
+
     private List<Modification> getModifications(PackageRevision packageRevision) {
         if (packageRevision == null) {
             return new Modifications();
@@ -74,7 +79,7 @@ public class PackageMaterialPoller implements MaterialPoller<PackageMaterial> {
     }
 
     private Map<String, String> getCommentParameters(PackageRevision packageRevision) {
-        HashMap<String, String> commentParametersMap = new HashMap<String, String>();
+        HashMap<String, String> commentParametersMap = new HashMap<>();
         commentParametersMap.put("TYPE", "PACKAGE_MATERIAL");
         commentParametersMap.put("TRACKBACK_URL", packageRevision.getTrackbackUrl());
         commentParametersMap.put("COMMENT", packageRevision.getRevisionComment());

@@ -1,24 +1,25 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.StringReader;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -40,8 +41,6 @@ import com.thoughtworks.go.domain.packagerepository.PackageDefinition;
 import com.thoughtworks.go.domain.packagerepository.PackageRepositories;
 import com.thoughtworks.go.domain.packagerepository.PackageRepository;
 import com.thoughtworks.go.helper.ConfigFileFixture;
-import com.thoughtworks.go.licensing.Edition;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
 import com.thoughtworks.go.server.service.GoConfigService;
 import com.thoughtworks.go.server.util.ServerVersion;
 import com.thoughtworks.go.serverhealth.HealthStateLevel;
@@ -51,12 +50,12 @@ import com.thoughtworks.go.serverhealth.ServerHealthService;
 import com.thoughtworks.go.serverhealth.ServerHealthStates;
 import com.thoughtworks.go.service.ConfigRepository;
 import com.thoughtworks.go.util.*;
-import com.thoughtworks.go.util.GoConfigFileHelper;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
-import org.hamcrest.Matchers;
+import org.apache.commons.lang.StringUtils;
 import org.jdom.Document;
 import org.jdom.filter.ElementFilter;
+import org.jdom.input.SAXBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -69,7 +68,6 @@ import static com.thoughtworks.go.domain.packagerepository.ConfigurationProperty
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 import static com.thoughtworks.go.util.FileUtil.readToEnd;
 import static java.util.Arrays.asList;
-import static junit.framework.Assert.fail;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.instanceOf;
@@ -77,9 +75,7 @@ import static org.hamcrest.Matchers.*;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.core.IsNull.nullValue;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.*;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = {
@@ -95,8 +91,8 @@ public class GoConfigMigrationIntegrationTest {
     @Autowired private ServerVersion serverVersion;
     @Autowired private ConfigElementImplementationRegistry registry;
     @Autowired private GoConfigService goConfigService;
-    @Autowired private MetricsProbeService metricsProbeService;
     @Autowired private ServerHealthService serverHealthService;
+    @Autowired private CachedGoPartials cachedGoPartials;
 
     private String currentGoServerVersion;
     private MagicalGoConfigXmlLoader loader;
@@ -110,7 +106,7 @@ public class GoConfigMigrationIntegrationTest {
         configRepository.initialize();
         serverHealthService.removeAllLogs();
         currentGoServerVersion = serverVersion.version();
-        loader = new MagicalGoConfigXmlLoader(new ConfigCache(), ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+        loader = new MagicalGoConfigXmlLoader(new ConfigCache(), ConfigElementImplementationRegistryMother.withNoPlugins());
     }
 
     @After
@@ -152,7 +148,7 @@ public class GoConfigMigrationIntegrationTest {
 
     @Test
     public void shouldMigrateConfigContentAsAString() throws Exception {
-        String newContent = new GoConfigMigration(configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService)
+        String newContent = new GoConfigMigration(configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins())
                 .upgradeIfNecessary(ConfigFileFixture.VERSION_0);
         assertThat(newContent, containsString("schemaVersion=\"" + GoConfigSchema.currentSchemaVersion() + "\""));
     }
@@ -160,7 +156,7 @@ public class GoConfigMigrationIntegrationTest {
     @Test
     public void shouldNotMigrateConfigContentAsAStringWhenAlreadyUpToDate() throws Exception {
         GoConfigMigration configMigration = new GoConfigMigration(configRepository, new TimeProvider(), configCache,
-                ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+                ConfigElementImplementationRegistryMother.withNoPlugins());
         String newContent = configMigration.upgradeIfNecessary(ConfigFileFixture.VERSION_0);
         assertThat(newContent, is(configMigration.upgradeIfNecessary(newContent)));
     }
@@ -183,8 +179,8 @@ public class GoConfigMigrationIntegrationTest {
             loadConfigFileWithContent("<cruise></cruise>");
             ServerHealthStates states = serverHealthService.getAllLogs();
             assertThat(states.size(), is(1));
-            assertThat(states.get(0).getDescription(), containsString("Go encountered an invalid configuration file while starting up. The invalid configuration file has been renamed to ‘"));
-            assertThat(states.get(0).getDescription(), containsString("’ and a new configuration file has been automatically created using the last good configuration."));
+            assertThat(states.get(0).getDescription(), containsString("Go encountered an invalid configuration file while starting up. The invalid configuration file has been renamed to &lsquo;"));
+            assertThat(states.get(0).getDescription(), containsString("&rsquo; and a new configuration file has been automatically created using the last good configuration."));
             assertThat(states.get(0).getMessage(), containsString("Invalid Configuration"));
             assertThat(states.get(0).getType(), is(HealthStateType.general(HealthStateScope.forInvalidConfig())));
             assertThat(states.get(0).getLogLevel(), is(HealthStateLevel.WARNING));
@@ -196,12 +192,12 @@ public class GoConfigMigrationIntegrationTest {
     @Test
     public void shouldTryToRevertConfigToTheLatestValidConfigVersionOnlyOnce() throws IOException {
         try {
-            configRepository.checkin(new GoConfigRevision("<cruise></cruise>", "md5", "ps", "123", Edition.Empty, new TimeProvider()));
+            configRepository.checkin(new GoConfigRevision("<cruise></cruise>", "md5", "ps", "123", new TimeProvider()));
             loadConfigFileWithContent("<cruise></cruise>");
             ServerHealthStates states = serverHealthService.getAllLogs();
             assertThat(states.size(), is(1));
-            assertThat(states.get(0).getDescription(), containsString("Go encountered an invalid configuration file while starting up. The invalid configuration file has been renamed to ‘"));
-            assertThat(states.get(0).getDescription(), containsString("’ and a new configuration file has been automatically created using the last good configuration."));
+            assertThat(states.get(0).getDescription(), containsString("Go encountered an invalid configuration file while starting up. The invalid configuration file has been renamed to &lsquo;"));
+            assertThat(states.get(0).getDescription(), containsString("&rsquo; and a new configuration file has been automatically created using the last good configuration."));
             assertThat(states.get(0).getMessage(), containsString("Invalid Configuration"));
             assertThat(states.get(0).getType(), is(HealthStateType.general(HealthStateScope.forInvalidConfig())));
             assertThat(states.get(0).getLogLevel(), is(HealthStateLevel.WARNING));
@@ -223,7 +219,7 @@ public class GoConfigMigrationIntegrationTest {
 
     @Test
     public void shouldMigrateApprovalsCorrectlyBug2112() throws Exception {
-        File bjcruise = new File("../common/test-resources/data/bjcruise-cruise-config-1.0.xml");
+        File bjcruise = new File("../common/test-resources/unit/data/bjcruise-cruise-config-1.0.xml");
         assertThat(bjcruise.exists(), is(true));
         String xml = readToEnd(bjcruise);
 
@@ -277,7 +273,7 @@ public class GoConfigMigrationIntegrationTest {
     @Test
     public void shouldMigrateDependsOnTagToBeADependencyMaterial() throws Exception {
         String content = FileUtils.readFileToString(
-                new File("../common/test-resources/data/config/version4/cruise-config-dependency-migration.xml"));
+                new File("../common/test-resources/unit/data/config/version4/cruise-config-dependency-migration.xml"));
         CruiseConfig cruiseConfig = loadConfigFileWithContent(content);
         MaterialConfig actual = cruiseConfig.pipelineConfigByName(new CaseInsensitiveString("depends")).materialConfigs().first();
         assertThat(actual, instanceOf(DependencyMaterialConfig.class));
@@ -294,7 +290,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
         FileUtils.writeStringToFile(configFile, ConfigFileFixture.JOBS_WITH_DIFFERNT_CASE);
 
         upgrader.upgradeIfNecessary(configFile, currentGoServerVersion);
@@ -309,9 +305,9 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         throw new AssertionError("upgrade failed!!!!!");
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
         FileUtils.writeStringToFile(configFile, ConfigFileFixture.DEFAULT_XML_WITH_2_AGENTS);
-        configRepository.checkin(new GoConfigRevision("dummy-content", "some-md5", "loser", "100.3.1", Edition.Free, new TimeProvider()));
+        configRepository.checkin(new GoConfigRevision("dummy-content", "some-md5", "loser", "100.3.1", new TimeProvider()));
 
         upgrader.upgradeIfNecessary(configFile, currentGoServerVersion);
 
@@ -473,7 +469,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
         String configContent = ConfigFileFixture.configWithPipeline(String.format(
                 "<pipeline name='pipeline1'>"
                         + "    <materials>"
@@ -548,8 +544,8 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(),
-                metricsProbeService);
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins()
+        );
         String configContent = ConfigFileFixture.configWithPipeline(String.format(
                 "<pipeline name='pipeline1'>"
                         + "<params>"
@@ -586,7 +582,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
 
         String content = "<cruise schemaVersion='" + 47 + "'>\n"
                 + "<server artifactsdir=\"logs\" siteUrl=\"http://go-server-site-url:8153\" secureSiteUrl=\"https://go-server-site-url:8154\" jobTimeout=\"60\">\n"
@@ -615,7 +611,7 @@ public class GoConfigMigrationIntegrationTest {
 
         String configXml = FileUtils.readFileToString(configFile);
 
-        MagicalGoConfigXmlLoader loader = new MagicalGoConfigXmlLoader(new ConfigCache(), ConfigElementImplementationRegistryMother.withNoPlugins(), metricsProbeService);
+        MagicalGoConfigXmlLoader loader = new MagicalGoConfigXmlLoader(new ConfigCache(), ConfigElementImplementationRegistryMother.withNoPlugins());
         GoConfigHolder configHolder = loader.loadConfigHolder(configXml);
 
         CruiseConfig config = configHolder.config;
@@ -878,7 +874,7 @@ public class GoConfigMigrationIntegrationTest {
                         + "</cruise>";
 
         String migratedContent = migrateXmlString(configString, 66);
-        Document document = XmlUtils.buildXmlDocument(migratedContent);
+        Document document = new SAXBuilder().build(new StringReader(migratedContent));
 
         assertThat(document.getDescendants(new ElementFilter("luau")).hasNext(), is(false));
         assertThat(document.getDescendants(new ElementFilter("groups")).hasNext(), is(false));
@@ -1021,7 +1017,7 @@ public class GoConfigMigrationIntegrationTest {
 
         Tasks tasks = jobConfig.getTasks();
         assertThat(tasks.size(),is(1));
-        assertThat((PluggableTask) tasks.get(0), is(new PluggableTask(null, new PluginConfiguration("plugin-id", "1.0"), configuration)));
+        assertThat((PluggableTask) tasks.get(0), is(new PluggableTask(new PluginConfiguration("plugin-id", "1.0"), configuration)));
     }
 
     @Test
@@ -1116,6 +1112,76 @@ public class GoConfigMigrationIntegrationTest {
         assertThat(task, is(instanceOf(ExecTask.class)));
         assertThat((ExecTask) task, is(new ExecTask("c:\\program files\\cmd.exe", "arguments", (String) null)));
     }
+    @Test
+    public void shouldNotRemoveNonEmptyUserTags_asPartOfMigration78() throws Exception {
+        String configXml =
+                "<cruise schemaVersion='77'>"
+                +"  <pipelines group='first'>"
+                +"    <authorization>"
+                +"       <view>"
+                +"         <user>abc</user>"
+                +"       </view>"
+                +"    </authorization>"
+                +"    <pipeline name='Test' template='test_template'>"
+                +"      <materials>"
+                +"        <hg url='../manual-testing/ant_hg/dummy' />"
+                +"      </materials>"
+                +"     </pipeline>"
+                +"  </pipelines>"
+                +"</cruise>";
+        String migratedXml = migrateXmlString(configXml, 77);
+        assertThat(migratedXml, containsString("<user>"));
+    }
+
+    @Test
+    public void shouldRemoveEmptyTags_asPartOfMigration78() throws Exception {
+        String configXml =
+                "<cruise schemaVersion='77'>"
+                +"  <pipelines group='first'>"
+                +"    <authorization>"
+                +"       <view>"
+                +"         <user>foo</user>"
+                +"         <user />"
+                +"         <user>        </user>"
+                +"       </view>"
+                +"       <operate>"
+                +"          <user></user>"
+                +"       </operate>"
+                +"    </authorization>"
+                +"    <pipeline name='Test' template='test_template'>"
+                +"      <materials>"
+                +"        <hg url='../manual-testing/ant_hg/dummy' />"
+                +"      </materials>"
+                +"     </pipeline>"
+                +"  </pipelines>"
+                +"</cruise>";
+        String migratedXml = migrateXmlString(configXml, 77);
+        assertThat(StringUtils.countMatches(migratedXml, "<user>"), is(1));
+    }
+
+    @Test
+    public void shouldRemoveEmptyTagsRecursively_asPartOfMigration78() throws Exception {
+        String configXml =
+                "<cruise schemaVersion='77'>"
+                +"  <pipelines group='first'>"
+                +"    <authorization>"
+                +"       <view>"
+                +"         <user></user>"
+                +"       </view>"
+                +"    </authorization>"
+                +"    <pipeline name='Test' template='test_template'>"
+                +"      <materials>"
+                +"        <hg url='../manual-testing/ant_hg/dummy' />"
+                +"      </materials>"
+                +"     </pipeline>"
+                +"  </pipelines>"
+                +"</cruise>";
+        String migratedXml = migrateXmlString(configXml, 77);
+        assertThat(migratedXml, not(containsString("<user>")));
+        assertThat(migratedXml, not(containsString("<view>")));
+        assertThat(migratedXml, not(containsString("<authorization>")));
+    }
+
 
     private void assertStringsIgnoringCarriageReturnAreEqual(String expected, String actual) {
         assertEquals(expected.replaceAll("\\r", ""), actual.replaceAll("\\r", ""));
@@ -1169,8 +1235,8 @@ public class GoConfigMigrationIntegrationTest {
                         e.printStackTrace();
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(),
-                metricsProbeService);
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins()
+        );
         Method upgrade = upgrader.getClass().getDeclaredMethod("upgrade", String.class, Integer.TYPE, Integer.TYPE);
         upgrade.setAccessible(true);
         return (String) upgrade.invoke(upgrader, content, fromVersion, toVersion);
@@ -1191,11 +1257,11 @@ public class GoConfigMigrationIntegrationTest {
                 }
                 throw bomb(e.getMessage() + ": content=\n" + content, e);
             }
-        }, configRepository, new TimeProvider(), configCache, registry,
-                metricsProbeService);
+        }, configRepository, new TimeProvider(), configCache, registry
+        );
         SystemEnvironment sysEnv = new SystemEnvironment();
-        GoConfigDataSource configDataSource = new GoConfigDataSource(migration, configRepository, sysEnv, new TimeProvider(), configCache, serverVersion,
-                registry, metricsProbeService, serverHealthService);
+        GoFileConfigDataSource configDataSource = new GoFileConfigDataSource(migration, configRepository, sysEnv, new TimeProvider(), configCache, serverVersion,
+                registry, serverHealthService, cachedGoPartials);
         configDataSource.upgradeIfNecessary();
         return configDataSource.forceLoad(configFile);
     }

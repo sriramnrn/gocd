@@ -1,5 +1,5 @@
 ##########################GO-LICENSE-START################################
-# Copyright 2014 ThoughtWorks, Inc.
+# Copyright 2016 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,22 +63,25 @@ class EnvironmentsController < ApplicationController
   end
 
   def show
-    @agent_details = agent_service.filter(@environment.getAgents().map(&:uuid))
+    @agent_details = agent_service.filter(@environment.getLocalAgents().map(&:uuid))
   end
 
   def edit_pipelines
+    render layout:false
   end
 
   def edit_agents
+    render layout:false
   end
 
   def edit_variables
+    render layout:false
   end
 
   private
 
   def load_new_environment
-    @environment = EnvironmentConfig.new
+    @environment = BasicEnvironmentConfig.new
   end
 
   def load_existing_environment
@@ -104,10 +107,12 @@ class EnvironmentsController < ApplicationController
   end
 
   def load_pipelines_and_agents
-    pipelines = environment_config_service.getAllPipelinesForUser(current_user)
+    pipelines = environment_config_service.getAllLocalPipelinesForUser(current_user)
+    # available_pipelines should only contain local pipelines, not referenced already from a remote config repository
 
     @unavailable_pipelines = []
     @available_pipelines = []
+    @remote_pipelines = environment_config_service.getAllRemotePipelinesForUserInEnvironment(current_user,@environment)
 
     pipelines.each do |pipeline|
       collection = pipeline.isAssociatedWithEnvironmentOtherThan(@environment && @environment.name().to_s) ? @unavailable_pipelines : @available_pipelines

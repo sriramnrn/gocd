@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.thoughtworks.go.plugins.PluginExtensions;
 import com.thoughtworks.go.plugins.presentation.PluggableViewModel;
@@ -38,21 +39,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConfigElementImplementationRegistry implements ConfigElementRegistry {
 
-    private final ConcurrentHashMap<Class, List<Class>> registry;
-    private final ConcurrentHashMap<String, PluginNamespace> xsdsFor;
-    private final ConcurrentHashMap<Class, PluggableViewModelFactory> viewRegistry;
+    private final ConcurrentMap<Class, List<Class>> registry;
+    private final ConcurrentMap<String, PluginNamespace> xsdsFor;
+    private final ConcurrentMap<Class, PluggableViewModelFactory> viewRegistry;
 
     @Autowired
     public ConfigElementImplementationRegistry(PluginExtensions pluginExtns) {
-        this.registry = new ConcurrentHashMap<Class,List<Class>>();
-        this.viewRegistry = new ConcurrentHashMap<Class, PluggableViewModelFactory>();
-        this.xsdsFor = new ConcurrentHashMap<String, PluginNamespace>();
+        this.registry = new ConcurrentHashMap<>();
+        this.viewRegistry = new ConcurrentHashMap<>();
+        this.xsdsFor = new ConcurrentHashMap<>();
 
         registerPluginExtensions(pluginExtns);
     }
 
     public <T> List<Class<? extends T>> implementersOf(Class<T> type) {
-        List<Class<? extends T>> toReturn = new ArrayList<Class<? extends T>>();
+        List<Class<? extends T>> toReturn = new ArrayList<>();
         //noinspection unchecked
         for (Class<? extends T> impl : registry.get(type)) {
             toReturn.add(impl);

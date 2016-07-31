@@ -1,44 +1,33 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.controller;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import javax.servlet.http.HttpServletResponse;
-
-import com.thoughtworks.go.config.AgentConfig;
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.SecurityConfig;
-import com.thoughtworks.go.config.ServerConfig;
-import com.thoughtworks.go.config.UpdateConfigCommand;
+import com.thoughtworks.go.config.*;
+import com.thoughtworks.go.plugin.infra.commons.PluginsZip;
 import com.thoughtworks.go.server.domain.Username;
+import com.thoughtworks.go.server.service.AgentConfigService;
 import com.thoughtworks.go.server.service.AgentRuntimeInfo;
 import com.thoughtworks.go.server.service.AgentService;
 import com.thoughtworks.go.server.service.GoConfigService;
 import com.thoughtworks.go.server.service.result.HttpOperationResult;
-import com.thoughtworks.go.util.FileDigester;
-import com.thoughtworks.go.util.JsonTester;
 import com.thoughtworks.go.util.ReflectionUtil;
 import com.thoughtworks.go.util.StringUtil;
 import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.util.TestFileUtil;
-import com.thoughtworks.go.util.json.JsonMap;
 import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,23 +35,18 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.ModelAndView;
 
-import static com.thoughtworks.go.util.GoConstants.ERROR_FOR_JSON;
-import static org.junit.Assert.assertEquals;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+
 import static org.hamcrest.Matchers.is;
-import static org.jmock.Expectations.equal;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class AgentRegistrationControllerTest {
     private static final String AGENT_CHECKSUM_FIELD = "agentChecksum";
     private static final String AGENT_LAUNCHER_CHECKSUM_FIELD = "agentLauncherChecksum";
-    private static final String AGENT_PLUGINS_CHECKSUM_FIELD = "agentPluginsChecksum";
     private static final String UUID = "uuid";
     private static final String EXPECTED = "test";
     private static final String EXPECTED_MD5 = "CY9rzUYh03PK3k6DJie09g==";
@@ -75,10 +59,13 @@ public class AgentRegistrationControllerTest {
     private GoConfigService goConfigService;
     private AgentRegistrationController controller;
     private SystemEnvironment systemEnvironment;
+    private PluginsZip pluginsZip;
+    private AgentConfigService agentConfigService;
 
     @Before
     public void setUp() throws Exception {
         agentService = mock(AgentService.class);
+        agentConfigService = mock(AgentConfigService.class);
         systemEnvironment = mock(SystemEnvironment.class);
         goConfigService = mock(GoConfigService.class);
 
@@ -86,8 +73,8 @@ public class AgentRegistrationControllerTest {
         when(agentService.agentLauncherJarInputStream()).thenReturn(new ByteArrayInputStream(EXPECTED_LAUNCHER.getBytes()));
 
         when(systemEnvironment.getSslServerPort()).thenReturn(8443);
-        controller = new AgentRegistrationController(agentService, goConfigService, systemEnvironment);
-        ReflectionUtil.setField(controller, AGENT_PLUGINS_CHECKSUM_FIELD, "default");
+        pluginsZip = mock(PluginsZip.class);
+        controller = new AgentRegistrationController(agentService, goConfigService, systemEnvironment, pluginsZip, agentConfigService);
     }
 
     @Test
@@ -95,8 +82,12 @@ public class AgentRegistrationControllerTest {
         when(goConfigService.hasAgent("blahAgent-uuid")).thenReturn(false);
         ServerConfig serverConfig = new ServerConfig("artifacts", new SecurityConfig(), 10, 20, "1", null);
         when(goConfigService.serverConfig()).thenReturn(serverConfig);
-        controller.agentRequest("blahAgent-host", "blahAgent-uuid", "blah-location", "34567", "osx", "", "", "", request, response);
-        verify(agentService).requestRegistration(AgentRuntimeInfo.fromServer(new AgentConfig("blahAgent-uuid", "blahAgent-host", request.getRemoteAddr()), false, "blah-location", 34567L, "osx"));
+        when(agentService.agentUsername("blahAgent-uuid", request.getRemoteAddr(), "blahAgent-host")).thenReturn(new Username("some-agent-login-name"));
+
+        ModelAndView modelAndView = controller.agentRequest("blahAgent-host", "blahAgent-uuid", "blah-location", "34567", "osx", "", "", "", "", "", "", false, request);
+        assertThat(modelAndView.getView().getContentType(), is("application/json"));
+
+        verify(agentService).requestRegistration(new Username("some-agent-login-name"), AgentRuntimeInfo.fromServer(new AgentConfig("blahAgent-uuid", "blahAgent-host", request.getRemoteAddr()), false, "blah-location", 34567L, "osx", false));
     }
 
     @Test
@@ -106,10 +97,30 @@ public class AgentRegistrationControllerTest {
         ServerConfig serverConfig = new ServerConfig("artifacts", new SecurityConfig(), 10, 20, "1", "someKey");
         when(goConfigService.serverConfig()).thenReturn(serverConfig);
 
-        controller.agentRequest("host", uuid, "location", "233232", "osx", "someKey", "", "", request, response);
+        when(agentService.agentUsername(uuid, request.getRemoteAddr(), "host")).thenReturn(new Username("some-agent-login-name"));
+        when(agentConfigService.updateAgent(any(UpdateConfigCommand.class), eq(uuid), any(HttpOperationResult.class), eq(new Username("some-agent-login-name"))))
+                .thenReturn(new AgentConfig(uuid, "host", request.getRemoteAddr()));
+        controller.agentRequest("host", uuid, "location", "233232", "osx", "someKey", "", "", "", "", "", false, request);
 
-        verify(agentService).requestRegistration(AgentRuntimeInfo.fromServer(new AgentConfig(uuid, "host", request.getRemoteAddr()), false, "location", 233232L, "osx"));
-        verify(goConfigService).updateConfig(any(UpdateConfigCommand.class));
+        verify(agentService).requestRegistration(new Username("some-agent-login-name"), AgentRuntimeInfo.fromServer(new AgentConfig(uuid, "host", request.getRemoteAddr()), false, "location", 233232L, "osx", false));
+        verify(agentConfigService).updateAgent(any(UpdateConfigCommand.class), eq(uuid), any(HttpOperationResult.class), eq(new Username("some-agent-login-name")));
+    }
+
+    @Test
+    public void shouldAutoRegisterAgentWithHostnameFromAutoRegisterProperties() throws Exception {
+        String uuid = "uuid";
+        when(goConfigService.hasAgent(uuid)).thenReturn(false);
+        ServerConfig serverConfig = new ServerConfig("artifacts", new SecurityConfig(), 10, 20, "1", "someKey");
+        when(goConfigService.serverConfig()).thenReturn(serverConfig);
+        when(agentService.agentUsername(uuid, request.getRemoteAddr(), "autoregister-hostname")).thenReturn(new Username("some-agent-login-name"));
+        when(agentConfigService.updateAgent(any(UpdateConfigCommand.class), eq(uuid), any(HttpOperationResult.class), eq(new Username("some-agent-login-name"))))
+                .thenReturn(new AgentConfig(uuid, "autoregister-hostname", request.getRemoteAddr()));
+
+        controller.agentRequest("host", uuid, "location", "233232", "osx", "someKey", "", "", "autoregister-hostname", "", "", false, request);
+
+        verify(agentService).requestRegistration(new Username("some-agent-login-name"), AgentRuntimeInfo.fromServer(
+                new AgentConfig(uuid, "autoregister-hostname", request.getRemoteAddr()), false, "location", 233232L, "osx", false));
+        verify(agentConfigService).updateAgent(any(UpdateConfigCommand.class), eq(uuid), any(HttpOperationResult.class), eq(new Username("some-agent-login-name")));
     }
 
     @Test
@@ -119,15 +130,16 @@ public class AgentRegistrationControllerTest {
         ServerConfig serverConfig = new ServerConfig("artifacts", new SecurityConfig(), 10, 20, "1", "");
         when(goConfigService.serverConfig()).thenReturn(serverConfig);
 
-        controller.agentRequest("host", uuid, "location", "233232", "osx", "", "", "", request, response);
+        when(agentService.agentUsername(uuid, request.getRemoteAddr(), "host")).thenReturn(new Username("some-agent-login-name"));
+        controller.agentRequest("host", uuid, "location", "233232", "osx", "", "", "", "", "", "", false, request);
 
-        verify(agentService).requestRegistration(AgentRuntimeInfo.fromServer(new AgentConfig(uuid, "host", request.getRemoteAddr()), false, "location", 233232L, "osx"));
+        verify(agentService).requestRegistration(new Username("some-agent-login-name"), AgentRuntimeInfo.fromServer(new AgentConfig(uuid, "host", request.getRemoteAddr()), false, "location", 233232L, "osx", false));
         verify(goConfigService, never()).updateConfig(any(UpdateConfigCommand.class));
     }
 
     @Test
     public void shouldReturnAgentJarWhenRequested() throws Exception {
-        ModelAndView modelAndView = controller.downloadAgent(null, null);
+        ModelAndView modelAndView = controller.downloadAgent();
         modelAndView.getView().render(null, request, response);
         String actual = response.getContentAsString();
         assertEquals(EXPECTED, actual);
@@ -135,7 +147,7 @@ public class AgentRegistrationControllerTest {
 
     @Test
     public void shouldReturnCorrectContentType() throws Exception {
-        ModelAndView modelAndView = controller.downloadAgent(null, null);
+        ModelAndView modelAndView = controller.downloadAgent();
         assertEquals("application/octet-stream", modelAndView.getView().getContentType());
     }
 
@@ -143,7 +155,7 @@ public class AgentRegistrationControllerTest {
     public void headShouldIncludeMd5Checksum_forAgent_whenCached() throws Exception {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, EXPECTED_MD5);
 
-        controller.checkAgentVersion(request, response);
+        controller.checkAgentVersion(response);
         assertEquals(EXPECTED_MD5, response.getHeader("Content-MD5"));
     }
 
@@ -152,7 +164,9 @@ public class AgentRegistrationControllerTest {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, null);
         ReflectionUtil.setField(controller, AGENT_LAUNCHER_CHECKSUM_FIELD, null);
 
-        controller.checkAgentStatus(request, response);
+        when(pluginsZip.md5()).thenReturn("md5");
+
+        controller.checkAgentStatus(response);
         assertEquals(EXPECTED_MD5, response.getHeader(SystemEnvironment.AGENT_CONTENT_MD5_HEADER));
         assertEquals(EXPECTED_LAUNCHER_MD5, response.getHeader(SystemEnvironment.AGENT_LAUNCHER_CONTENT_MD5_HEADER));
         assertEquals("8443", response.getHeader("Cruise-Server-Ssl-Port"));
@@ -163,7 +177,9 @@ public class AgentRegistrationControllerTest {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, "foo");
         ReflectionUtil.setField(controller, AGENT_LAUNCHER_CHECKSUM_FIELD, "bar");
 
-        controller.checkAgentStatus(request, response);
+        when(pluginsZip.md5()).thenReturn("md5");
+
+        controller.checkAgentStatus(response);
         assertEquals("foo", response.getHeader(SystemEnvironment.AGENT_CONTENT_MD5_HEADER));
         assertEquals("bar", response.getHeader(SystemEnvironment.AGENT_LAUNCHER_CONTENT_MD5_HEADER));
         assertEquals("8443", response.getHeader("Cruise-Server-Ssl-Port"));
@@ -174,7 +190,8 @@ public class AgentRegistrationControllerTest {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, "foo");
         ReflectionUtil.setField(controller, AGENT_LAUNCHER_CHECKSUM_FIELD, "bar");
 
-        controller.latestAgentStatus(request, response);
+        when(pluginsZip.md5()).thenReturn("md5");
+        controller.latestAgentStatus(response);
 
         assertEquals("foo", response.getHeader(SystemEnvironment.AGENT_CONTENT_MD5_HEADER));
         assertEquals("bar", response.getHeader(SystemEnvironment.AGENT_LAUNCHER_CONTENT_MD5_HEADER));
@@ -185,7 +202,7 @@ public class AgentRegistrationControllerTest {
     public void headShouldIncludeMd5Checksum_forAgent_whenNotCached() throws Exception {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, null);
 
-        controller.checkAgentVersion(request, response);
+        controller.checkAgentVersion(response);
         assertEquals(EXPECTED_MD5, response.getHeader("Content-MD5"));
     }
 
@@ -193,7 +210,7 @@ public class AgentRegistrationControllerTest {
     public void headShouldIncludeServerUrl_forAgent() throws Exception {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, EXPECTED_MD5);
 
-        controller.checkAgentVersion(request, response);
+        controller.checkAgentVersion(response);
         assertEquals("8443", response.getHeader("Cruise-Server-Ssl-Port"));
     }
 
@@ -201,7 +218,7 @@ public class AgentRegistrationControllerTest {
     public void headShouldIncludeMd5Checksum_forAgentLauncher_whenCached() throws Exception {
         ReflectionUtil.setField(controller, AGENT_LAUNCHER_CHECKSUM_FIELD, EXPECTED_LAUNCHER_MD5);
 
-        controller.checkAgentLauncherVersion(request, response);
+        controller.checkAgentLauncherVersion(response);
         assertEquals(EXPECTED_LAUNCHER_MD5, response.getHeader("Content-MD5"));
     }
 
@@ -209,7 +226,7 @@ public class AgentRegistrationControllerTest {
     public void headShouldIncludeMd5Checksum_forAgentLauncher_whenNotCached() throws Exception {
         ReflectionUtil.setField(controller, AGENT_LAUNCHER_CHECKSUM_FIELD, null);
 
-        controller.checkAgentLauncherVersion(request, response);
+        controller.checkAgentLauncherVersion(response);
         assertEquals(EXPECTED_LAUNCHER_MD5, response.getHeader("Content-MD5"));
     }
 
@@ -217,13 +234,13 @@ public class AgentRegistrationControllerTest {
     public void headShouldIncludeServerUrl_forAgentLauncher() throws Exception {
         ReflectionUtil.setField(controller, AGENT_CHECKSUM_FIELD, EXPECTED_MD5);
 
-        controller.checkAgentLauncherVersion(request, response);
+        controller.checkAgentLauncherVersion(response);
         assertEquals("8443", response.getHeader("Cruise-Server-Ssl-Port"));
     }
 
     @Test
     public void contentShouldIncludeMd5Checksum_forAgent() throws Exception {
-        ModelAndView modelAndView = controller.downloadAgent(null, null);
+        ModelAndView modelAndView = controller.downloadAgent();
         modelAndView.getView().render(null, request, response);
         String actual = response.getHeader("Content-MD5");
         assertEquals(StringUtil.md5Digest(EXPECTED.getBytes()), actual);
@@ -231,99 +248,26 @@ public class AgentRegistrationControllerTest {
 
     @Test
     public void contentShouldIncludeMd5Checksum_forAgentLauncher() throws Exception {
-        ModelAndView modelAndView = controller.downloadAgentLauncher(null, null);
+        ModelAndView modelAndView = controller.downloadAgentLauncher();
         modelAndView.getView().render(null, request, response);
         String actual = response.getHeader("Content-MD5");
         assertEquals(StringUtil.md5Digest(EXPECTED_LAUNCHER.getBytes()), actual);
     }
 
     @Test
-    public void shouldRegisterUnregisteredAgentWhenRequestRegister() throws Exception {
-
-        request.setMethod("POST");
-        request.addParameter("uuid", UUID);
-        ModelAndView modelAndView = controller.registerAgent(response, UUID);
-        JsonMap result = (JsonMap) modelAndView.getModel().get("json");
-
-        new JsonTester(result).is(
-                "{ 'result' : 'success' }"
-        );
-        verify(agentService).approve(UUID);
-        assertThat(HttpServletResponse.SC_CREATED, is(equal(response.getStatus())));
+    public void checkAgentStatusShouldIncludeMd5Checksum_forAllPlugins() throws Exception {
+        when(pluginsZip.md5()).thenReturn("md5");
+        controller.checkAgentStatus(response);
+        assertThat(response.getHeader(SystemEnvironment.AGENT_PLUGINS_ZIP_MD5_HEADER), is("md5"));
+        verify(pluginsZip).md5();
     }
 
     @Test
-    public void shouldRejectUnregisteredAgentWhenRequestReject() throws Exception {
-
-
-        request.setMethod("POST");
-        request.addParameter("uuid", UUID);
-        ModelAndView modelAndView = controller.denyAgent(response, UUID);
-        JsonMap result = (JsonMap) modelAndView.getModel().get("json");
-
-        new JsonTester(result).is(
-                "{ 'result' : 'success' }"
-        );
-
-        assertThat(HttpServletResponse.SC_CREATED, is(equal(response.getStatus())));
-        verify(agentService).disableAgents(eq(USERNAME), any(HttpOperationResult.class), eq(Arrays.asList(UUID)));
-    }
-
-    @Test
-    public void shouldReturnHelpfulMessageIfExceptionOccurs() throws Exception {
-        final String exceptionMessage = "The agent at test.com is already registered.";
-        doThrow(new RuntimeException(exceptionMessage)).when(agentService).approve(UUID);
-        request.setMethod("POST");
-        request.addParameter("uuid", UUID);
-        ModelAndView modelAndView = controller.registerAgent(response, UUID);
-        JsonMap result = (JsonMap) modelAndView.getModel().get("json");
-
-        new JsonTester(result).is(
-                "{ 'result' : 'failed',"
-                        + "  '" + ERROR_FOR_JSON + "' : '" + exceptionMessage + "' }"
-        );
-    }
-
-    @Test
-    public void checkAgentStatusShouldIncludeMd5Checksum_forAllPlugins_whenChecksumsAreNotCached() throws Exception {
-        try {
-            ReflectionUtil.setField(controller, AGENT_PLUGINS_CHECKSUM_FIELD, null);
-            File pluginZipFile = TestFileUtil.createTempFile("plugins.zip");
-            when(systemEnvironment.get(SystemEnvironment.ALL_PLUGINS_ZIP_PATH)).thenReturn(pluginZipFile.getAbsolutePath());
-            controller.checkAgentStatus(request, response);
-            assertEquals(FileDigester.md5DigestOfFile(pluginZipFile), response.getHeader(SystemEnvironment.AGENT_PLUGINS_ZIP_MD5_HEADER));
-        } finally {
-            TestFileUtil.cleanTempFiles();
-        }
-    }
-
-    @Test
-    public void checkAgentStatusShouldIncludeMd5Checksum_forAllPlugins_whenChecksumsAreCached() throws Exception {
-        ReflectionUtil.setField(controller, AGENT_PLUGINS_CHECKSUM_FIELD, "default");
-        controller.checkAgentStatus(request, response);
-        assertEquals("default", response.getHeader(SystemEnvironment.AGENT_PLUGINS_ZIP_MD5_HEADER));
-        verify(systemEnvironment, never()).get(SystemEnvironment.ALL_PLUGINS_ZIP_PATH);
-    }
-
-    @Test
-    public void headShouldIncludeMd5Checksum_forPluginsZip_whenCached() throws Exception {
-        try {
-            ReflectionUtil.setField(controller, AGENT_PLUGINS_CHECKSUM_FIELD, null);
-            File pluginZipFile = TestFileUtil.createTempFile("plugins.zip");
-            when(systemEnvironment.get(SystemEnvironment.ALL_PLUGINS_ZIP_PATH)).thenReturn(pluginZipFile.getAbsolutePath());
-            controller.checkAgentPluginsZipStatus(request, response);
-            assertEquals(FileDigester.md5DigestOfFile(pluginZipFile), response.getHeader("Content-MD5"));
-        } finally {
-            TestFileUtil.cleanTempFiles();
-        }
-    }
-
-    @Test
-    public void headShouldIncludeMd5Checksum_forPluginsZip_whenNotCached() throws Exception {
-        ReflectionUtil.setField(controller, AGENT_PLUGINS_CHECKSUM_FIELD, "default");
-        controller.checkAgentPluginsZipStatus(request, response);
-        assertEquals("default", response.getHeader("Content-MD5"));
-        verify(systemEnvironment, never()).get(SystemEnvironment.ALL_PLUGINS_ZIP_PATH);
+    public void headShouldIncludeMd5Checksum_forPluginsZip() throws Exception {
+        when(pluginsZip.md5()).thenReturn("md5");
+        controller.checkAgentPluginsZipStatus(response);
+        assertEquals("md5", response.getHeader("Content-MD5"));
+        verify(pluginsZip).md5();
     }
 
     @Test
@@ -332,7 +276,7 @@ public class AgentRegistrationControllerTest {
         FileUtils.writeStringToFile(pluginZipFile, "content");
         when(systemEnvironment.get(SystemEnvironment.ALL_PLUGINS_ZIP_PATH)).thenReturn(pluginZipFile.getAbsolutePath());
 
-        ModelAndView modelAndView = controller.downloadPluginsZip(null, null);
+        ModelAndView modelAndView = controller.downloadPluginsZip();
 
         modelAndView.getView().render(null, request, response);
         String actual = response.getContentAsString();

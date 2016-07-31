@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,13 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ *
+ */
 
 package com.thoughtworks.go.helper;
-
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.JobConfigs;
@@ -26,18 +23,23 @@ import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.config.StageConfig;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.materials.Materials;
-import com.thoughtworks.go.domain.DefaultSchedulingContext;
-import com.thoughtworks.go.domain.JobInstance;
-import com.thoughtworks.go.domain.JobResult;
-import com.thoughtworks.go.domain.JobState;
-import com.thoughtworks.go.domain.MaterialRevisions;
-import com.thoughtworks.go.domain.Pipeline;
-import com.thoughtworks.go.domain.Stage;
-import com.thoughtworks.go.domain.Stages;
+import com.thoughtworks.go.config.materials.PackageMaterial;
+import com.thoughtworks.go.config.materials.PluggableSCMMaterial;
+import com.thoughtworks.go.config.materials.dependency.DependencyMaterial;
+import com.thoughtworks.go.config.materials.git.GitMaterial;
+import com.thoughtworks.go.config.materials.mercurial.HgMaterial;
+import com.thoughtworks.go.config.materials.perforce.P4Material;
+import com.thoughtworks.go.config.materials.svn.SvnMaterial;
+import com.thoughtworks.go.config.materials.tfs.TfsMaterial;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.buildcause.BuildCause;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.server.service.InstanceFactory;
 import com.thoughtworks.go.util.TimeProvider;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 import static com.thoughtworks.go.helper.ModificationsMother.modifyOneFile;
 
@@ -58,6 +60,20 @@ public class PipelineMother {
         return new Pipeline(pipelineName, BuildCause.createWithModifications(com.thoughtworks.go.helper.ModificationsMother.modifyOneFile(materials, com.thoughtworks.go.helper.ModificationsMother.nextRevision()), ""), stages);
     }
 
+    public static Pipeline pipelineWithAllTypesOfMaterials(String pipelineName, String stageName, String jobName) {
+        GitMaterial gitMaterial = MaterialsMother.gitMaterial("http://user:password@gitrepo.com", null, "branch");
+        HgMaterial hgMaterial = MaterialsMother.hgMaterial("http://user:password@hgrepo.com");
+        SvnMaterial svnMaterial = MaterialsMother.svnMaterial("http://user:password@svnrepo.com", null, "username", "password", false, null);
+        TfsMaterial tfsMaterial = MaterialsMother.tfsMaterial("http://user:password@tfsrepo.com");
+        P4Material p4Material = MaterialsMother.p4Material("127.0.0.1:1666", "username", "password", "view", false);
+        DependencyMaterial dependencyMaterial = MaterialsMother.dependencyMaterial();
+        PackageMaterial packageMaterial = MaterialsMother.packageMaterial();
+        PluggableSCMMaterial pluggableSCMMaterial = MaterialsMother.pluggableSCMMaterial();
+        Materials materials = new Materials(gitMaterial, hgMaterial, svnMaterial, tfsMaterial, p4Material, dependencyMaterial, packageMaterial, pluggableSCMMaterial);
+
+        return new Pipeline(pipelineName, BuildCause.createWithModifications(ModificationsMother.modifyOneFile(materials, ModificationsMother.nextRevision()), ""), StageMother.passedStageInstance(stageName, jobName, pipelineName));
+    }
+
     public static Pipeline schedule(PipelineConfig pipelineConfig, BuildCause cause) {
         String approvedBy = "cruise";
         if (pipelineConfig.getFirstStageConfig().getApproval().isManual()) {
@@ -76,6 +92,10 @@ public class PipelineMother {
 
     public static Pipeline building(PipelineConfig pipelineConfig) {
         return withState(pipelineConfig, JobState.Building, modifyOneFile(pipelineConfig));
+    }
+
+    public static Pipeline completed(PipelineConfig pipelineConfig) {
+        return withState(pipelineConfig, JobState.Completed, modifyOneFile(pipelineConfig));
     }
 
     public static Pipeline buildingWithRevisions(PipelineConfig pipelineConfig, MaterialRevisions materialRevisions) {

@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::CommandsController do
 
@@ -98,7 +98,7 @@ describe Admin::CommandsController do
         get :show, :command_name => "robo"
 
         response.response_code.should == 404
-        response.body.should == "Command Definition for 'robo' could not be found"
+        response.body.should == "Command definition not found"
       end
     end
 

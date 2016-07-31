@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "spec_helper")
+require 'spec_helper'
 
 describe ComparisonController, "view" do
   include StageModelMother
@@ -22,9 +22,6 @@ describe ComparisonController, "view" do
   render_views
 
   before do
-    controller.stub(:populate_health_messages) do
-      controller.instance_variable_set(:@current_server_health_states, com.thoughtworks.go.serverhealth.ServerHealthStates.new)
-    end
     controller.stub(:pipeline_history_service).and_return(@phs = double('PipelineHistoryService'))
     controller.stub(:current_user).and_return(@loser = Username.new(CaseInsensitiveString.new("loser")))
     controller.stub(:populate_config_validity)
@@ -136,7 +133,7 @@ describe ComparisonController, "view" do
           end
         end
       end
-      expect(response.body).to include("<h3>You do not have view permissions for pipeline 'some_pipeline'.</h3>")
+      expect(response.body).to include("<h3>You do not have view permissions for pipeline &#39;some_pipeline&#39;.</h3>")
       expect(response.status).to eq(401)
     end
 
@@ -159,7 +156,7 @@ describe ComparisonController, "view" do
           end
         end
       end
-      expect(response.body).to include("<h3>You do not have view permissions for pipeline 'admin_only'. { too bad for you! }\n</h3>")
+      expect(response.body).to include("<h3>You do not have view permissions for pipeline &#39;admin_only&#39;. { too bad for you! }\n</h3>")
       expect(response.status).to eq(401)
     end
 
@@ -238,7 +235,7 @@ describe ComparisonController, "view" do
 
     it "should render errors when Checkins return an error" do
       config_service = stub_service(:go_config_service)
-      config_service.should_receive(:getCurrentConfig).and_return(new_config = CruiseConfig.new)
+      config_service.should_receive(:getCurrentConfig).and_return(new_config = BasicCruiseConfig.new)
       controller.stub(:current_user).and_return(loser = Username.new(CaseInsensitiveString.new("loser")))
       controller.should_receive(:mingle_config_service).and_return(service = double('MingleConfigService'))
       controller.should_receive(:changeset_service).and_return(changeset_service = double('ChangesetService'))

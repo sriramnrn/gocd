@@ -16,31 +16,24 @@
 
 package com.thoughtworks.go.domain;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.ConfigCollection;
-import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.PipelineConfigs;
-import com.thoughtworks.go.config.Validatable;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.exceptions.PipelineGroupNotFoundException;
 import com.thoughtworks.go.config.materials.PackageMaterialConfig;
+import com.thoughtworks.go.config.materials.PluggableSCMMaterialConfig;
 import com.thoughtworks.go.config.materials.ScmMaterialConfig;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.domain.packagerepository.PackageDefinition;
 import com.thoughtworks.go.domain.packagerepository.PackageRepository;
+import com.thoughtworks.go.domain.scm.SCM;
 import com.thoughtworks.go.util.Pair;
 
-@ConfigCollection(value = PipelineConfigs.class)
+@ConfigCollection(value = BasicPipelineConfigs.class)
 public class PipelineGroups extends BaseCollection<PipelineConfigs> implements Validatable {
     private final ConfigErrors configErrors = new ConfigErrors();
     private Map<String, List<Pair<PipelineConfig, PipelineConfigs>>> packageToPipelineMap;
+    private Map<String, List<Pair<PipelineConfig, PipelineConfigs>>> pluggableSCMMaterialToPipelineMap;
 
     public PipelineGroups() {
     }
@@ -58,7 +51,7 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
     }
 
     public void addPipeline(String groupName, PipelineConfig pipeline) {
-        String sanitizedGroupName = PipelineConfigs.sanitizedGroupName(groupName);
+        String sanitizedGroupName = BasicPipelineConfigs.sanitizedGroupName(groupName);
         if (!this.hasGroup(sanitizedGroupName)) {
             createNewGroup(sanitizedGroupName, pipeline);
             return;
@@ -79,8 +72,17 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
         }
     }
 
+    public void deletePipeline(PipelineConfig pipelineConfig) {
+        for (PipelineConfigs group : this) {
+            if(group.hasPipeline(pipelineConfig.name())){
+                group.remove(pipelineConfig);
+                return;
+            }
+        }
+    }
+
     private void createNewGroup(String sanitizedGroupName, PipelineConfig pipeline) {
-        PipelineConfigs configs = new PipelineConfigs(pipeline);
+        PipelineConfigs configs = new BasicPipelineConfigs(pipeline);
         configs.setGroup(sanitizedGroupName);
         this.add(0, configs);
     }
@@ -124,7 +126,7 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
     }
 
     public void validate(ValidationContext validationContext) {
-        Map<String, PipelineConfigs> nameToConfig = new HashMap<String, PipelineConfigs>();
+        Map<String, PipelineConfigs> nameToConfig = new HashMap<>();
         List<PipelineConfigs> visited = new ArrayList();
         for (PipelineConfigs group : this) {
             group.validateNameUniqueness(nameToConfig);
@@ -133,13 +135,21 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
     }
 
     public void validatePipelineNameUniqueness() {
-        List<PipelineConfig> visited = new ArrayList<PipelineConfig>();
+        List<PipelineConfig> visited = new ArrayList<>();
+        HashMap<CaseInsensitiveString, Set<String>> duplicates = new HashMap<>();
         for (PipelineConfigs group : this) {
             for (PipelineConfig pipeline : group) {
                 for (PipelineConfig visitedPipeline : visited) {
                     if (visitedPipeline.name().equals(pipeline.name())) {
-                        pipeline.addError(PipelineConfig.NAME, String.format("You have defined multiple pipelines named '%s'. Pipeline names must be unique.", pipeline.name()));
-                        visitedPipeline.addError(PipelineConfig.NAME, String.format("You have defined multiple pipelines named '%s'. Pipeline names must be unique.", pipeline.name()));
+                        if(!duplicates.containsKey(pipeline.name())){
+                            duplicates.put(pipeline.name(), new HashSet<String>());
+                        }
+                        duplicates.get(pipeline.name()).add(pipeline.getOriginDisplayName());
+                        duplicates.get(pipeline.name()).add(visitedPipeline.getOriginDisplayName());
+                        pipeline.errors().remove(PipelineConfig.NAME);
+                        pipeline.addError(PipelineConfig.NAME, String.format("You have defined multiple pipelines named '%s'. Pipeline names must be unique. Source(s): %s", pipeline.name(), duplicates.get(pipeline.name())));
+                        visitedPipeline.errors().remove(PipelineConfig.NAME);
+                        visitedPipeline.addError(PipelineConfig.NAME, String.format("You have defined multiple pipelines named '%s'. Pipeline names must be unique. Source(s): %s", pipeline.name(), duplicates.get(pipeline.name())));
                     }
                 }
                 visited.add(pipeline);
@@ -155,18 +165,17 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
         configErrors.add(fieldName, message);
     }
 
-    public HashSet<MaterialConfig> getAllUniquePostCommitSchedulableMaterials() {
-        HashSet<MaterialConfig> materialConfigs = new HashSet<MaterialConfig>();
-        Set<Map> uniqueMaterials = new HashSet<Map>();
+    public Set<MaterialConfig> getAllUniquePostCommitSchedulableMaterials() {
+        Set<MaterialConfig> materialConfigs = new HashSet<>();
+        Set<String> uniqueMaterials = new HashSet<>();
         for (PipelineConfigs pipelineConfigs : this) {
             for (PipelineConfig pipelineConfig : pipelineConfigs) {
                 for (MaterialConfig materialConfig : pipelineConfig.materialConfigs()) {
-                    if (!uniqueMaterials.contains(materialConfig.getSqlCriteria()) && materialConfig instanceof ScmMaterialConfig) {
-                        if (materialConfig.isAutoUpdate()) {
-                            continue;
-                        }
+                    if ((materialConfig instanceof ScmMaterialConfig || materialConfig instanceof PluggableSCMMaterialConfig)
+                            && !materialConfig.isAutoUpdate()
+                            && !uniqueMaterials.contains(materialConfig.getFingerprint())) {
                         materialConfigs.add(materialConfig);
-                        uniqueMaterials.add(materialConfig.getSqlCriteria());
+                        uniqueMaterials.add(materialConfig.getFingerprint());
                     }
                 }
             }
@@ -178,7 +187,7 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
         if (packageToPipelineMap == null) {
             synchronized (this) {
                 if (packageToPipelineMap == null) {
-                    packageToPipelineMap = new HashMap<String, List<Pair<PipelineConfig, PipelineConfigs>>>();
+                    packageToPipelineMap = new HashMap<>();
                     for (PipelineConfigs pipelineConfigs : this) {
                         for (PipelineConfig pipelineConfig : pipelineConfigs) {
                             for (PackageMaterialConfig packageMaterialConfig : pipelineConfig.packageMaterialConfigs()) {
@@ -186,7 +195,7 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
                                 if (!packageToPipelineMap.containsKey(packageId)) {
                                     packageToPipelineMap.put(packageId, new ArrayList<Pair<PipelineConfig, PipelineConfigs>>());
                                 }
-                                packageToPipelineMap.get(packageId).add(new Pair<PipelineConfig, PipelineConfigs>(pipelineConfig, pipelineConfigs));
+                                packageToPipelineMap.get(packageId).add(new Pair<>(pipelineConfig, pipelineConfigs));
                             }
                         }
                     }
@@ -204,5 +213,46 @@ public class PipelineGroups extends BaseCollection<PipelineConfigs> implements V
             }
         }
         return true;
+    }
+
+    public Map<String, List<Pair<PipelineConfig, PipelineConfigs>>> getPluggableSCMMaterialUsageInPipelines() {
+        if (pluggableSCMMaterialToPipelineMap == null) {
+            synchronized (this) {
+                if (pluggableSCMMaterialToPipelineMap == null) {
+                    pluggableSCMMaterialToPipelineMap = new HashMap<>();
+                    for (PipelineConfigs pipelineConfigs : this) {
+                        for (PipelineConfig pipelineConfig : pipelineConfigs) {
+                            for (PluggableSCMMaterialConfig pluggableSCMMaterialConfig : pipelineConfig.pluggableSCMMaterialConfigs()) {
+                                String scmId = pluggableSCMMaterialConfig.getScmId();
+                                if (!pluggableSCMMaterialToPipelineMap.containsKey(scmId)) {
+                                    pluggableSCMMaterialToPipelineMap.put(scmId, new ArrayList<Pair<PipelineConfig, PipelineConfigs>>());
+                                }
+                                pluggableSCMMaterialToPipelineMap.get(scmId).add(new Pair<>(pipelineConfig, pipelineConfigs));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return pluggableSCMMaterialToPipelineMap;
+    }
+
+    public boolean canDeletePluggableSCMMaterial(SCM scmConfig) {
+        Map<String, List<Pair<PipelineConfig, PipelineConfigs>>> packageUsageInPipelines = getPluggableSCMMaterialUsageInPipelines();
+        if (packageUsageInPipelines.containsKey(scmConfig.getId())) {
+            return false;
+        }
+        return true;
+    }
+
+    public PipelineGroups getLocal() {
+        PipelineGroups locals = new PipelineGroups();
+        for(PipelineConfigs pipelineConfigs : this)
+        {
+            PipelineConfigs local = pipelineConfigs.getLocal();
+            if(local != null)
+                locals.add(local);
+        }
+        return locals;
     }
 }

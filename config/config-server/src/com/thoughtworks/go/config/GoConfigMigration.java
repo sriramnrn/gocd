@@ -1,45 +1,26 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.List;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
-
 import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
 import com.thoughtworks.go.domain.GoConfigRevision;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
 import com.thoughtworks.go.service.ConfigRepository;
 import com.thoughtworks.go.util.CachedDigestUtils;
 import com.thoughtworks.go.util.TimeProvider;
-import com.thoughtworks.go.util.XmlUtils;
-import com.thoughtworks.go.util.XsdErrorTranslator;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
@@ -49,8 +30,21 @@ import org.jdom.input.SAXBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import java.io.*;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
+
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 import static com.thoughtworks.go.util.ExceptionUtils.bombIfNull;
+import static com.thoughtworks.go.util.XmlUtils.buildXmlDocument;
 
 /**
  * @understands how to migrate from a previous version of config
@@ -66,11 +60,9 @@ public class GoConfigMigration {
     private final ConfigElementImplementationRegistry registry;
 
     public static final String UPGRADE = "Upgrade";
-    private final MetricsProbeService metricsProbeService;
 
     @Autowired
-    public GoConfigMigration(final ConfigRepository configRepository, final TimeProvider timeProvider, ConfigCache configCache, ConfigElementImplementationRegistry registry,
-                             MetricsProbeService metricsProbeService) {
+    public GoConfigMigration(final ConfigRepository configRepository, final TimeProvider timeProvider, ConfigCache configCache, ConfigElementImplementationRegistry registry) {
         this(new UpgradeFailedHandler() {
             public void handle(Exception e) {
                 e.printStackTrace();
@@ -88,18 +80,16 @@ public class GoConfigMigration {
                 }).start();
 
             }
-        }, configRepository, timeProvider, configCache, registry, metricsProbeService);
+        }, configRepository, timeProvider, configCache, registry);
     }
 
     GoConfigMigration(UpgradeFailedHandler upgradeFailed, ConfigRepository configRepository, TimeProvider timeProvider,
-                      ConfigCache configCache, ConfigElementImplementationRegistry registry,
-                      MetricsProbeService metricsProbeService) {
+                      ConfigCache configCache, ConfigElementImplementationRegistry registry) {
         this.upgradeFailed = upgradeFailed;
         this.configRepository = configRepository;
         this.timeProvider = timeProvider;
         this.configCache = configCache;
         this.registry = registry;
-        this.metricsProbeService = metricsProbeService;
     }
 
     public GoConfigMigrationResult upgradeIfNecessary(File configFile, final String currentGoServerVersion) {
@@ -123,7 +113,7 @@ public class GoConfigMigration {
                 GoConfigHolder configHolder = reloadedConfig(stream, reloadedXml);
                 reloadedXml = new String(stream.toByteArray());
                 configRepository.checkin(new GoConfigRevision(reloadedXml, CachedDigestUtils.md5Hex(reloadedXml), UPGRADE,
-                        currentGoServerVersion, configHolder.config.edition(), timeProvider));
+                        currentGoServerVersion, timeProvider));
             } else {
                 GoConfigHolder configHolder = reloadedConfig(stream, xmlStringBeforeUpgrade);
                 reloadedXml = new String(stream.toByteArray());
@@ -145,7 +135,7 @@ public class GoConfigMigration {
 
     private GoConfigHolder reloadedConfig(ByteArrayOutputStream stream, String upgradedXmlString) throws Exception {
         GoConfigHolder configHolder = validateAfterMigrationFinished(upgradedXmlString);
-        new MagicalGoConfigXmlWriter(configCache, registry, metricsProbeService).write(configHolder.configForEdit, stream, false);
+        new MagicalGoConfigXmlWriter(configCache, registry).write(configHolder.configForEdit, stream, false);
         return configHolder;
     }
 
@@ -185,7 +175,7 @@ public class GoConfigMigration {
     }
 
     private GoConfigHolder validateAfterMigrationFinished(String content) throws Exception {
-        return new MagicalGoConfigXmlLoader(configCache, registry, metricsProbeService).loadConfigHolder(content);
+        return new MagicalGoConfigXmlLoader(configCache, registry).loadConfigHolder(content);
     }
 
     private void backup(File configFile) throws IOException {
@@ -224,7 +214,7 @@ public class GoConfigMigration {
     private void validate(String content) {
         int currentVersion = getCurrentSchemaVersion(content);
         try {
-            XmlUtils.validate(new ByteArrayInputStream(content.getBytes()), GoConfigSchema.getResource(currentVersion), new XsdErrorTranslator(), new SAXBuilder(), registry.xsds());
+            buildXmlDocument(new ByteArrayInputStream(content.getBytes()), GoConfigSchema.getResource(currentVersion), registry.xsds());
         } catch (Exception e) {
             throw bomb("Cruise config file with version " + currentVersion + " is invalid. Unable to upgrade.", e);
         }
@@ -248,7 +238,7 @@ public class GoConfigMigration {
     }
 
     private List<URL> upgradeScripts(int currentVersion, int targetVersion) {
-        ArrayList<URL> xsls = new ArrayList<URL>();
+        ArrayList<URL> xsls = new ArrayList<>();
         for (int i = currentVersion + 1; i <= targetVersion; i++) {
             URL xsl = getResource("/upgrades/" + i + ".xsl");
             bombIfNull(xsl, "Config File upgrade script named " + i + ".xsl is missing. Unable to perform upgrade.");
@@ -271,7 +261,7 @@ public class GoConfigMigration {
 
     private int getCurrentSchemaVersion(String content) {
         try {
-            SAXBuilder builder = new SAXBuilder(false);
+            SAXBuilder builder = new SAXBuilder();
             Document document = builder.build(new ByteArrayInputStream(content.getBytes()));
             Element root = document.getRootElement();
 

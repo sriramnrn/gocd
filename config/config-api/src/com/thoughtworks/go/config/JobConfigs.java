@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
@@ -81,6 +81,15 @@ public class JobConfigs extends BaseCollection<JobConfig> implements Validatable
         verifyUniqueName(jobConfig);
     }
 
+    public boolean validateTree(PipelineConfigSaveValidationContext validationContext) {
+        validate(validationContext);
+        boolean isValid = errors().isEmpty();
+        for (JobConfig jobConfig : this) {
+            isValid = jobConfig.validateTree(validationContext) && isValid;
+        }
+        return isValid;
+    }
+
     public void validate(ValidationContext validationContext) {
         validateNameUniqueness();
     }
@@ -112,7 +121,7 @@ public class JobConfigs extends BaseCollection<JobConfig> implements Validatable
     }
 
     private void validateNameUniqueness() {
-        Map<String, JobConfig> nameToConfig = new HashMap<String, JobConfig>();
+        Map<String, JobConfig> nameToConfig = new HashMap<>();
         for (JobConfig jobConfig : this) {
             jobConfig.validateNameUniqueness(nameToConfig);
         }
@@ -127,7 +136,7 @@ public class JobConfigs extends BaseCollection<JobConfig> implements Validatable
     }
 
     public List<CaseInsensitiveString> names() {
-        List<CaseInsensitiveString> names = new ArrayList<CaseInsensitiveString>();
+        List<CaseInsensitiveString> names = new ArrayList<>();
         for (JobConfig jobConfig : this) {
             names.add(jobConfig.name());
         }

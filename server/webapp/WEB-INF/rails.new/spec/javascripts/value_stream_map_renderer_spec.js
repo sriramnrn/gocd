@@ -55,8 +55,10 @@ describe("value_stream_map_renderer", function () {
         assertIfItIsStartNode(grid.nodeIdAt(0, 0))
     });
 
-    it("testCurrentPipelineShouldHaveHighlightingBackground", function() {
-        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["p1"]', 1, '[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, {"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]');
+    it("testCurrentPipelineShouldHaveHighlightingBackground", function () {
+        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["p1"]', 1,
+          '[{"modifications": [{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, ' +
+          '{"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]}]');
         var node_p1 = pipelineNode("p1", '["hg_fingerprint"]', '[]', 1, "", '[]');
         var vsm = eval('({"current_pipeline":"p1","levels":[{"nodes":[' + hg_material + ']},{"nodes":[' + node_p1 + ']}]})');
         new Graph_Renderer("#vsm-container").invoke(vsm);
@@ -64,8 +66,10 @@ describe("value_stream_map_renderer", function () {
         assertEquals("Should have highlighting behind current pipeline", jQuery('#vsm-container .highlight').length, 1);
     });
 
-    it("testVSMForCommitShouldNotHaveHighlightingBackground", function() {
-        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["p1"]', 1, '[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, {"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]');
+    it("testVSMForCommitShouldNotHaveHighlightingBackground", function () {
+        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["p1"]', 1,
+          '[{"modifications": [{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, ' +
+          '{"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]}]');
         var node_p1 = pipelineNode("p1", '["hg_fingerprint"]', '[]', 1, "", '[]');
         var vsm = eval('({"current_material":"hg_fingerprint","levels":[{"nodes":[' + hg_material + ']},{"nodes":[' + node_p1 + ']}]})');
         new Graph_Renderer("#vsm-container").invoke(vsm);
@@ -74,7 +78,7 @@ describe("value_stream_map_renderer", function () {
     });
 
 
-    it("testShouldCheckIfPipelineHasRunMessageVisible", function() {
+    it("testShouldCheckIfPipelineHasRunMessageVisible", function () {
 
         var vsm = {"current_material": "sample", "levels": [
             {"nodes": [
@@ -276,66 +280,67 @@ describe("value_stream_map_renderer", function () {
         assertEquals("details of deleted pipeline are shown.", deleted_pipeline_message, jQuery("#vsm-container #deleted_pipeline .message span").text());
     });
 
+    if (window.navigator.userAgent.indexOf("MSIE")<=0) {
+        it("testShouldDisplayAllDetailsForSCMMaterialNodes", function () {
+            /*
+             hg_fingerprint -> p1
+             */
 
-    it("testShouldDisplayAllDetailsForSCMMaterialNodes", function () {
-        /*
-         hg_fingerprint -> p1
-         */
+            var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["p1"]', 1,
+                '[{modifications:[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, ' +
+                '{"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]}]');
+            var node_p1 = pipelineNode("p1", '["hg_fingerprint"]', '[]', 1, "", '[]');
 
-        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["p1"]', 1,
-            '[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, {"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]');
-        var node_p1 = pipelineNode("p1", '["hg_fingerprint"]', '[]', 1, "", '[]');
+            var vsm = eval('({"current_pipeline":"p1","levels":[{"nodes":[' + hg_material + ']},{"nodes":[' + node_p1 + ']}]})');
+            new Graph_Renderer("#vsm-container").invoke(vsm);
 
-        var vsm = eval('({"current_pipeline":"p1","levels":[{"nodes":[' + hg_material + ']},{"nodes":[' + node_p1 + ']}]})');
-        new Graph_Renderer("#vsm-container").invoke(vsm);
+            assertEquals("material details are not populated correctly.", true, jQuery("#vsm-container #hg_fingerprint .material_revisions").hasClass("hg"));
+            assertEquals("material details are not populated correctly.", 2, jQuery('ul[data-materialname="hg_fingerprint"] li.instance').length);
 
-        assertEquals("material details are not populated correctly.", true, jQuery("#vsm-container #hg_fingerprint .material_revisions").hasClass("hg"));
-        assertEquals("material details are not populated correctly.", 2, jQuery('ul[data-materialname="hg_fingerprint"] li.instance').length);
+            /*
+             * material url
+             */
+            assertEquals("material url is not populated correctly.", "../manual-testing/ant_hg/dummy", jQuery("#hg_fingerprint .material_type").html());
 
-        /*
-         * material url
-         */
-        assertEquals("material url is not populated correctly.", "../manual-testing/ant_hg/dummy", jQuery("#hg_fingerprint .material_type").html());
-
-        /*
-         * material image
-         */
-        var boundingRectOfMaterialNode = jQuery("#hg_fingerprint")[0].getBoundingClientRect();
-        var boundingRectOfMaterialImageNode = jQuery("#hg_fingerprint .material_type")[0].getBoundingClientRect();
-        var centerOfNode = boundingRectOfMaterialNode.left + (boundingRectOfMaterialNode.width / 2);
-        var centerOfImage = boundingRectOfMaterialImageNode.left + (boundingRectOfMaterialImageNode.width / 2);
-        assertEquals("material image should be positioned at center of node", true, Math.abs(centerOfNode - centerOfImage) < 5);
+            /*
+             * material image
+             */
+            var boundingRectOfMaterialNode = jQuery("#hg_fingerprint")[0].getBoundingClientRect();
+            var boundingRectOfMaterialImageNode = jQuery("#hg_fingerprint .material_type")[0].getBoundingClientRect();
+            var centerOfNode = boundingRectOfMaterialNode.left + (boundingRectOfMaterialNode.width / 2);
+            var centerOfImage = boundingRectOfMaterialImageNode.left + (boundingRectOfMaterialImageNode.width / 2);
+            assertEquals("material image should be positioned at center of node", true, Math.abs(centerOfNode - centerOfImage) < 5);
 
 
-        /*
-         * hide/show revisions
-         */
-        assertEquals("revision details should be hidden by default", false, jQuery(".instances[data-materialname='hg_fingerprint']").is(':visible'));
-        jQuery(jQuery("#hg_fingerprint .more")).trigger('click');
-        assertEquals("revision details should be on click of more", true, jQuery(".instances[data-materialname='hg_fingerprint']").is(':visible'));
+            /*
+             * hide/show revisions
+             */
+            assertEquals("revision details should be hidden by default", false, jQuery(".instances[data-materialname='hg_fingerprint']").is(':visible'));
+            jQuery(jQuery("#hg_fingerprint .more")).trigger('click');
+            assertEquals("revision details should be on click of more", true, jQuery(".instances[data-materialname='hg_fingerprint']").is(':visible'));
 
-        /*
-         first commit
-         */
-        assertEquals("first revision is not populated correctly.", "revision1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('0').text().trim());
-        assertEquals("first comment is not populated correctly.", "comment1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('1').text().trim());
-        assertEquals("first user is not populated correctly.", "user1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('2').find('p').eq('0').text().trim());
-        assertEquals("first modified_time is populated correctly.", "modified_time1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('2').find('p').eq('1').text());
-        /*
-         second commit
-         */
-        assertEquals("second revision is not populated correctly.", "revision2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('0').text().trim());
-        assertEquals("second comment is not populated correctly.", "comment2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('1').text().trim());
-        assertEquals("second user is not populated correctly.", "user2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('2').find('p').eq('0').text().trim());
-        assertEquals("second modified_time is populated correctly.", "modified_time2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('2').find('p').eq('1').text());
-    });
-
+            /*
+             first commit
+             */
+            assertEquals("first revision is not populated correctly.", "revision1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('0').text().trim());
+            assertEquals("first comment is not populated correctly.", "comment1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('1').text().trim());
+            assertEquals("first user is not populated correctly.", "user1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('2').find('p').eq('0').text().trim());
+            assertEquals("first modified_time is populated correctly.", "modified_time1", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('0').find('div').eq('2').find('p').eq('1').text());
+            /*
+             second commit
+             */
+            assertEquals("second revision is not populated correctly.", "revision2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('0').text().trim());
+            assertEquals("second comment is not populated correctly.", "comment2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('1').text().trim());
+            assertEquals("second user is not populated correctly.", "user2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('2').find('p').eq('0').text().trim());
+            assertEquals("second modified_time is populated correctly.", "modified_time2", jQuery('ul[data-materialname="hg_fingerprint"] li.instance').eq('1').find('div').eq('2').find('p').eq('1').text());
+        });
+    }
 
     it("testShouldCommitDetailsForPackageMaterial", function () {
         var vsm = {"current_pipeline": "sample", "levels": [
             {"nodes": [
-                {"name": "Repository: [repo_url=file:///tmp/repo] - Package: [package_spec=go-agent]", "node_type": "PACKAGE", "depth": 1, "parents": [], "instances": [
-                    {"modified_time": "5 months ago", "user": "anonymous", "comment": "{\"COMMENT\":\"Built on server.\",\"TRACKBACK_URL\":\"google.com\",\"TYPE\":\"PACKAGE_MATERIAL\"}", "revision": "go-agent-13.1.1-16714.noarch"}
+                {"name": "Repository: [repo_url=file:///tmp/repo] - Package: [package_spec=go-agent]", "node_type": "PACKAGE", "depth": 1, "parents": [], "material_revisions": [
+                    {"modifications": [{"modified_time": "5 months ago", "user": "anonymous", "comment": "{\"COMMENT\":\"Built on server.\",\"TRACKBACK_URL\":\"google.com\",\"TYPE\":\"PACKAGE_MATERIAL\"}", "revision": "go-agent-13.1.1-16714.noarch"}]}
                 ], "locator": "", "id": "pkg_id", "dependents": ["sample"], "material_names": ["yum:go-agent"]}
             ]},
             {"nodes": [
@@ -365,8 +370,8 @@ describe("value_stream_map_renderer", function () {
     it("testShouldShowTrackbackUrlAsNotProvidedWhenItIsEmpty", function () {
         var vsm = {"current_pipeline": "sample", "levels": [
             {"nodes": [
-                {"name": "Repository: [repo_url=file:///tmp/repo] - Package: [package_spec=go-agent]", "node_type": "PACKAGE", "depth": 1, "parents": [], "instances": [
-                    {"modified_time": "5 months ago", "user": "anonymous", "comment": "{\"TYPE\":\"PACKAGE_MATERIAL\"}", "revision": "go-agent-13.1.1-16714.noarch"}
+                {"name": "Repository: [repo_url=file:///tmp/repo] - Package: [package_spec=go-agent]", "node_type": "PACKAGE", "depth": 1, "parents": [], "material_revisions": [
+                    {"modifications": [{"modified_time": "5 months ago", "user": "anonymous", "comment": "{\"TYPE\":\"PACKAGE_MATERIAL\"}", "revision": "go-agent-13.1.1-16714.noarch"}]}
                 ], "locator": "", "id": "pkg_id", "dependents": ["sample"], "material_names": ["yum:go-agent"]}
             ]},
             {"nodes": [
@@ -392,25 +397,27 @@ describe("value_stream_map_renderer", function () {
             jQuery('#pkg_id .material_revisions_label').attr("title"));
     });
 
+    if (window.navigator.userAgent.indexOf("MSIE")<=0) {
+        it("testShouldCheckIfCommentsBoxIsShownCorrectlyIfTwoOrMoreSameSVNorTFSorP4IsConfiguredWithDifferentCredentials", function () {
+            var svn_material_1 = scmMaterialNode('svn_fingerprint_1', 'http://username1:password1@svn.com', "svn", '["p1"]', 1,
+                '[{"modifications":[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, ' +
+                '{"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]}]');
+            var svn_material_2 = scmMaterialNode('svn_fingerprint_2', 'http://username2:password2@svn.com', "svn", '["p1"]', 1,
+                '[{"modifications":[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, ' +
+                '{"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]}]');
+            var node_p1 = pipelineNode("p1", '["svn_fingerprint_1", "svn_fingerprint_2"]', '[]', 1, "", '[]');
 
-    it("testShouldCheckIfCommentsBoxIsShownCorrectlyIfTwoOrMoreSameSVNorTFSorP4IsConfiguredWithDifferentCredentials", function () {
-        var svn_material_1 = scmMaterialNode('svn_fingerprint_1', 'http://username1:password1@svn.com', "svn", '["p1"]', 1,
-            '[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, {"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]');
-        var svn_material_2 = scmMaterialNode('svn_fingerprint_2', 'http://username2:password2@svn.com', "svn", '["p1"]', 1,
-            '[{"revision": "revision1","comment":"comment1","user":"user1","modified_time":"modified_time1"}, {"revision": "revision2","comment":"comment2","user":"user2","modified_time":"modified_time2"}]');
-        var node_p1 = pipelineNode("p1", '["svn_fingerprint_1", "svn_fingerprint_2"]', '[]', 1, "", '[]');
+            var vsm = eval('({"current_pipeline":"p1","levels":[{"nodes":[' + svn_material_1 + ',' + svn_material_2 + ']},{"nodes":[' + node_p1 + ']}]})');
+            new Graph_Renderer("#vsm-container").invoke(vsm);
 
-        var vsm = eval('({"current_pipeline":"p1","levels":[{"nodes":[' + svn_material_1 + ',' + svn_material_2 + ']},{"nodes":[' + node_p1 + ']}]})');
-        new Graph_Renderer("#vsm-container").invoke(vsm);
-
-        assertEquals("revision details should be hidden by default", false, jQuery(".instances[data-materialname='svn_fingerprint_1']").is(':visible'));
-        assertEquals("revision details should be hidden by default", false, jQuery(".instances[data-materialname='svn_fingerprint_2']").is(':visible'));
-        jQuery(jQuery("#svn_fingerprint_1 .more")).trigger('click');
-        jQuery(jQuery("#svn_fingerprint_2 .more")).trigger('click');
-        assertEquals("revision details should be on click of more", true, jQuery(".instances[data-materialname='svn_fingerprint_1']").is(':visible'));
-        assertEquals("revision details should be on click of more", true, jQuery(".instances[data-materialname='svn_fingerprint_2']").is(':visible'));
-    });
-
+            assertEquals("revision details should be hidden by default", false, jQuery(".instances[data-materialname='svn_fingerprint_1']").is(':visible'));
+            assertEquals("revision details should be hidden by default", false, jQuery(".instances[data-materialname='svn_fingerprint_2']").is(':visible'));
+            jQuery(jQuery("#svn_fingerprint_1 .more")).trigger('click');
+            jQuery(jQuery("#svn_fingerprint_2 .more")).trigger('click');
+            assertEquals("revision details should be on click of more", true, jQuery(".instances[data-materialname='svn_fingerprint_1']").is(':visible'));
+            assertEquals("revision details should be on click of more", true, jQuery(".instances[data-materialname='svn_fingerprint_2']").is(':visible'));
+        });
+    }
 
     it("testShouldDisplayAllDetailsForPipelineNodes", function () {
         /*
@@ -420,7 +427,8 @@ describe("value_stream_map_renderer", function () {
         var current_pipeline_instance_details = '{"stages": [{"locator": "/go/pipelines/current/1/defaultStage/1","status": "Passed","name": "defaultStage"},' +
             '{"locator": "","status": "Unknown","name": "oneMore"}],"locator": "/go/pipelines/value_stream_map/current/1","counter": 1,"label": "1" }';
 
-        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["current"]', 1, '[{"revision": "revision1"}, {"revision": "revision2"}]');
+        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["current"]', 1,
+          '[{"modifications":[{"revision": "revision1"}, {"revision": "revision2"}]}]');
         var current = pipelineNode("current", '["hg_fingerprint"]', '[]', 1, "/go/tab/pipeline/history/current", '[' + current_pipeline_instance_details + ']');
 
         var vsm = eval('({"current_pipeline":"p1","levels":[{"nodes":[' + hg_material + ']},{"nodes":[' + current + ']}]})');
@@ -447,7 +455,8 @@ describe("value_stream_map_renderer", function () {
             ' "locator": "/go/pipelines/value_stream_map/downstream/1","counter": 1,"label": "1" },' + '{"stages": [{"locator": "/go/pipelines/downstream/2/defaultStage/1","status": "Passed","name": "defaultStage"}],' +
             ' "locator": "/go/pipelines/downstream/current/2","counter": 2,"label": "2" }';
 
-        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["current"]', 1, '[{"revision": "revision1"}, {"revision": "revision2"}]');
+        var hg_material = scmMaterialNode('hg_fingerprint', '../manual-testing/ant_hg/dummy', "hg", '["current"]', 1,
+          '[{"modifications":[{"revision": "revision1"}, {"revision": "revision2"}]}]');
         var current = pipelineNode("current", '["hg_fingerprint"]', '["downstream"]', 1, "/go/tab/pipeline/history/current", '[' + current_pipeline_instance_details + ']');
         var downstream = pipelineNode("downstream", '["current"]', '[]', 2, "/go/tab/pipeline/history/downstream", '[' + downstream_pipeline_instance_details + ']');
 
@@ -485,9 +494,9 @@ describe("value_stream_map_renderer", function () {
             ',"id":"' + nodeId + '", "depth":' + depth + ', "locator":' + '""' + '}';
     }
 
-    function scmMaterialNode(nodeId, nodeName, type, dependents, depth, instances) {
+    function scmMaterialNode(nodeId, nodeName, type, dependents, depth, material_revisions) {
         return '{"node_type":"' + type + '","name":"' + nodeName + '","parents":' + '[]' + ',"dependents":' + dependents +
-            ',"id":"' + nodeId + '", "depth":' + depth + ', "locator":' + '""' + ', "instances":' + instances + '}';
+            ',"id":"' + nodeId + '", "depth":' + depth + ', "locator":' + '""' + ', "material_revisions":' + material_revisions + '}';
     }
 
     function pipelineNode(nodeId, parents, dependents, depth, locator, instances) {

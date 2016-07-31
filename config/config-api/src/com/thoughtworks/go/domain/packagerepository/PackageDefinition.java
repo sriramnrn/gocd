@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,8 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ *
+ */
 
 package com.thoughtworks.go.domain.packagerepository;
 
@@ -37,6 +38,7 @@ import com.thoughtworks.go.config.ValidationContext;
 import com.thoughtworks.go.config.materials.AbstractMaterialConfig;
 import com.thoughtworks.go.config.validation.NameTypeValidator;
 import com.thoughtworks.go.domain.ConfigErrors;
+import com.thoughtworks.go.domain.ConfigurationDisplayUtil;
 import com.thoughtworks.go.domain.config.Configuration;
 import com.thoughtworks.go.domain.config.ConfigurationProperty;
 import com.thoughtworks.go.domain.config.SecureKeyInfoProvider;
@@ -159,7 +161,7 @@ public class PackageDefinition implements Serializable, Validatable, ParamsAttri
     public void validate(ValidationContext validationContext) {
         if (isBlank(name)) {
             errors().add(NAME, "Package name is mandatory");
-        } else if (!new NameTypeValidator().isNameValid(name)) {
+        } else if (new NameTypeValidator().isNameInvalid(name)) {
             errors().add(NAME, NameTypeValidator.errorMessage("Package", name));
         }
         configuration.validateUniqueness(String.format("Package '%s'", name));
@@ -170,7 +172,7 @@ public class PackageDefinition implements Serializable, Validatable, ParamsAttri
         Packages packageDefinitionsWithSameFingerprint = packagesMap.get(fingerprint);
 
         if (packageDefinitionsWithSameFingerprint.size() > 1) {
-            List<String> packageNames = new ArrayList<String>();
+            List<String> packageNames = new ArrayList<>();
             for (PackageDefinition packageDefinition : packageDefinitionsWithSameFingerprint) {
                 packageNames.add(format("[Repo Name: '%s', Package Name: '%s']", packageDefinition.getRepository().getName(), packageDefinition.getName()));
             }
@@ -200,7 +202,7 @@ public class PackageDefinition implements Serializable, Validatable, ParamsAttri
     }
 
     public String getFingerprint(String fingerprintDelimiter) {
-        List<String> list = new ArrayList<String>();
+        List<String> list = new ArrayList<>();
         list.add(format("%s=%s", "plugin-id", pluginId()));
         handlePackageDefinitionProperties(list);
         handlePackageRepositoryProperties(list);

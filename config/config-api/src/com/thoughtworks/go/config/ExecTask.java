@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,18 +12,18 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 import com.thoughtworks.go.domain.TaskProperty;
 import com.thoughtworks.go.domain.config.Arguments;
 import com.thoughtworks.go.util.FileUtil;
 import com.thoughtworks.go.util.StringUtil;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This was copied from the ExecBuilder class in ccmain. Look for references there.
@@ -31,6 +31,7 @@ import com.thoughtworks.go.util.StringUtil;
 @ConfigTag("exec")
 public class ExecTask extends AbstractTask implements CommandTask {
 
+    public static final String TYPE = "exec";
     @ConfigAttribute("command") private String command = "";
     @ConfigAttribute(value = "args", allowNull = true) private String args = "";
     @ConfigAttribute(value = "workingdir", allowNull = true) private String workingDirectory;
@@ -90,16 +91,32 @@ public class ExecTask extends AbstractTask implements CommandTask {
             }
         }
         if (attributeMap.containsKey(ARGS)) {
-            clearCurrentArgsAndArgList();
             String val = (String) attributeMap.get(ARGS);
-            if (!StringUtil.isBlank(val)) {
-                this.args = val;
-            }
+            setArgs(val);
         }
         if (attributeMap.containsKey(WORKING_DIR)) {
             final String newWorkingDir = (String) attributeMap.get(WORKING_DIR);
-            workingDirectory = StringUtil.isBlank(newWorkingDir) ? null : newWorkingDir;
+            setWorkingDirectory(newWorkingDir);
         }
+    }
+
+    public void setArgsList(String[] arguments) {
+        clearCurrentArgsAndArgList();
+        for (String arg : arguments) {
+            argList.add(new Argument(arg));
+        }
+
+    }
+
+    public void setArgs(String val) {
+        clearCurrentArgsAndArgList();
+        if (!StringUtil.isBlank(val)) {
+            this.args = val;
+        }
+    }
+
+    public void setWorkingDirectory(String newWorkingDir) {
+        workingDirectory = StringUtil.isBlank(newWorkingDir) ? null : newWorkingDir;
     }
 
     private void clearCurrentArgsAndArgList() {
@@ -134,7 +151,7 @@ public class ExecTask extends AbstractTask implements CommandTask {
 
     @Override
     public String getTaskType() {
-        return "exec";
+        return TYPE;
     }
 
     public String getTypeForDisplay() {
@@ -142,10 +159,10 @@ public class ExecTask extends AbstractTask implements CommandTask {
     }
 
     public List<TaskProperty> getPropertiesForDisplay() {
-        ArrayList<TaskProperty> taskProperties = new ArrayList<TaskProperty>();
+        ArrayList<TaskProperty> taskProperties = new ArrayList<>();
         taskProperties.add(new TaskProperty("COMMAND", command));
         String arguments = arguments();
-        if(!arguments.isEmpty()){
+        if (!arguments.isEmpty()) {
             taskProperties.add(new TaskProperty("ARGUMENTS", arguments));
         }
         if (workingDirectory != null) {
@@ -159,7 +176,7 @@ public class ExecTask extends AbstractTask implements CommandTask {
 
     private String argsAsString(final String delimiter) {
         StringBuilder args = new StringBuilder();
-        for (int i = 0; i < argList.size();) {
+        for (int i = 0; i < argList.size(); ) {
             args.append(argList.get(i).getValue());
             if (++i < argList.size()) {
                 args.append(delimiter);
@@ -187,14 +204,13 @@ public class ExecTask extends AbstractTask implements CommandTask {
         if (argList != null ? !argList.equals(execTask.argList) : execTask.argList != null) {
             return false;
         }
-        if (!command.equals(execTask.command)) {
+        if (command != null ? !command.equals(execTask.command) : execTask.command != null) {
             return false;
         }
         if (workingDirectory != null ? !workingDirectory.equals(execTask.workingDirectory) : execTask.workingDirectory != null) {
             return false;
         }
-
-        return true;
+        return super.equals(execTask);
     }
 
     public int hashCode() {
@@ -230,6 +246,14 @@ public class ExecTask extends AbstractTask implements CommandTask {
         return command;
     }
 
+    public String getCommand() {
+        return command();
+    }
+
+    public void setCommand(String command) {
+        this.command = command;
+    }
+
     public String getArgs() {
         return args;
     }
@@ -251,7 +275,7 @@ public class ExecTask extends AbstractTask implements CommandTask {
 
     @Override
     public String arguments() {
-        if(!args.isEmpty()){
+        if (!args.isEmpty()) {
             return args;
         }
         return argsAsString(" ");

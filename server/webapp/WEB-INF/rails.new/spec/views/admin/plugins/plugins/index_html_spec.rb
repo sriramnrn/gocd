@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../../spec_helper")
+require 'spec_helper'
 
 def with_listItem ul, class_name, key, value
   ul.find("li.#{class_name}").tap do |li|
@@ -24,8 +24,12 @@ def with_listItem ul, class_name, key, value
 end
 
 describe "admin/plugins/plugins/index.html.erb" do
+  before :each do
+    assign(:meta_data_store, @meta_data_store = double('metadata store'))
+  end
 
   it "should have a form to upload plugins" do
+    expect(@meta_data_store).to receive(:hasPlugin).with(anything()).and_return(false)
     assign(:upload_feature_enabled, true)
     assign(:plugin_descriptors, [valid_descriptor("1")])
 
@@ -35,7 +39,7 @@ describe "admin/plugins/plugins/index.html.erb" do
     expect(plugin_upload).to have_selector("form")
   end
 
-  it "should hide the upload plugins form when the Toggles.PLUGIN_UPLOAD_FEATURE_TOGGLE_KEY is off" do
+  it "should hide thNe upload plugins form when the PLUGIN_UPLOAD_FEATURE is off" do
     assign(:upload_feature_enabled, false)
     assign(:plugin_descriptors, [])
 
@@ -43,10 +47,10 @@ describe "admin/plugins/plugins/index.html.erb" do
 
     expect(response).to_not have_selector('div#plugins-listing div#upload-plugin')
     expect(response).to_not have_selector('div#plugins-listing form')
-    expect("This test should fail when the toggle is removed. So, access the toggle: #{Toggles.PLUGIN_UPLOAD_FEATURE_TOGGLE_KEY}").to_not be_nil
   end
 
   it "should list a set of plugins" do
+    expect(@meta_data_store).to receive(:hasPlugin).twice().with(anything()).and_return(false)
     assign(:plugin_descriptors, [valid_descriptor("1"), invalid_descriptor('2', ['message1', 'message2'])])
 
     render
@@ -104,6 +108,7 @@ describe "admin/plugins/plugins/index.html.erb" do
   end
 
   it "should add http:// to url if not specified" do
+    expect(@meta_data_store).to receive(:hasPlugin).with(anything()).and_return(false)
     assign(:plugin_descriptors, [valid_descriptor_without_http("1")])
 
     render
@@ -123,6 +128,7 @@ describe "admin/plugins/plugins/index.html.erb" do
   end
 
   it "should not have a messages section when there are no messages" do
+    expect(@meta_data_store).to receive(:hasPlugin).with(anything()).and_return(false)
     description = valid_descriptor("1")
     assign(:plugin_descriptors, [description])
 
@@ -138,6 +144,7 @@ describe "admin/plugins/plugins/index.html.erb" do
   end
 
   it "should have a messages section when there are messages" do
+    expect(@meta_data_store).to receive(:hasPlugin).with(anything()).and_return(false)
     description = invalid_descriptor('2', ['message1', 'message2'])
     assign(:plugin_descriptors, [description])
 
@@ -164,6 +171,56 @@ describe "admin/plugins/plugins/index.html.erb" do
     Capybara.string(response.body).find('div#plugins-listing').tap do |plugins_listing|
       expect(plugins_listing).to have_selector("div.information", :text => "No plugins found. Please drop your plugin here at this location:")
       expect(plugins_listing).not_to have_selector("li.plugin")
+    end
+  end
+
+  it "should add settings icon if settings is available" do
+    expect(@meta_data_store).to receive(:hasPlugin).with('plugin1.id').and_return(true)
+    allow(view).to receive(:is_user_an_admin?).and_return(true)
+    assign(:plugin_descriptors, [valid_descriptor("1")])
+
+    render
+
+    Capybara.string(response.body).find('div#plugins-listing').tap do |plugins_listing|
+      plugins_listing.find("li.plugin.enabled[id='plugin1.id']").tap do |li|
+        li.find("div.plugin-details").tap do |plugin_details|
+          plugin_details.find("span.settings").tap do |span|
+            expect(span).to have_selector("a[href='#']")
+          end
+        end
+      end
+    end
+  end
+
+  it "should not add settings icon if settings is not available" do
+    expect(@meta_data_store).to receive(:hasPlugin).with('plugin1.id').and_return(false)
+    allow(view).to receive(:is_user_an_admin?).and_return(true)
+    assign(:plugin_descriptors, [valid_descriptor("1")])
+
+    render
+
+    Capybara.string(response.body).find('div#plugins-listing').tap do |plugins_listing|
+      plugins_listing.find("li.plugin.enabled[id='plugin1.id']").tap do |li|
+        li.find("div.plugin-details").tap do |plugin_details|
+          expect(plugin_details).not_to have_selector('span.settings')
+        end
+      end
+    end
+  end
+
+  it "should not add settings icon if user is not an admin" do
+    expect(@meta_data_store).to receive(:hasPlugin).with('plugin1.id').and_return(true)
+    allow(view).to receive(:is_user_an_admin?).and_return(false)
+    assign(:plugin_descriptors, [valid_descriptor("1")])
+
+    render
+
+    Capybara.string(response.body).find('div#plugins-listing').tap do |plugins_listing|
+      plugins_listing.find("li.plugin.enabled[id='plugin1.id']").tap do |li|
+        li.find("div.plugin-details").tap do |plugin_details|
+          expect(plugin_details).not_to have_selector('span.settings')
+        end
+      end
     end
   end
 

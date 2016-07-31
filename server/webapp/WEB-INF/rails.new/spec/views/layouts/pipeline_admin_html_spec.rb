@@ -14,16 +14,12 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 load File.join(File.dirname(__FILE__), 'layout_html_examples.rb')
 
 
 describe "/layouts/pipeline_admin" do
   include EngineUrlHelper
-
-  before do
-    stub_server_health_messages
-  end
 
   before do
     @layout_name = "layouts/pipeline_admin"

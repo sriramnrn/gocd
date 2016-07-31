@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,33 @@ package com.thoughtworks.go.util.validators;
 
 import java.io.File;
 import java.io.IOException;
+
+import static com.thoughtworks.go.util.StringUtil.*;
 import static java.text.MessageFormat.format;
 
 import com.thoughtworks.go.util.SystemEnvironment;
-import com.thoughtworks.go.util.validators.Validation;
-import com.thoughtworks.go.util.validators.Validator;
 import org.apache.commons.io.FileUtils;
 
 public class JettyWorkDirValidator implements Validator {
+
+    private SystemEnvironment systemEnvironment;
+
+    public JettyWorkDirValidator() {
+        this(new SystemEnvironment());
+    }
+
+    protected JettyWorkDirValidator(SystemEnvironment systemEnvironment) {
+        this.systemEnvironment = systemEnvironment;
+    }
+
     public Validation validate(Validation val) {
-        if (SystemEnvironment.getProperty("jetty.home", "").equals("")) {
-            new SystemEnvironment().setProperty("jetty.home", new SystemEnvironment().getPropertyImpl("user.dir"));
+        if (isBlank(systemEnvironment.getPropertyImpl("jetty.home"))) {
+            systemEnvironment.setProperty("jetty.home", systemEnvironment.getPropertyImpl("user.dir"));
         }
-        File home = new File(new SystemEnvironment().getPropertyImpl("jetty.home"));
-        File work = new File(new SystemEnvironment().getPropertyImpl("jetty.home"), "work");
+        systemEnvironment.setProperty("jetty.base", systemEnvironment.getPropertyImpl("jetty.home"));
+        
+        File home = new File(systemEnvironment.getPropertyImpl("jetty.home"));
+        File work = new File(systemEnvironment.getPropertyImpl("jetty.home"), "work");
         if (home.exists()) {
             if (work.exists()) {
                 try {

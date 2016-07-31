@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,12 +12,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,12 +40,24 @@ public class EnvironmentVariablesConfig extends BaseCollection<EnvironmentVariab
     public EnvironmentVariablesConfig(List<EnvironmentVariableConfig> elements) {
         super(elements);
     }
+    public EnvironmentVariablesConfig(EnvironmentVariableConfig[] elements) {
+        super(elements);
+    }
 
     public void validate(ValidationContext validationContext) {
-        Map<String, EnvironmentVariableConfig> map = new HashMap<String, EnvironmentVariableConfig>();
+        Map<String, EnvironmentVariableConfig> map = new HashMap<>();
         for (EnvironmentVariableConfig config : this) {
             config.validateName(map, validationContext);
         }
+    }
+
+    public boolean validateTree(PipelineConfigSaveValidationContext validationContext) {
+        validate(validationContext);
+        boolean isValid = errors().isEmpty();
+        for (EnvironmentVariableConfig config : this) {
+            isValid = config.validateTree(validationContext) && isValid;
+        }
+        return isValid;
     }
 
     public ConfigErrors errors() {
@@ -121,24 +132,25 @@ public class EnvironmentVariablesConfig extends BaseCollection<EnvironmentVariab
         }
     }
 
-    public List<EnvironmentVariableConfig> getSecureVariables() {
-        ArrayList<EnvironmentVariableConfig> secureVariables = new ArrayList<EnvironmentVariableConfig>();
+    public EnvironmentVariablesConfig getSecureVariables() {
+        EnvironmentVariablesConfig result = new EnvironmentVariablesConfig();
         for (EnvironmentVariableConfig environmentVariableConfig : this) {
             if (environmentVariableConfig.isSecure()) {
-                secureVariables.add(environmentVariableConfig);
+                result.add(environmentVariableConfig);
             }
         }
-        return secureVariables;
+        return result;
     }
 
-    public List<EnvironmentVariableConfig> getPlainTextVariables() {
-        ArrayList<EnvironmentVariableConfig> plainTextVariables = new ArrayList<EnvironmentVariableConfig>();
+    public EnvironmentVariablesConfig getPlainTextVariables() {
+        EnvironmentVariablesConfig result = new EnvironmentVariablesConfig();
         for (EnvironmentVariableConfig environmentVariableConfig : this) {
-            if (!environmentVariableConfig.isSecure()) {
-                plainTextVariables.add(environmentVariableConfig);
+            if (environmentVariableConfig.isPlain()) {
+                result.add(environmentVariableConfig);
             }
         }
-        return plainTextVariables;
+        return result;
 
     }
+
 }

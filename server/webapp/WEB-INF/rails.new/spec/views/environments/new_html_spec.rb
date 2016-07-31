@@ -14,14 +14,15 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "environments/new.html.erb" do
   before do
     assign(:available_pipelines, [])
     assign(:unavailable_pipelines, [])
+    assign(:remote_pipelines, [])
     assign(:agents, [])
-    assign(:environment, EnvironmentConfig.new())
+    assign(:environment, BasicEnvironmentConfig.new())
     allow(view).to receive(:current_user).and_return(com.thoughtworks.go.server.domain.Username.new(CaseInsensitiveString.new('user_foo')))
     allow(view).to receive(:security_service).and_return(@security_service = Object.new)
   end
@@ -68,7 +69,7 @@ describe "environments/new.html.erb" do
     assign(:available_pipelines, [EnvironmentPipelineModel.new("first"), EnvironmentPipelineModel.new("second")])
 
     render
-    
+
     verify_pipeline_is_present('first')
     verify_pipeline_is_present('second')
   end
@@ -79,7 +80,7 @@ describe "environments/new.html.erb" do
     render
 
     expect(response).to have_selector("h2", "Environment Variables (Name = Value)")
-    expect(response).to have_selector("div.environment_variables_section ul.variables")
+    expect(response).to have_selector("div.environment_variables_section .variables")
   end
 
   it "should show the environment name with pipeline selections while adding a new environment" do
@@ -100,4 +101,3 @@ describe "environments/new.html.erb" do
     expect(response).to have_selector("div.form_content label[for='pipeline_#{pipeline_name}']")
   end
 end
-  

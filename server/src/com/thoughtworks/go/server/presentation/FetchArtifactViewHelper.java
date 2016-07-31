@@ -16,24 +16,15 @@
 
 package com.thoughtworks.go.server.presentation;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.PathFromAncestor;
-import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.PipelineTemplateConfig;
-import com.thoughtworks.go.config.StageConfig;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
+import com.thoughtworks.go.util.SystemEnvironment;
+
+import java.util.*;
 
 public class FetchArtifactViewHelper {
+    private SystemEnvironment systemEnvironment;
     private final CruiseConfig cruiseConfig;
     private final CaseInsensitiveString pipelineName;
     private final CaseInsensitiveString stageName;
@@ -41,7 +32,8 @@ public class FetchArtifactViewHelper {
 
     private static final String NULL_STR = new String();
 
-    public FetchArtifactViewHelper(CruiseConfig cruiseConfig, CaseInsensitiveString pipelineName, CaseInsensitiveString stageName, boolean template) {
+    public FetchArtifactViewHelper(SystemEnvironment systemEnvironment, CruiseConfig cruiseConfig, CaseInsensitiveString pipelineName, CaseInsensitiveString stageName, boolean template) {
+        this.systemEnvironment = systemEnvironment;
         this.cruiseConfig = cruiseConfig;
         this.pipelineName = pipelineName;
         this.stageName = stageName;
@@ -64,9 +56,9 @@ public class FetchArtifactViewHelper {
         }
     }
 
-    private static final class FetchSuggestionHirarchy extends HashMap<CaseInsensitiveString, Map<CaseInsensitiveString, List<CaseInsensitiveString>>>{
+    private static final class FetchSuggestionHirarchy extends HashMap<CaseInsensitiveString, Map<CaseInsensitiveString, List<CaseInsensitiveString>>> {
         private void addStagesToHirarchy(CaseInsensitiveString pipelineName, List<StageConfig> currentPipelineStages) {
-            Map<CaseInsensitiveString, List<CaseInsensitiveString>> stageMap = new HashMap<CaseInsensitiveString, List<CaseInsensitiveString>>();
+            Map<CaseInsensitiveString, List<CaseInsensitiveString>> stageMap = new HashMap<>();
             for (StageConfig stg : currentPipelineStages) {
                 stageMap.put(stg.name(), stg.getJobs().names());
             }
@@ -74,11 +66,11 @@ public class FetchArtifactViewHelper {
         }
 
         private void populateFetchableJobHirarchyFor(Queue<JobHirarchyQueueEntry> bfsQueue, CruiseConfig cruiseConfig) {
-            while (! bfsQueue.isEmpty()) {
+            while (!bfsQueue.isEmpty()) {
                 JobHirarchyQueueEntry entry = bfsQueue.remove();
                 CaseInsensitiveString pipelineName = entry.pipelineName;
                 PipelineConfig pipelineConfig = cruiseConfig.pipelineConfigByName(pipelineName);
-                List<StageConfig> fetchableStages = new ArrayList<StageConfig>();
+                List<StageConfig> fetchableStages = new ArrayList<>();
                 for (StageConfig stageConfig : pipelineConfig) {
                     fetchableStages.add(stageConfig);
                     if (entry.stageName.equals(stageConfig.name())) {
@@ -92,6 +84,9 @@ public class FetchArtifactViewHelper {
     }
 
     public FetchSuggestionHirarchy autosuggestMap() {
+        if (!systemEnvironment.get(SystemEnvironment.FETCH_ARTIFACT_AUTO_SUGGEST)) {
+            return new FetchSuggestionHirarchy();
+        }
         return fetchArtifactSuggestionsForPipeline(template ? createPipelineConfigForTemplate() : cruiseConfig.pipelineConfigByName(pipelineName));
     }
 
@@ -113,9 +108,9 @@ public class FetchArtifactViewHelper {
 
     private FetchSuggestionHirarchy fetchArtifactSuggestionsForPipeline(PipelineConfig pipelineConfig) {
         FetchSuggestionHirarchy hirarchy = new FetchSuggestionHirarchy();
-        Queue<JobHirarchyQueueEntry> bfsQueue = new ArrayDeque<JobHirarchyQueueEntry>();
+        Queue<JobHirarchyQueueEntry> bfsQueue = new ArrayDeque<>();
         addLocalUpstreamStages(hirarchy, pipelineConfig);
-        HashSet<DependencyMaterialConfig> handled = new HashSet<DependencyMaterialConfig>();
+        HashSet<DependencyMaterialConfig> handled = new HashSet<>();
         addMaterialsToQueue(bfsQueue, pipelineConfig, "");
         hirarchy.populateFetchableJobHirarchyFor(bfsQueue, cruiseConfig);
         return hirarchy;
@@ -123,8 +118,8 @@ public class FetchArtifactViewHelper {
 
     private void addLocalUpstreamStages(FetchSuggestionHirarchy hirarchy, PipelineConfig pipelineConfig) {
         List<StageConfig> currentPipelineStages = pipelineConfig.allStagesBefore(stageName);
-        if (! currentPipelineStages.isEmpty()) {
-            if (! template) {
+        if (!currentPipelineStages.isEmpty()) {
+            if (!template) {
                 hirarchy.addStagesToHirarchy(pipelineName, currentPipelineStages);
             }
             hirarchy.addStagesToHirarchy(new CaseInsensitiveString(NULL_STR), currentPipelineStages);

@@ -14,15 +14,10 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../spec_helper")
+require 'spec_helper'
 
 describe Admin::TasksController do
-  include MockRegistryModule
-  before do
-    controller.stub(:populate_health_messages)
-  end
-
-  include TaskMother, ReflectiveUtil, ConfigSaveStubbing
+  include MockRegistryModule, TaskMother, ReflectiveUtil, ConfigSaveStubbing
 
   describe "increment" do
 
@@ -42,7 +37,7 @@ describe Admin::TasksController do
       @result = stub_localized_result
 
       @template = PipelineTemplateConfig.new(CaseInsensitiveString.new("template.name"), [StageConfigMother.stageWithTasks("stage_one"), StageConfigMother.stageWithTasks("stage_two")].to_java(StageConfig))
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       @cruise_config.addTemplate(@template)
       set(@cruise_config, "md5", "abcd1234")
       @cruise_config.addPipeline("my-group", @pipeline)
@@ -96,7 +91,7 @@ describe Admin::TasksController do
 
       @template = PipelineTemplateConfig.new(CaseInsensitiveString.new("template.name"), [StageConfigMother.stageWithTasks("stage_one"), StageConfigMother.stageWithTasks("stage_two")].to_java(StageConfig))
 
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       @cruise_config.addPipeline("my-groups", @pipeline)
       @cruise_config.addTemplate(@template)
       set(@cruise_config, "md5", "abcd1234")

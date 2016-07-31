@@ -1,29 +1,87 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END**********************************/
+ */
 
 var BuildOutputObserver = Class.create();
 
 BuildOutputObserver.prototype = {
     initialize: function(buildLocator, name) {
+        var self = this;
         this.name = name;
         this.buildLocator = buildLocator;
         this.start_line_number = 0;
         this.was_building = false;
         this.is_output_empty = false;
         this.is_completed = false;
+        this.ansi_up = ansi_up.ansi_to_html_obj();
+        this.enableTailing = true;
+        this.window = jQuery(window);
+        this.originalWindowScrollTop = this.window.scrollTop();
+        this.consoleElement = jQuery('.buildoutput_pre');
+        this.consoleTabElement = jQuery('#build_console');
+        this.autoScrollButton = jQuery('.auto-scroll');
+        this.autoScrollButton.toggleClass('tailing', this.enableTailing);
+        this.autoScrollButton.on('click', function(){
+            self.enableTailing = !self.enableTailing;
+            self.initializeScroll();
+        });
+        this.consoleTabElement.on('click', function(){
+            self.initializeScroll();
+        });
+        this.initializeScroll();
+    },
+    initializeScroll: function(){
+      if(this.enableTailing){
+        this.startScroll();
+      } else {
+        this.stopScroll();
+      }
+    },
+    startScroll: function(){
+        this.autoScrollButton.toggleClass('tailing', this.enableTailing);
+        var self = this;
+        this.scrollToBottom(0);
+        this.window.on('scroll.autoScroll resize.autoScroll', jQuery.throttle(200, function () {
+            var windowScrollTop = self.window.scrollTop();
+            if (self.originalWindowScrollTop - windowScrollTop > 5) {
+                self.stopScroll();
+            }
+        }));
+    },
+    stopScroll: function(){
+        this.window.off('scroll.autoScroll resize.autoScroll');
+        this.enableTailing = false;
+        this.autoScrollButton.toggleClass('tailing', this.enableTailing);
+    },
+    scrollToBottom: function(delay){
+        var self = this;
+        var captureScrollTop = function () {
+          self.originalWindowScrollTop = self.window.scrollTop();
+        };
+
+        jQuery('body,html').stop(true).animate(
+            {
+                scrollTop: this.consoleElement.outerHeight()
+            },
+            {
+                duration: delay || 100,
+                start: captureScrollTop, // start is not support with the current version, but we'll be upgrading
+                complete: captureScrollTop,
+                step: captureScrollTop
+            }
+        );
     },
     notify : function(jsonArray) {
         for (var i = 0; i < jsonArray.length; i++) {
@@ -40,7 +98,6 @@ BuildOutputObserver.prototype = {
 
         if (this.is_completed && this.is_output_empty) {
             this.update_page(json);
-            dashboard_periodical_executer.pause();
         }
         else {
             this.update_live_output.bind(this).delay(5);
@@ -57,29 +114,45 @@ BuildOutputObserver.prototype = {
                 onSuccess: function(transport, next_start_as_json) {
                     if (next_start_as_json) {
                         _this.start_line_number = next_start_as_json[0];
-                        var build_output = transport.responseText;
-                        _this.is_output_empty = _this._update_live_output(build_output);
+                        _this.is_output_empty = _this._update_live_output_color(transport.responseText);
                     } else {
                         _this.is_output_empty = true;
                     }
+                },
+              onFailure: function(response){
+                if (404 === response.status){
+                  _this.is_output_empty = _this._update_live_output_color(response.responseText);
+                } else {
+                  var message = "There was an error contacting the server. The HTTP status was " + response.status + ".";
+                  _this.is_output_empty = _this._update_live_output_color(message);
                 }
+              }
             });
         }
     },
-    _update_live_output: function (build_output) {
+
+    _update_live_output_color: function(build_output) {
         var is_output_empty = !build_output;
         if (!is_output_empty) {
-            var escapedOutPut = build_output.escapeHTML();
-            if (Prototype.Browser.IE) {
-                // Fix for the IE not wrap /r in pre bug
-                escapedOutPut = '<br/>' + escapedOutPut.replace(/\n/ig, '<br\/>');
-            }
-            if($('buildoutput_pre')){
-                $('buildoutput_pre').innerHTML += escapedOutPut;
+
+            // parsing the entier console output and building HTML is computationally expensive and blows up memory
+            // we therefore chunk the console output into 1000 lines each and hand it over to the parser, and also insert it into the DOM.
+
+            var lines = build_output.match(/^.*([\n\r]+|$)/gm);
+            while(lines.length){
+                var slice = lines.splice(0, 1000);
+                var htmlContents = this.ansi_up.ansi_to_html(slice.join("").escapeHTML(), {use_classes: true});
+                this.consoleElement.append(htmlContents);
             }
         }
+
+        if (this.enableTailing){
+            this.scrollToBottom();
+        }
+
         return is_output_empty;
     },
+
     update_page : function(json) {
         this.update_build_detail_summary_result(json);
         this.display_error_message_if_necessary(json);
@@ -116,7 +189,7 @@ BuildOutputObserver.prototype = {
         this.update_date($('build_completing_date'), json.building_info.build_completing_date)
         this.update_date($('build_completed_date'), json.building_info.build_completed_date)
         $('agent_name').setAttribute("href", context_path("agents/" + json.building_info.agent_uuid));
-        $('agent_name').update(json.building_info.agent + ' (ip:' + json.building_info.agent_ip + ')');
+        $('agent_name').update(json.building_info.agent.escapeHTML() + ' (ip:' + json.building_info.agent_ip + ')');
         // TODO: update css on building panel
         json_to_css.update_build_detail_header(json);
     },

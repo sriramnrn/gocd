@@ -14,13 +14,13 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe Admin::AdminHelper do
   include Admin::AdminHelper
 
   it "should return template's first stage" do
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     @pipeline = GoConfigMother.new.addPipelineWithTemplate(@cruise_config, "pipeline", "template", "stage", ["job"].to_java(java.lang.String))
     stage = first_stage_of_template(@cruise_config, @pipeline.getTemplateName())
     stage.name().to_s.should == 'stage'

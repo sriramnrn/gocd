@@ -1,31 +1,22 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
-
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.ConfigAttribute;
-import com.thoughtworks.go.config.ConfigSubtag;
-import com.thoughtworks.go.config.ParamsAttributeAware;
-import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.validation.FilePathTypeValidator;
 import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
@@ -33,6 +24,10 @@ import com.thoughtworks.go.util.FileUtil;
 import com.thoughtworks.go.util.StringUtil;
 import com.thoughtworks.go.util.command.UrlArgument;
 import org.apache.commons.lang.StringUtils;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
 
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 
@@ -47,6 +42,9 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
     @ConfigSubtag
     private Filter filter;
 
+    @ConfigAttribute(value = "invertFilter", optional = true)
+    private boolean invertFilter = false;
+
     @ConfigAttribute(value = "dest", allowNull = true)
     protected String folder;
 
@@ -60,14 +58,16 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
 
     public static final String FOLDER = "folder";
     public static final String FILTER = "filterAsString";
+    public static final String INVERT_FILTER = "invertFilter";
 
     public ScmMaterialConfig(String typeName) {
         super(typeName);
     }
 
-    public ScmMaterialConfig(CaseInsensitiveString name, Filter filter, String folder, boolean autoUpdate, String typeName, ConfigErrors errors) {
+    public ScmMaterialConfig(CaseInsensitiveString name, Filter filter, boolean invertFilter, String folder, boolean autoUpdate, String typeName, ConfigErrors errors) {
         super(typeName, name, errors);
         this.filter = filter;
+        this.invertFilter = invertFilter;
         this.folder = folder;
         this.autoUpdate = autoUpdate;
     }
@@ -102,6 +102,8 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
 
     public abstract String getUrl();
 
+    public abstract void setUrl(String url);
+
     protected abstract UrlArgument getUrlArgument();
 
     protected abstract String getLocation();
@@ -123,6 +125,18 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
 
     public void setFilter(Filter filter) {
         this.filter = filter;
+    }
+
+    public boolean isInvertFilter() {
+        return invertFilter;
+    }
+
+    public boolean getInvertFilter() {
+        return invertFilter;
+    }
+
+    public void setInvertFilter(boolean value) {
+        invertFilter = value;
     }
 
     public String getDescription() {
@@ -171,7 +185,7 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
             return false;
         }
 
-        return true;
+        return super.equals(that);
     }
 
     @Override
@@ -185,10 +199,10 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
     protected final void validateConcreteMaterial(ValidationContext validationContext) {
         validateNotOutsideSandbox();
         validateDestFolderPath();
-        validateConcreteScmMaterial(validationContext);
+        validateConcreteScmMaterial();
     }
 
-    protected abstract void validateConcreteScmMaterial(ValidationContext validationContext);
+    public abstract void validateConcreteScmMaterial();
 
     private void validateDestFolderPath() {
         if (StringUtils.isBlank(folder)) {
@@ -210,6 +224,7 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
             this.folder = folder;
         }
         this.setAutoUpdate("true".equals(map.get(AUTO_UPDATE)));
+        this.setInvertFilter("true".equals(map.get(INVERT_FILTER)));
         if (map.containsKey(FILTER)) {
             String pattern = (String) map.get(FILTER);
             if (!StringUtil.isBlank(pattern)) {
@@ -221,9 +236,11 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
     }
 
     public boolean isAutoUpdateStateMismatch(MaterialConfigs materialAutoUpdateMap) {
-        for (MaterialConfig otherMaterial : materialAutoUpdateMap) {
-            if (otherMaterial.isAutoUpdate() != this.autoUpdate) {
-                return true;
+        if(materialAutoUpdateMap.size() > 1){
+            for (MaterialConfig otherMaterial : materialAutoUpdateMap) {
+                if (otherMaterial.isAutoUpdate() != this.autoUpdate) {
+                    return true;
+                }
             }
         }
         return false;
@@ -231,36 +248,36 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
 
     public void setAutoUpdateMismatchError() {
         addError(AUTO_UPDATE, String.format("Material of type %s (%s) is specified more than once in the configuration with different values for the autoUpdate attribute."
-                + " All copies of the a material should have the same value for this attribute.", getTypeForDisplay(), getDescription()));
+                + " All copies of this material must have the same value for this attribute.", getTypeForDisplay(), getDescription()));
+    }
+    public void setAutoUpdateMismatchErrorWithConfigRepo() {
+        addError(AUTO_UPDATE, String.format("Material of type %s (%s) is specified as a configuration repository and pipeline material with disabled autoUpdate."
+                + " All copies of this material must have autoUpdate enabled or configuration repository must be removed", getTypeForDisplay(), getDescription()));
     }
 
     public void setDestinationFolderError(String message) {
         addError(FOLDER, message);
     }
 
-    public void validateNotSubdirectoryOf(ScmMaterialConfig otherMaterial) {
+    public void validateNotSubdirectoryOf(String otherSCMMaterialFolder) {
         String myDirPath = this.getFolder();
-        String otherDirPath = otherMaterial.getFolder();
-        if (myDirPath == null || otherDirPath == null) {
+        if (myDirPath == null || otherSCMMaterialFolder == null) {
             return;
         }
         File myDir = new File(myDirPath);
-        File otherDir = new File(otherDirPath);
+        File otherDir = new File(otherSCMMaterialFolder);
         try {
             if (FileUtil.isSubdirectoryOf(myDir, otherDir)) {
-                String message = "Invalid Destination Directory.Every material needs a different destination directory and the directories should not be nested.";
-                this.setDestinationFolderError(message);
-                otherMaterial.setDestinationFolderError(message);
+                addError(FOLDER, "Invalid Destination Directory. Every material needs a different destination directory and the directories should not be nested.");
             }
         } catch (IOException e) {
             throw bomb("Dest folder specification is not valid. " + e.getMessage());
         }
     }
 
-    public void validateDestinationDirectoryName(ScmMaterialConfig otherMaterial) {
-        if (folder != null && folder.equalsIgnoreCase(otherMaterial.folder)) {
-            this.addError(FOLDER, "The destination directory must be unique across materials.");
-            otherMaterial.addError(FOLDER, "The destination directory must be unique across materials.");
+    public void validateDestinationDirectoryName(String otherSCMMaterialFolder) {
+        if (folder != null && folder.equalsIgnoreCase(otherSCMMaterialFolder)) {
+            addError(FOLDER, "The destination directory must be unique across materials.");
         }
     }
 
@@ -274,10 +291,6 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
         }
     }
 
-    public boolean hasDestination() {
-        return !StringUtil.isBlank(folder);
-    }
-
     public Boolean isUsedInFetchArtifact(PipelineConfig pipelineConfig) {
         return false;
     }
@@ -286,4 +299,6 @@ public abstract class ScmMaterialConfig extends AbstractMaterialConfig implement
     public void setFolder(String folder) {
         this.folder = folder;
     }
+
+
 }

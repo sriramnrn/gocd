@@ -1,24 +1,20 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterial;
@@ -34,22 +30,22 @@ import com.thoughtworks.go.config.materials.svn.SvnMaterialConfig;
 import com.thoughtworks.go.config.materials.tfs.TfsMaterial;
 import com.thoughtworks.go.config.materials.tfs.TfsMaterialConfig;
 import com.thoughtworks.go.domain.BaseCollection;
+import com.thoughtworks.go.domain.BuildCommand;
 import com.thoughtworks.go.domain.ConfigVisitor;
 import com.thoughtworks.go.domain.MaterialRevisions;
-import com.thoughtworks.go.domain.materials.DirectoryCleaner;
-import com.thoughtworks.go.domain.materials.Material;
-import com.thoughtworks.go.domain.materials.MaterialConfig;
-import com.thoughtworks.go.domain.materials.Modification;
-import com.thoughtworks.go.domain.materials.Revision;
-import com.thoughtworks.go.domain.materials.TestingMaterialConfig;
-import com.thoughtworks.go.domain.materials.TestingMaterial;
+import com.thoughtworks.go.domain.materials.*;
 import com.thoughtworks.go.security.GoCipher;
 import com.thoughtworks.go.util.ArtifactLogUtil;
 import com.thoughtworks.go.util.ObjectUtil;
 import com.thoughtworks.go.util.command.ConsoleOutputStreamConsumer;
-import com.thoughtworks.go.util.command.ProcessOutputStreamConsumer;
 import com.thoughtworks.go.util.command.UrlArgument;
 import org.apache.commons.lang.StringUtils;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.thoughtworks.go.domain.BuildCommand.*;
 
 public class Materials extends BaseCollection<Material> {
     private static final int DEFAULT_INTERVAL = 100;
@@ -87,7 +83,7 @@ public class Materials extends BaseCollection<Material> {
     public MaterialRevisions latestModification(File baseDir, final SubprocessExecutionContext execCtx) {
         MaterialRevisions revisions = new MaterialRevisions();
         for (Material material : this) {
-            List<Modification> modifications = new ArrayList<Modification>();
+            List<Modification> modifications = new ArrayList<>();
             if (material instanceof SvnMaterial) {
                 modifications = ((SvnMaterial) material).latestModification(baseDir, execCtx);
             }
@@ -111,16 +107,8 @@ public class Materials extends BaseCollection<Material> {
         return revisions;
     }
 
-    public void updateTo(Revision revision, File baseFolder, ProcessOutputStreamConsumer outputStreamConsumer, final SubprocessExecutionContext execCtx) {
-        cleanUp(baseFolder, outputStreamConsumer);
-
-        for (Material material : this) {
-            material.updateTo(outputStreamConsumer, revision, baseFolder, execCtx);
-        }
-    }
-
     public void cleanUp(File baseFolder, ConsoleOutputStreamConsumer consumer) {
-        if (hasOneMaterialUseBaseFolder()) {
+        if (hasMaterialsWithNoDestinationFolder()) {
             return;
         }
 
@@ -130,7 +118,7 @@ public class Materials extends BaseCollection<Material> {
     }
 
     private List<String> allowedFolders() {
-        ArrayList<String> allowed = new ArrayList<String>();
+        ArrayList<String> allowed = new ArrayList<>();
         for (Material material : this) {
             if (!StringUtils.isBlank(material.getFolder())) {
                 allowed.add(material.getFolder());
@@ -140,9 +128,10 @@ public class Materials extends BaseCollection<Material> {
         return allowed;
     }
 
-    boolean hasOneMaterialUseBaseFolder() {
+    boolean hasMaterialsWithNoDestinationFolder() {
         for (Material material : this) {
-            if (material.getFolder() == null) {
+            AbstractMaterial abstractMaterial = (AbstractMaterial) material;
+            if (abstractMaterial.supportsDestinationFolder() && !abstractMaterial.hasDestinationFolder()) {
                 return true;
             }
         }
@@ -155,10 +144,10 @@ public class Materials extends BaseCollection<Material> {
         }
     }
 
-    public int count(Class<? extends Material> materiaClass) {
+    public int count(Class<? extends Material> materialClass) {
         int count = 0;
         for (Material material : this) {
-            if (materiaClass.isInstance(material)) {
+            if (materialClass.isInstance(material)) {
                 count++;
             }
         }
@@ -167,7 +156,7 @@ public class Materials extends BaseCollection<Material> {
 
     public Material byFolder(String folder) {
         for (Material material : this) {
-            if (material instanceof ScmMaterial && ObjectUtil.nullSafeEquals(folder, material.getFolder())) {
+            if ((material instanceof ScmMaterial || material instanceof PluggableSCMMaterial) && ObjectUtil.nullSafeEquals(folder, material.getFolder())) {
                 return material;
             }
         }
@@ -189,7 +178,7 @@ public class Materials extends BaseCollection<Material> {
                 return material;
             }
         }
-        throw new RuntimeException("Material not found: " + other);//IMP: because, config can change between BCPS call and build cause production - shilpa/jj 
+        throw new RuntimeException("Material not found: " + other);//IMP: because, config can change between BCPS call and build cause production - shilpa/jj
     }
 
     /*
@@ -197,7 +186,7 @@ public class Materials extends BaseCollection<Material> {
  */
 
     private List<ScmMaterial> filterScmMaterials() {
-        List<ScmMaterial> scmMaterials = new ArrayList<ScmMaterial>();
+        List<ScmMaterial> scmMaterials = new ArrayList<>();
         for (Material material : this) {
             if (material instanceof ScmMaterial) {
                 scmMaterials.add((ScmMaterial) material);
@@ -208,7 +197,7 @@ public class Materials extends BaseCollection<Material> {
 
     public boolean scmMaterialsHaveDestination() {
         for (ScmMaterial scmMaterial : filterScmMaterials()) {
-            if (!scmMaterial.hasDestination()) {
+            if (!scmMaterial.hasDestinationFolder()) {
                 return false;
             }
         }
@@ -267,6 +256,8 @@ public class Materials extends BaseCollection<Material> {
             return new TfsMaterial((TfsMaterialConfig) materialConfig);
         } else if (PackageMaterial.TYPE.equals(materialConfig.getType())) {
             return new PackageMaterial((PackageMaterialConfig) materialConfig);
+        } else if (PluggableSCMMaterial.TYPE.equals(materialConfig.getType())) {
+            return new PluggableSCMMaterial((PluggableSCMMaterialConfig) materialConfig);
         } else if (TestingMaterial.TYPE.equals(materialConfig.getType())) {
             return new TestingMaterial((TestingMaterialConfig) materialConfig);
         }
@@ -289,4 +280,14 @@ public class Materials extends BaseCollection<Material> {
         }
         return false;
     }
+
+
+    public BuildCommand cleanUpCommand(String baseDir) {
+        if (hasMaterialsWithNoDestinationFolder()) {
+            return noop();
+        }
+        List<String> allowed = allowedFolders();
+        return cleandir(baseDir, allowed.toArray(new String[allowed.size()]));
+    }
+
 }

@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,22 +12,19 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.materials;
 
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.thoughtworks.go.config.CruiseConfig;
+import com.thoughtworks.go.config.GoConfigWatchList;
+import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.domain.PipelineGroups;
 import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.i18n.LocalizedMessage;
 import com.thoughtworks.go.listener.ConfigChangedListener;
+import com.thoughtworks.go.listener.EntityConfigChangedListener;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.materials.postcommit.PostCommitHookImplementer;
 import com.thoughtworks.go.server.materials.postcommit.PostCommitHookMaterialType;
@@ -47,6 +44,13 @@ import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 import static com.thoughtworks.go.serverhealth.HealthStateType.general;
 import static com.thoughtworks.go.serverhealth.ServerHealthState.warning;
 import static java.lang.String.format;
@@ -59,12 +63,14 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
     private static final Logger LOGGER = Logger.getLogger(MaterialUpdateService.class);
 
     private final MaterialUpdateQueue updateQueue;
+    private final ConfigMaterialUpdateQueue configUpdateQueue;
+    private final GoConfigWatchList watchList;
     private final GoConfigService goConfigService;
     private final SystemEnvironment systemEnvironment;
     private ServerHealthService serverHealthService;
 
-    private ConcurrentHashMap<Material, Date> inProgress = new ConcurrentHashMap<Material, Date>();
-    private ConcurrentHashMap<Material, Long> materialLastUpdateTimeMap = new ConcurrentHashMap<Material, Long>();
+    private ConcurrentMap<Material, Date> inProgress = new ConcurrentHashMap<>();
+    private ConcurrentMap<Material, Long> materialLastUpdateTimeMap = new ConcurrentHashMap<>();
 
     private final PostCommitHookMaterialTypeResolver postCommitHookMaterialType;
     private final MDUPerformanceLogger mduPerformanceLogger;
@@ -74,13 +80,18 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
     private Set<Material> schedulableMaterials;
 
     @Autowired
-    public MaterialUpdateService(MaterialUpdateQueue queue, MaterialUpdateCompletedTopic completed, GoConfigService goConfigService,
+    public MaterialUpdateService(MaterialUpdateQueue queue,ConfigMaterialUpdateQueue configUpdateQueue,
+                                 MaterialUpdateCompletedTopic completed,
+                                 GoConfigWatchList watchList,
+                                 GoConfigService goConfigService,
                                  SystemEnvironment systemEnvironment, ServerHealthService serverHealthService,
                                  PostCommitHookMaterialTypeResolver postCommitHookMaterialType,
                                  MDUPerformanceLogger mduPerformanceLogger, MaterialConfigConverter materialConfigConverter) {
+        this.watchList = watchList;
         this.goConfigService = goConfigService;
         this.systemEnvironment = systemEnvironment;
         this.updateQueue = queue;
+        this.configUpdateQueue = configUpdateQueue;
         this.serverHealthService = serverHealthService;
         this.postCommitHookMaterialType = postCommitHookMaterialType;
         this.mduPerformanceLogger = mduPerformanceLogger;
@@ -91,6 +102,17 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
 
     public void initialize() {
         goConfigService.register(this);
+        goConfigService.register(pipelineConfigChangedListener());
+    }
+
+    protected EntityConfigChangedListener<PipelineConfig> pipelineConfigChangedListener() {
+        final MaterialUpdateService materialUpdateService = this;
+        return new EntityConfigChangedListener<PipelineConfig>() {
+            @Override
+            public void onEntityConfigChange(PipelineConfig pipelineConfig) {
+                materialUpdateService.onConfigChange(goConfigService.getCurrentConfig());
+            }
+        };
     }
 
     public void onTimer() {
@@ -121,9 +143,17 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
             final PipelineGroups allGroups = goConfigService.currentCruiseConfig().getGroups();
             Set<Material> allUniquePostCommitSchedulableMaterials = materialConfigConverter.toMaterials(allGroups.getAllUniquePostCommitSchedulableMaterials());
             final Set<Material> prunedMaterialList = materialTypeImplementer.prune(allUniquePostCommitSchedulableMaterials, attributes);
+
+            if (prunedMaterialList.isEmpty()) {
+                result.notFound(LocalizedMessage.string("MATERIAL_SUITABLE_FOR_NOTIFICATION_NOT_FOUND"), HealthStateType.general(HealthStateScope.GLOBAL));
+                return;
+            }
+
             for (Material material : prunedMaterialList) {
                 updateMaterial(material);
             }
+
+            result.accepted(LocalizedMessage.string("MATERIAL_SCHEDULE_NOTIFICATION_ACCEPTED"));
         } else {
             result.badRequest(LocalizedMessage.string("API_BAD_REQUEST"));
         }
@@ -137,7 +167,10 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
             }
             try {
                 long trackingId = mduPerformanceLogger.materialSentToUpdateQueue(material);
-                updateQueue.post(new MaterialUpdateMessage(material, trackingId));
+                if(isConfigMaterial(material))
+                    configUpdateQueue.post(new MaterialUpdateMessage(material, trackingId));
+                else
+                    updateQueue.post(new MaterialUpdateMessage(material, trackingId));
             } catch (RuntimeException e) {
                 inProgress.remove(material);
                 throw e;
@@ -153,6 +186,10 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
                         general(scope)));
             }
         }
+    }
+
+    private boolean isConfigMaterial(Material material) {
+        return watchList.hasConfigRepoWithFingerprint(material.getFingerprint());
     }
 
     private Long getMaterialUpdateInActiveTimeoutInMillis() {
@@ -192,7 +229,7 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
     }
 
     private Set<HealthStateScope> toHealthStateScopes(Set<MaterialConfig> materialConfigs) {
-        Set<HealthStateScope> scopes = new HashSet<HealthStateScope>();
+        Set<HealthStateScope> scopes = new HashSet<>();
         for (MaterialConfig materialConfig : materialConfigs) {
             scopes.add(HealthStateScope.forMaterialConfig(materialConfig));
         }
@@ -219,5 +256,15 @@ public class MaterialUpdateService implements GoMessageListener<MaterialUpdateCo
         if (forceLoad || schedulableMaterials == null) {
             schedulableMaterials = materialConfigConverter.toMaterials(goConfigService.getSchedulableMaterials());
         }
+    }
+
+    //used in tests
+    public boolean isInProgress(Material material) {
+        for(Material m : this.inProgress.keySet())
+        {
+            if(m.isSameFlyweight(material))
+                return true;
+        }
+        return false;
     }
 }

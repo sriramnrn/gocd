@@ -19,11 +19,7 @@ package com.thoughtworks.go.server.service;
 import java.util.Date;
 import java.util.HashMap;
 
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.JobConfig;
-import com.thoughtworks.go.config.JobConfigs;
-import com.thoughtworks.go.config.PipelineConfig;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.materials.git.GitMaterialConfig;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
@@ -38,15 +34,12 @@ import com.thoughtworks.go.domain.buildcause.BuildCause;
 import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.Modification;
 import com.thoughtworks.go.helper.*;
-import com.thoughtworks.go.helper.PipelineMother;
 import com.thoughtworks.go.server.cache.GoCache;
 import com.thoughtworks.go.server.dao.JobInstanceDao;
 import com.thoughtworks.go.server.dao.PipelineDao;
 import com.thoughtworks.go.server.dao.PipelineSqlMapDao;
 import com.thoughtworks.go.server.dao.StageDao;
 import com.thoughtworks.go.server.domain.*;
-import com.thoughtworks.go.server.domain.PipelineConfigDependencyGraph;
-import com.thoughtworks.go.server.domain.PipelineTimeline;
 import com.thoughtworks.go.server.messaging.JobResultTopic;
 import com.thoughtworks.go.server.messaging.StageStatusTopic;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
@@ -135,7 +128,7 @@ public class PipelineServiceTest {
 
         PipelineConfigDependencyGraph dependencyGraph = new PipelineConfigDependencyGraph(pipelineConfig);
         MaterialRevisions finalRevisions = service.getRevisionsBasedOnDependencies(revs,
-                createCruiseConfigFromGraph(new CruiseConfig(), dependencyGraph), dependencyGraph.getCurrent().name());
+                createCruiseConfigFromGraph(new BasicCruiseConfig(), dependencyGraph), dependencyGraph.getCurrent().name());
         assertThat(finalRevisions.getRevisions(), is(revs.getRevisions()));
     }
 
@@ -242,14 +235,14 @@ public class PipelineServiceTest {
         when(pipelineDao.findBuildCauseOfPipelineByNameAndCounter("up1", 1)).thenReturn(BuildCause.createManualForced(expectedIfPegged, new Username(str("loser"))));
 
         PipelineConfigDependencyGraph dependencyGraph = new PipelineConfigDependencyGraph(current, new PipelineConfigDependencyGraph(up1));
-        assertThat(service.getRevisionsBasedOnDependencies(actual, createCruiseConfigFromGraph(new CruiseConfig(), dependencyGraph), dependencyGraph.getCurrent().name()), is(actual));
+        assertThat(service.getRevisionsBasedOnDependencies(actual, createCruiseConfigFromGraph(new BasicCruiseConfig(), dependencyGraph), dependencyGraph.getCurrent().name()), is(actual));
     }
 
     @Test
     public void shouldReturnTheOrderedListOfStageIdentifiers() throws Exception {
         //TODO: does it? while we trust it, may be its a good idea to validate --shilpa & jj
     }
-   
+
     private JobConfigs jobs() {
         JobConfigs configs = new JobConfigs();
         configs.add(new JobConfig("job"));

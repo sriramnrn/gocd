@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
@@ -63,11 +63,11 @@ public class Resources extends BaseCollection<Resource> implements Comparable<Re
     }
 
     public List<String> resourceNames() {
-        Set<String> names = new TreeSet<String>();
+        Set<String> names = new TreeSet<>();
         for (Resource resource : this) {
             names.add(resource.getName());
         }
-        return new ArrayList<String>(names);
+        return new ArrayList<>(names);
     }
 
     public String toString() {
@@ -78,6 +78,13 @@ public class Resources extends BaseCollection<Resource> implements Comparable<Re
         return new AlphaAsciiCollectionComparator<Resource>().compare(this, other);
     }
 
+    public boolean validateTree(ValidationContext validationContext) {
+        boolean isValid = errors().isEmpty();
+        for (Resource resource : this) {
+            isValid = resource.validateTree(validationContext) && isValid;
+        }
+        return isValid;
+    }
     public void validate(ValidationContext validationContext) {
     }
 

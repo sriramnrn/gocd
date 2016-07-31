@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,21 +12,19 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.StageConfig;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
 import com.thoughtworks.go.domain.BaseCollection;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
+import org.hamcrest.Matchers;
 import org.junit.Test;
 
 import static org.hamcrest.Matchers.not;
@@ -102,7 +100,7 @@ public class AbstractMaterialConfigTest {
     @Test
     public void shouldNotUseNameFieldButInsteadUseTheNameMethodToCheckIfTheMaterialNameIsUsedInThePipelineLabel() throws Exception {
         PipelineConfig pipelineConfig = mock(PipelineConfig.class);
-        when(pipelineConfig.getLabelTemplate()).thenReturn("${COUNT}-${hg}-${dep}-${pkg}");
+        when(pipelineConfig.getLabelTemplate()).thenReturn("${COUNT}-${hg}-${dep}-${pkg}-${scm}");
         MaterialConfig hg = mock(HgMaterialConfig.class);
         when(hg.getName()).thenReturn(new CaseInsensitiveString("hg"));
         when(hg.isUsedInLabelTemplate(pipelineConfig)).thenCallRealMethod();
@@ -112,14 +110,33 @@ public class AbstractMaterialConfigTest {
         MaterialConfig aPackage = mock(PackageMaterialConfig.class);
         when(aPackage.getName()).thenReturn(new CaseInsensitiveString("pkg"));
         when(aPackage.isUsedInLabelTemplate(pipelineConfig)).thenCallRealMethod();
+        MaterialConfig aPluggableSCM = mock(PluggableSCMMaterialConfig.class);
+        when(aPluggableSCM.getName()).thenReturn(new CaseInsensitiveString("scm"));
+        when(aPluggableSCM.isUsedInLabelTemplate(pipelineConfig)).thenCallRealMethod();
 
         assertThat(hg.isUsedInLabelTemplate(pipelineConfig), is(true));
         assertThat(dependency.isUsedInLabelTemplate(pipelineConfig), is(true));
         assertThat(aPackage.isUsedInLabelTemplate(pipelineConfig), is(true));
+        assertThat(aPluggableSCM.isUsedInLabelTemplate(pipelineConfig), is(true));
 
         verify(hg).getName();
-        verify(aPackage).getName();
         verify(dependency).getName();
+        verify(aPackage).getName();
+        verify(aPluggableSCM).getName();
+    }
+
+    @Test
+    public void shouldHandleBlankMaterialName(){
+        TestMaterialConfig materialConfig = new TestMaterialConfig("");
+        materialConfig.setName(null);
+        materialConfig.validate(PipelineConfigSaveValidationContext.forChain(true, "group", new PipelineConfig()));
+        assertThat(materialConfig.errors().getAllOn(AbstractMaterialConfig.MATERIAL_NAME), is(Matchers.nullValue()));
+        materialConfig.setName(new CaseInsensitiveString(null));
+        materialConfig.validate(PipelineConfigSaveValidationContext.forChain(true, "group", new PipelineConfig()));
+        assertThat(materialConfig.errors().getAllOn(AbstractMaterialConfig.MATERIAL_NAME), is(Matchers.nullValue()));
+        materialConfig.setName(new CaseInsensitiveString(""));
+        materialConfig.validate(PipelineConfigSaveValidationContext.forChain(true, "group", new PipelineConfig()));
+        assertThat(materialConfig.errors().getAllOn(AbstractMaterialConfig.MATERIAL_NAME), is(Matchers.nullValue()));
     }
 
     private Map<String, String> m(String key, String value) {
@@ -166,6 +183,11 @@ public class AbstractMaterialConfigTest {
         }
 
         @Override
+        public boolean isInvertFilter() {
+            return false;
+        }
+
+        @Override
         public void setConfigAttributes(Object attributes) {
             super.setConfigAttributes(attributes);
             Map map = (Map) attributes;
@@ -194,6 +216,11 @@ public class AbstractMaterialConfigTest {
         }
 
         public boolean isAutoUpdate() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void setAutoUpdate(boolean autoUpdate) {
             throw new UnsupportedOperationException();
         }
 

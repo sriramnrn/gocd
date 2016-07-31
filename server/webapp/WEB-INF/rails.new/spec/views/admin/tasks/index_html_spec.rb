@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/tasks/index.html.erb" do
   include GoUtil, TaskMother, FormUI
@@ -28,7 +28,7 @@ describe "admin/tasks/index.html.erb" do
     tasks.add(ant_task)
     tasks.add(rake_task)
     tasks.add(nant_task)
-    assign(:cruise_config, config = CruiseConfig.new)
+    assign(:cruise_config, config = BasicCruiseConfig.new)
     set(config, "md5", "abcd1234")
 
     assign(:pipeline, @pipeline)

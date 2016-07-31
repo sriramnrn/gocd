@@ -16,18 +16,15 @@
 
 package com.thoughtworks.go.config.materials;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.domain.PersistentObject;
 import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.util.CachedDigestUtils;
 import com.thoughtworks.go.util.ListUtil;
+import com.thoughtworks.go.util.StringUtil;
+
+import java.util.*;
 
 /**
  * @understands material configuration
@@ -45,7 +42,7 @@ public abstract class AbstractMaterial extends PersistentObject implements Mater
     private Map<String, Object> sqlCriteria;
     private Map<String, Object> attributesForXml;
     private String pipelineUniqueFingerprint;
-    private String fingerprint;
+    protected String fingerprint;
 
     public AbstractMaterial(String typeName) {
         type = typeName;
@@ -57,7 +54,7 @@ public abstract class AbstractMaterial extends PersistentObject implements Mater
 
     public final Map<String, Object> getSqlCriteria() {
         if (sqlCriteria == null) {
-            Map<String, Object> map = new LinkedHashMap<String, Object>();
+            Map<String, Object> map = new LinkedHashMap<>();
             map.put("type", type);
             appendCriteria(map);
             sqlCriteria = Collections.unmodifiableMap(map);
@@ -67,7 +64,7 @@ public abstract class AbstractMaterial extends PersistentObject implements Mater
 
     public final Map<String, Object> getAttributesForXml() {
         if (attributesForXml == null) {
-            Map<String, Object> map = new LinkedHashMap<String, Object>();
+            Map<String, Object> map = new LinkedHashMap<>();
             map.put("type", type);
             appendAttributes(map);
             attributesForXml = Collections.unmodifiableMap(map);
@@ -84,7 +81,7 @@ public abstract class AbstractMaterial extends PersistentObject implements Mater
 
     public String getPipelineUniqueFingerprint() {
         if (pipelineUniqueFingerprint == null) {
-            Map<String, Object> basicCriteria = new LinkedHashMap<String, Object>(getSqlCriteria());
+            Map<String, Object> basicCriteria = new LinkedHashMap<>(getSqlCriteria());
             appendPipelineUniqueCriteria(basicCriteria);
             pipelineUniqueFingerprint = generateFingerprintFromCriteria(basicCriteria);
         }
@@ -92,7 +89,7 @@ public abstract class AbstractMaterial extends PersistentObject implements Mater
     }
 
     private String generateFingerprintFromCriteria(Map<String, Object> sqlCriteria) {
-        List<String> list = new ArrayList<String>();
+        List<String> list = new ArrayList<>();
         for (Map.Entry<String, Object> criteria : sqlCriteria.entrySet()) {
             list.add(new StringBuilder().append(criteria.getKey()).append("=").append(criteria.getValue()).toString());
         }
@@ -181,5 +178,26 @@ public abstract class AbstractMaterial extends PersistentObject implements Mater
     @Override
     public MaterialConfig config() {
         throw new RuntimeException("You need to implement this");
+    }
+
+    @Override
+    public Map<String, Object> getAttributes(boolean addSecureFields) {
+        throw new RuntimeException("You need to implement this");
+    }
+
+    protected boolean hasDestinationFolder() {
+        return !StringUtil.isBlank(getFolder());
+    }
+
+    public boolean supportsDestinationFolder() {
+        return false;
+    }
+
+    @Override
+    public void updateFromConfig(MaterialConfig materialConfig) {
+        if(materialConfig instanceof PasswordAwareMaterial) {
+            PasswordAwareMaterial passwordConfig = (PasswordAwareMaterial) materialConfig;
+            ((PasswordAwareMaterial) this).setPassword(passwordConfig.getPassword());
+        }
     }
 }

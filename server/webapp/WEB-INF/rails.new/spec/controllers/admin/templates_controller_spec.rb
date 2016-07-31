@@ -14,14 +14,10 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::TemplatesController do
   include MockRegistryModule
-  before do
-    controller.stub(:populate_health_messages)
-    @go_config_service.stub(:registry).and_return(MockRegistryModule::MockRegistry.new)
-  end
   include ConfigSaveStubbing
   include GoUtil
 
@@ -73,7 +69,7 @@ describe Admin::TemplatesController do
   describe :action do
     before :each do
       @pipeline = PipelineTemplateConfig.new(CaseInsensitiveString.new("some_template"), [StageConfigMother.stageConfig("defaultStage")].to_java(StageConfig))
-      @cruise_config = CruiseConfig.new
+      @cruise_config = BasicCruiseConfig.new
       @cruise_config.addTemplate(@pipeline)
       @user = current_user
       @result = stub_localized_result

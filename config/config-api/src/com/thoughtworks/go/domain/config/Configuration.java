@@ -1,32 +1,28 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.domain.config;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import com.thoughtworks.go.config.ConfigCollection;
 import com.thoughtworks.go.config.ConfigTag;
 import com.thoughtworks.go.domain.BaseCollection;
 import com.thoughtworks.go.util.ListUtil;
 import com.thoughtworks.go.util.StringUtil;
+
+import java.util.*;
 
 import static java.lang.String.format;
 
@@ -45,7 +41,7 @@ public class Configuration extends BaseCollection<ConfigurationProperty> {
     }
 
     public String forDisplay(List<ConfigurationProperty> propertiesToDisplay) {
-        ArrayList<String> list = new ArrayList<String>();
+        ArrayList<String> list = new ArrayList<>();
         for (ConfigurationProperty property : propertiesToDisplay) {
             if (!property.isSecure()) {
                 list.add(format("%s=%s", property.getConfigurationKey().getName().toLowerCase(), property.getConfigurationValue().getValue()));
@@ -66,7 +62,7 @@ public class Configuration extends BaseCollection<ConfigurationProperty> {
     }
 
     public List<String> listOfConfigKeys() {
-        ArrayList<String> list = new ArrayList<String>();
+        ArrayList<String> list = new ArrayList<>();
         for (ConfigurationProperty configurationProperty : this) {
             list.add(configurationProperty.getConfigurationKey().getName());
         }
@@ -108,10 +104,10 @@ public class Configuration extends BaseCollection<ConfigurationProperty> {
     }
 
     public void clearEmptyConfigurations() {
-        List<ConfigurationProperty> propertiesToRemove = new ArrayList<ConfigurationProperty>();
+        List<ConfigurationProperty> propertiesToRemove = new ArrayList<>();
         for (ConfigurationProperty configurationProperty : this) {
             ConfigurationValue configurationValue = configurationProperty.getConfigurationValue();
-            EncryptedConfigurationValue encryptedValue = configurationProperty.getEncryptedValue();
+            EncryptedConfigurationValue encryptedValue = configurationProperty.getEncryptedConfigurationValue();
 
             if (StringUtil.isBlank(configurationProperty.getValue()) && (configurationValue == null || configurationValue.errors().isEmpty()) && (encryptedValue == null || encryptedValue.errors().isEmpty())) {
                 propertiesToRemove.add(configurationProperty);
@@ -121,9 +117,35 @@ public class Configuration extends BaseCollection<ConfigurationProperty> {
     }
 
     public void validateUniqueness(String entity) {
-        HashMap<String, ConfigurationProperty> map = new HashMap<String, ConfigurationProperty>();
+        HashMap<String, ConfigurationProperty> map = new HashMap<>();
         for (ConfigurationProperty property : this) {
             property.validateKeyUniqueness(map, entity);
         }
+    }
+
+    public void validateTree() {
+        for (ConfigurationProperty property : this) {
+            property.validate(null);
+        }
+    }
+
+    public boolean hasErrors() {
+        for (ConfigurationProperty property : this) {
+            if (property.hasErrors()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public Map<String, String> getConfigurationAsMap(boolean addSecureFields) {
+        Map<String, String> configurationMap = new LinkedHashMap<>();
+        for (ConfigurationProperty currentConfiguration : this) {
+            if (addSecureFields || !currentConfiguration.isSecure()) {
+                configurationMap.put(currentConfiguration.getConfigKeyName(), currentConfiguration.getValue());
+            }
+        }
+        return configurationMap;
     }
 }

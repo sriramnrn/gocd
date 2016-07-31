@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,27 +12,32 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ *
+ */
 
 package com.thoughtworks.go.helper;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.materials.Filter;
-import com.thoughtworks.go.config.materials.IgnoredFiles;
-import com.thoughtworks.go.config.materials.MaterialConfigs;
-import com.thoughtworks.go.config.materials.PackageMaterialConfig;
+import com.thoughtworks.go.config.materials.*;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.materials.git.GitMaterialConfig;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
 import com.thoughtworks.go.config.materials.perforce.P4MaterialConfig;
 import com.thoughtworks.go.config.materials.svn.SvnMaterialConfig;
+import com.thoughtworks.go.config.materials.tfs.TfsMaterialConfig;
 import com.thoughtworks.go.domain.config.Configuration;
+import com.thoughtworks.go.domain.config.ConfigurationKey;
+import com.thoughtworks.go.domain.config.ConfigurationProperty;
+import com.thoughtworks.go.domain.config.ConfigurationValue;
 import com.thoughtworks.go.domain.packagerepository.ConfigurationPropertyMother;
 import com.thoughtworks.go.domain.packagerepository.PackageDefinition;
 import com.thoughtworks.go.domain.packagerepository.PackageDefinitionMother;
 import com.thoughtworks.go.domain.packagerepository.PackageRepository;
 import com.thoughtworks.go.domain.packagerepository.PackageRepositoryMother;
+import com.thoughtworks.go.domain.scm.SCM;
+import com.thoughtworks.go.domain.scm.SCMMother;
 import com.thoughtworks.go.security.GoCipher;
+import com.thoughtworks.go.util.command.HgUrlArgument;
 import com.thoughtworks.go.util.command.UrlArgument;
 
 import static com.thoughtworks.go.util.DataStructureUtils.m;
@@ -69,12 +74,37 @@ public class MaterialConfigsMother {
         return material;
     }
 
+    public static PluggableSCMMaterialConfig pluggableSCMMaterialConfig() {
+        Filter filter = new Filter(new IgnoredFiles("**/*.html"), new IgnoredFiles("**/foobar/"));
+         return pluggableSCMMaterialConfig("scm-id", "des-folder", filter);
+    }
+
+    public static PluggableSCMMaterialConfig pluggableSCMMaterialConfigWithConfigProperties(String... properties) {
+        SCM scmConfig = SCMMother.create("scm-id");
+        Configuration configuration = new Configuration();
+        for (String property : properties) {
+            ConfigurationProperty configurationProperty = new ConfigurationProperty(new ConfigurationKey(property), new ConfigurationValue(property+"-value"));
+            configuration.add(configurationProperty);
+        }
+        scmConfig.setConfiguration(configuration);
+        return new PluggableSCMMaterialConfig(null, scmConfig, "des-folder", null);
+    }
+
+    public static PluggableSCMMaterialConfig pluggableSCMMaterialConfig(String scmId, String destinationFolder, Filter filter) {
+        return new PluggableSCMMaterialConfig(null, SCMMother.create(scmId), destinationFolder, filter);
+    }
+
     public static DependencyMaterialConfig dependencyMaterialConfig(String pipelineName, String stageName) {
         return new DependencyMaterialConfig(new CaseInsensitiveString(pipelineName), new CaseInsensitiveString(stageName));
     }
 
     public static DependencyMaterialConfig dependencyMaterialConfig() {
         return new DependencyMaterialConfig(new CaseInsensitiveString("pipeline-name"), new CaseInsensitiveString("stage-name"));
+    }
+
+    public static HgMaterialConfig hgMaterialConfigFull() {
+        Filter filter = new Filter(new IgnoredFiles("**/*.html"), new IgnoredFiles("**/foobar/"));
+        return new HgMaterialConfig(new HgUrlArgument("http://user:pass@domain/path##branch"),true, filter, false, "dest-folder", new CaseInsensitiveString("hg-material") );
     }
 
     public static HgMaterialConfig hgMaterialConfig() {
@@ -89,10 +119,16 @@ public class MaterialConfigsMother {
         return new HgMaterialConfig(url, folder);
     }
 
-    public static GitMaterialConfig gitMaterialConfig(String url, String submoduleFolder, String branch) {
+    public static GitMaterialConfig gitMaterialConfig(String url, String submoduleFolder, String branch, boolean shallowClone) {
         GitMaterialConfig gitMaterialConfig = new GitMaterialConfig(url, branch);
+        gitMaterialConfig.setShallowClone(shallowClone);
         gitMaterialConfig.setSubmoduleFolder(submoduleFolder);
         return gitMaterialConfig;
+    }
+
+    public static GitMaterialConfig gitMaterialConfig() {
+        Filter filter = new Filter(new IgnoredFiles("**/*.html"), new IgnoredFiles("**/foobar/"));
+        return new GitMaterialConfig(new UrlArgument("http://user:password@funk.com/blank"), "branch", "sub_module_folder", false, filter, false, "destination", new CaseInsensitiveString("AwesomeGitMaterial"), true);
     }
 
     public static GitMaterialConfig gitMaterialConfig(String url) {
@@ -101,6 +137,14 @@ public class MaterialConfigsMother {
 
     public static P4MaterialConfig p4MaterialConfig() {
         return p4MaterialConfig("serverAndPort", null, null, "view", false);
+    }
+    public static P4MaterialConfig p4MaterialConfigFull() {
+        Filter filter = new Filter(new IgnoredFiles("**/*.html"), new IgnoredFiles("**/foobar/"));
+        P4MaterialConfig config = p4MaterialConfig("host:9876", "user", "password", "view", true);
+        config.setFolder("dest-folder");
+        config.setFilter(filter);
+        config.setName(new CaseInsensitiveString("p4-material"));
+        return config;
     }
 
     public static P4MaterialConfig p4MaterialConfig(String serverAndPort, String userName, String password, String view, boolean useTickets) {
@@ -115,13 +159,19 @@ public class MaterialConfigsMother {
         return svnMaterialConfig("url", "svnDir");
     }
 
+    public static SvnMaterialConfig svnMaterialConfig(String svnUrl, String folder, CaseInsensitiveString name) {
+        SvnMaterialConfig svnMaterialConfig = svnMaterialConfig(svnUrl, folder);
+        svnMaterialConfig.setName(name);
+        return svnMaterialConfig;
+    }
+
     public static SvnMaterialConfig svnMaterialConfig(String svnUrl, String folder) {
         return svnMaterialConfig(svnUrl, folder, false);
     }
 
     public static SvnMaterialConfig svnMaterialConfig(String svnUrl, String folder, boolean autoUpdate) {
-        SvnMaterialConfig materialConfig = new SvnMaterialConfig(new UrlArgument(svnUrl), "user", "pass", true, new GoCipher(), autoUpdate, new Filter(new IgnoredFiles("*.doc")),
-                folder, null);
+        SvnMaterialConfig materialConfig = new SvnMaterialConfig(new UrlArgument(svnUrl), "user", "pass", true, new GoCipher(), autoUpdate, new Filter(new IgnoredFiles("*.doc")), false,
+                folder, new CaseInsensitiveString("svn-material"));
         materialConfig.setPassword("pass");
         return materialConfig;
     }
@@ -130,6 +180,9 @@ public class MaterialConfigsMother {
         SvnMaterialConfig svnMaterial = new SvnMaterialConfig(svnUrl, userName, password, checkExternals, folder);
         if (filterPattern != null)
             svnMaterial.setFilter(new Filter(new IgnoredFiles(filterPattern)));
+        String name = svnUrl.replaceAll("/", "_");
+        name = name.replaceAll(":", "_");
+        svnMaterial.setName(new CaseInsensitiveString(name));
         return svnMaterial;
     }
 
@@ -141,5 +194,15 @@ public class MaterialConfigsMother {
 
     public static MaterialConfigs mockMaterialConfigs(String url) {
         return new MaterialConfigs(new SvnMaterialConfig(url, null, null, false));
+    }
+
+    public static TfsMaterialConfig tfsMaterialConfig(){
+        Filter filter = new Filter(new IgnoredFiles("**/*.html"), new IgnoredFiles("**/foobar/"));
+        TfsMaterialConfig tfsMaterialConfig= new TfsMaterialConfig(new GoCipher(), new UrlArgument("http://10.4.4.101:8080/tfs/Sample"), "loser", "some_domain", "passwd", "walk_this_path");
+        tfsMaterialConfig.setFilter(filter);
+        tfsMaterialConfig.setName(new CaseInsensitiveString("tfs-material"));
+        tfsMaterialConfig.setFolder("dest-folder");
+        return tfsMaterialConfig;
+
     }
 }

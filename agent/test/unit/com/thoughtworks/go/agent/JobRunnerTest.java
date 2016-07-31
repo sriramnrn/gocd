@@ -1,57 +1,57 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.agent;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.googlecode.junit.ext.JunitExtRunner;
 import com.googlecode.junit.ext.RunIf;
 import com.thoughtworks.go.config.ArtifactPlans;
+import com.thoughtworks.go.config.BasicCruiseConfig;
+import com.thoughtworks.go.config.BasicPipelineConfigs;
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.CruiseConfig;
 import com.thoughtworks.go.config.ExecTask;
 import com.thoughtworks.go.config.JobConfig;
 import com.thoughtworks.go.config.JobConfigs;
 import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.PipelineConfigs;
 import com.thoughtworks.go.config.Resources;
 import com.thoughtworks.go.config.StageConfig;
 import com.thoughtworks.go.config.Tasks;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
-import com.thoughtworks.go.domain.builder.Builder;
+import com.thoughtworks.go.domain.AgentRuntimeStatus;
 import com.thoughtworks.go.domain.DefaultSchedulingContext;
 import com.thoughtworks.go.domain.JobIdentifier;
 import com.thoughtworks.go.domain.JobPlan;
 import com.thoughtworks.go.domain.JobResult;
 import com.thoughtworks.go.domain.Property;
 import com.thoughtworks.go.domain.buildcause.BuildCause;
+import com.thoughtworks.go.domain.builder.Builder;
 import com.thoughtworks.go.helper.BuilderMother;
 import com.thoughtworks.go.helper.JobInstanceMother;
 import com.thoughtworks.go.junitext.EnhancedOSChecker;
 import com.thoughtworks.go.remote.AgentIdentifier;
 import com.thoughtworks.go.remote.AgentInstruction;
-import com.thoughtworks.go.remote.work.*;
+import com.thoughtworks.go.remote.work.BuildAssignment;
+import com.thoughtworks.go.remote.work.BuildRepositoryRemoteStub;
+import com.thoughtworks.go.remote.work.BuildWork;
+import com.thoughtworks.go.remote.work.GoArtifactsManipulatorStub;
 import com.thoughtworks.go.server.service.AgentRuntimeInfo;
 import com.thoughtworks.go.server.service.UpstreamPipelineResolver;
 import com.thoughtworks.go.util.GoConstants;
 import com.thoughtworks.go.util.SystemEnvironment;
-import com.thoughtworks.go.util.command.CruiseControlException;
 import com.thoughtworks.go.work.FakeWork;
 import org.junit.After;
 import org.junit.Before;
@@ -59,8 +59,13 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
 import static com.thoughtworks.go.junitext.EnhancedOSChecker.DO_NOT_RUN_ON;
 import static com.thoughtworks.go.junitext.EnhancedOSChecker.WINDOWS;
+import static com.thoughtworks.go.util.SystemUtil.currentWorkingDirectory;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.StringContains.containsString;
@@ -70,59 +75,16 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @RunWith(JunitExtRunner.class)
 public class JobRunnerTest {
+    private static final String SERVER_URL = "somewhere-does-not-matter";
+    private static final String JOB_PLAN_NAME = "run-ant";
     private JobRunner runner;
     private FakeWork work;
     private List<String> consoleOut;
     private List<Enum> statesAndResult;
     private List<Property> properties;
-    private static final String SERVER_URL = "somewhere-does-not-matter";
-
-    private static final String JOB_PLAN_NAME = "run-ant";
-
-    private static final String TASK_WITH_CANCEL = "<job name=\"" + JOB_PLAN_NAME + "\">\n"
-            + "  <tasks>\n"
-            + "    <exec command=\"echo\" args=\"should run me before cancellation\" />\n"
-            + "    <exec command=\"sleep\" args=\"10\">\n"
-            + "      <oncancel>\n"
-            + "        <exec command=\"echo\" args=\"cancel in progress\" />\n"
-            + "      </oncancel>\n"
-            + "    </exec>\n"
-            + "    <exec command=\"echo\" args=\"should not run after cancellation\" />\n"
-            + "  </tasks>\n"
-            + "</job>";
-
-    private static final String TASK_WITH_LONG_RUNNING_CANCEL = "<job name=\"" + JOB_PLAN_NAME + "\">\n"
-            + "  <tasks>\n"
-            + "    <exec command=\"echo\" args=\"should run me before cancellation\" />\n"
-            + "    <exec command=\"sleep\" args=\"10\">\n"
-            + "      <oncancel>\n"
-            + "        <exec command=\"sleep\" args=\"15\" />\n"
-            + "      </oncancel>\n"
-            + "    </exec>\n"
-            + "    <exec command=\"echo\" args=\"should not run after cancellation\" />\n"
-            + "  </tasks>\n"
-            + "</job>";
     private BuildWork buildWork;
     private AgentIdentifier agentIdentifier;
     private UpstreamPipelineResolver resolver;
-
-    @Before
-    public void setUp() throws Exception {
-        runner = new JobRunner();
-        work = new FakeWork();
-        consoleOut = new ArrayList<String>();
-        statesAndResult = new ArrayList<Enum>();
-        properties = new ArrayList<Property>();
-        agentIdentifier = new AgentIdentifier("localhost", "127.0.0.1", "uuid");
-
-        new SystemEnvironment().setProperty("serviceUrl", SERVER_URL);
-        resolver = mock(UpstreamPipelineResolver.class);
-    }
-    
-    @After
-    public void tearDown() {
-        verifyNoMoreInteractions(resolver);
-    }
 
     public static String withJob(String jobXml) {
         return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -148,12 +110,30 @@ public class JobRunnerTest {
                 + "</cruise>";
     }
 
+    @Before
+    public void setUp() throws Exception {
+        runner = new JobRunner();
+        work = new FakeWork();
+        consoleOut = new ArrayList<>();
+        statesAndResult = new ArrayList<>();
+        properties = new ArrayList<>();
+        agentIdentifier = new AgentIdentifier("localhost", "127.0.0.1", "uuid");
+
+        new SystemEnvironment().setProperty("serviceUrl", SERVER_URL);
+        resolver = mock(UpstreamPipelineResolver.class);
+    }
+
+    @After
+    public void tearDown() {
+        verifyNoMoreInteractions(resolver);
+    }
+
     private BuildWork getWork(JobConfig jobConfig) {
-        CruiseConfig config = new CruiseConfig();
+        CruiseConfig config = new BasicCruiseConfig();
         config.server().setArtifactsDir("logs");
         String stageName = "mingle";
         String pipelineName = "pipeline1";
-        config.addPipeline(PipelineConfigs.DEFAULT_GROUP, new PipelineConfig(new CaseInsensitiveString(pipelineName), new MaterialConfigs(), new StageConfig(
+        config.addPipeline(BasicPipelineConfigs.DEFAULT_GROUP, new PipelineConfig(new CaseInsensitiveString(pipelineName), new MaterialConfigs(), new StageConfig(
                 new CaseInsensitiveString(stageName), new JobConfigs(jobConfig))));
 
         String pipelineLabel = "100";
@@ -168,26 +148,26 @@ public class JobRunnerTest {
     }
 
     @Test
-    public void shouldDoNothingWhenJobIsNotCancelled() throws CruiseControlException {
+    public void shouldDoNothingWhenJobIsNotCancelled() {
         runner.setWork(work);
-        runner.handleInstruction(new AgentInstruction(false), AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null));
+        runner.handleInstruction(new AgentInstruction(false), new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false));
         assertThat(work.getCallCount(), is(0));
     }
 
     @Test
-    public void shouldCancelOncePerJob() throws CruiseControlException {
+    public void shouldCancelOncePerJob() {
         runner.setWork(work);
-        runner.handleInstruction(new AgentInstruction(true), AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null));
+        runner.handleInstruction(new AgentInstruction(true), new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false));
         assertThat(work.getCallCount(), is(1));
 
-        runner.handleInstruction(new AgentInstruction(true), AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null));
+        runner.handleInstruction(new AgentInstruction(true), new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false));
         assertThat(work.getCallCount(), is(1));
     }
 
     @Test
-    public void shoudReturnTrueOnGetJobIsCancelledWhenJobIsCancelled() {
+    public void shouldReturnTrueOnGetJobIsCancelledWhenJobIsCancelled() {
         assertThat(runner.isJobCancelled(), is(false));
-        runner.handleInstruction(new AgentInstruction(true), AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null));
+        runner.handleInstruction(new AgentInstruction(true), new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false));
         assertThat(runner.isJobCancelled(), is(true));
     }
 
@@ -208,12 +188,12 @@ public class JobRunnerTest {
             public void run() {
                 jobRunner.run(buildWork, agentIdentifier,
                         new BuildRepositoryRemoteStub(), stubPublisher(properties, consoleOut),
-                        AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null), null);
+                        new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false), null, null, null);
             }
         });
         Thread cancel = new Thread(new Runnable() {
             public void run() {
-                jobRunner.handleInstruction(new AgentInstruction(true), AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null));
+                jobRunner.handleInstruction(new AgentInstruction(true), new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false));
             }
         });
 
@@ -228,7 +208,6 @@ public class JobRunnerTest {
 
         worker.join();
 
-        System.out.println(consoleOut);
         assertThat(consoleOut.toString(), containsString("should run me before cancellation"));
         assertThat(consoleOut.toString(),
                 containsString("Start to execute cancel task: <exec command=\"echo\" args=\"cancel in progress\" />"));
@@ -256,12 +235,12 @@ public class JobRunnerTest {
             public void run() {
                 jobRunner.run(buildWork, agentIdentifier,
                         new BuildRepositoryRemoteStub(), stubPublisher(properties, consoleOut),
-                        AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null), null);
+                        new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false), null, null, null);
             }
         });
         Thread cancel = new Thread(new Runnable() {
             public void run() {
-                jobRunner.handleInstruction(new AgentInstruction(true), AgentRuntimeInfo.fromAgent(agentIdentifier, "cookie", null));
+                jobRunner.handleInstruction(new AgentInstruction(true), new AgentRuntimeInfo(agentIdentifier, AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", null, false));
             }
         });
 
@@ -276,7 +255,6 @@ public class JobRunnerTest {
         cancel.join();
         worker.join();
 
-        System.out.println(consoleOut);
         String output = consoleOut.toString();
         assertThat(output.indexOf("Task is cancelled") < output.indexOf("Job completed"), is(true));
 
@@ -284,7 +262,7 @@ public class JobRunnerTest {
     }
 
     private GoArtifactsManipulatorStub stubPublisher(final List<Property> properties,
-                                                                     final List<String> consoleOuts) {
+                                                     final List<String> consoleOuts) {
         return new GoArtifactsManipulatorStub(properties, consoleOuts);
     }
 

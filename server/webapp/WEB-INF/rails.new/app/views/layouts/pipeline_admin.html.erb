@@ -6,7 +6,7 @@
 <body id="<%= page_name %>" class="<%= page_name %>">
 <div id="body_bg">
     <div id="header">
-        <%= render :partial => "shared/header", :locals => {:scope => {:admin_tab_url => '/tab/admin'}} %>
+        <%= render :partial => "shared/header" %>
     </div>
 
     <div id='body_content'>
@@ -28,9 +28,9 @@
         <%= yield %>
     </div>
 
-    <div id='footer'>
-        <%= render :partial => "shared/footer" %>
-    </div>
+  <div id='footer-new-foundation'>
+    <%= render :partial => 'navigation_elements/footer' %>
+  </div>
 </div>
 </body>
 

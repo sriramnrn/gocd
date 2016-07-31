@@ -18,7 +18,7 @@ package com.thoughtworks.go.server.service;
 
 import javax.servlet.http.HttpServletResponse;
 
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.domain.Pipeline;
 import com.thoughtworks.go.fixture.PipelineWithMultipleStages;
 import com.thoughtworks.go.server.controller.StageController;
@@ -53,7 +53,7 @@ public class StageControllerIntegrationTest {
     @Autowired private PipelineService pipelineService;
     @Autowired private StageController controller;
     @Autowired private DatabaseAccessHelper dbHelper;
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private TransactionTemplate transactionTemplate;
 
@@ -67,12 +67,13 @@ public class StageControllerIntegrationTest {
     public void setUp() throws Exception {
         fixture = new PipelineWithMultipleStages(3, materialRepository, transactionTemplate);
         this.configHelper = new GoConfigFileHelper();
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         configHelper.onSetUp();
         fixture.usingConfigHelper(configHelper).usingDbHelper(dbHelper).onSetUp();
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
         logFixture = LogFixture.startListening(Level.INFO);
+        request.addHeader("Confirm", "true");
     }
 
     @After
@@ -85,7 +86,7 @@ public class StageControllerIntegrationTest {
     @Test
     public void shouldRunStageIfItHasNotBeenRun() throws Exception {
         Pipeline pipeline = fixture.createPipelineWithFirstStagePassedAndSecondStageHasNotStarted();
-        ModelAndView mav = controller.rerunStage(fixture.pipelineName, pipeline.getLabel(), fixture.ftStage);
+        ModelAndView mav = controller.rerunStage(fixture.pipelineName, pipeline.getLabel(), fixture.ftStage, response, request);
         assertThat(((ResponseCodeView) mav.getView()).getStatusCode(), is(HttpServletResponse.SC_OK));
         Pipeline newPipeline = pipelineService.fullPipelineById(pipeline.getId());
         assertThat("Should run " + fixture.ftStage, newPipeline.getStages().hasStage(fixture.ftStage), is(true));
@@ -94,7 +95,7 @@ public class StageControllerIntegrationTest {
     @Test
     public void shouldReturn404WhenReRunningNonExistantStage() throws Exception {
         Pipeline pipeline = fixture.createPipelineWithFirstStagePassedAndSecondStageHasNotStarted();
-        ModelAndView mav = controller.rerunStage(fixture.pipelineName, pipeline.getLabel(), "doesNotExist");
+        ModelAndView mav = controller.rerunStage(fixture.pipelineName, pipeline.getLabel(), "doesNotExist", response, request);
         ResponseCodeView codeView = (ResponseCodeView) mav.getView();
         assertThat(codeView.getStatusCode(), is(HttpServletResponse.SC_NOT_FOUND));
         assertThat(codeView.getContent(), is("Stage 'doesNotExist' not found in pipeline '"  + fixture.pipelineName + "'"));
@@ -104,7 +105,7 @@ public class StageControllerIntegrationTest {
     public void shouldNotRunStageIfPreviousStageHasNotBeenRun() throws Exception {
         Pipeline pipeline = fixture.createPipelineWithFirstStagePassedAndSecondStageHasNotStarted();
         String thirdStage = fixture.stageName(3);
-        ModelAndView mav = controller.rerunStage(fixture.pipelineName, pipeline.getLabel(), thirdStage);
+        ModelAndView mav = controller.rerunStage(fixture.pipelineName, pipeline.getLabel(), thirdStage, response, request);
         Pipeline newPipeline = pipelineService.fullPipelineById(pipeline.getId());
         assertThat("Should not run " + thirdStage, newPipeline.getStages().hasStage(thirdStage), is(false));
         assertThat(((ResponseCodeView) mav.getView()).getStatusCode(), is(HttpServletResponse.SC_BAD_REQUEST));
@@ -112,10 +113,21 @@ public class StageControllerIntegrationTest {
 
     @Test
     public void shouldGiveFriendlyErrorMessageForRerun() {
-        ModelAndView modelAndView = controller.rerunStage("pipeline", "invalid-label", "stage");
+        ModelAndView modelAndView = controller.rerunStage("pipeline", "invalid-label", "stage", response, request);
         ResponseCodeView codeView = (ResponseCodeView) modelAndView.getView();
         assertThat(codeView.getStatusCode(), is(HttpServletResponse.SC_BAD_REQUEST));
         assertThat(codeView.getContent(), is("Stage [pipeline/invalid-label/stage] not found"));
     }
 
+    @Test
+    public void shouldReturnBadRequestIfRequiredHeadersAreMissing() {
+        MockHttpServletRequest mockHttpServletRequest = new MockHttpServletRequest();
+        mockHttpServletRequest.addHeader("Confirm", "false");
+
+        ModelAndView modelAndView = controller.rerunStage("pipeline", "invalid-label", "stage", response, mockHttpServletRequest);
+        ResponseCodeView codeView = (ResponseCodeView) modelAndView.getView();
+
+        assertThat(codeView.getStatusCode(), is(HttpServletResponse.SC_BAD_REQUEST));
+        assertThat(codeView.getContent(), is("Missing required header 'Confirm'"));
+    }
 }

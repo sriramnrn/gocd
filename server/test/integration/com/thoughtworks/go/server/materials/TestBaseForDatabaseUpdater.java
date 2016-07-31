@@ -66,7 +66,7 @@ public abstract class TestBaseForDatabaseUpdater {
 
     @Before public void setUp() throws Exception {
         dbHelper.onSetUp();
-        updater = new MaterialDatabaseUpdater(materialRepository, serverHealthService, transactionTemplate, goCache, dependencyMaterialUpdater, scmMaterialUpdater, null, materialExpansionService);
+        updater = new MaterialDatabaseUpdater(materialRepository, serverHealthService, transactionTemplate, goCache, dependencyMaterialUpdater, scmMaterialUpdater, null, null, materialExpansionService);
         testRepo = repo();
         material = material();
         testRepo.onSetup();
@@ -82,7 +82,7 @@ public abstract class TestBaseForDatabaseUpdater {
         updater.updateMaterial(material);
 
         Modification modification = materialRepository.findLatestModification(material).getMaterialRevision(0).getModification(0);
-        assertEquals(testRepo.latestModification(), modification);
+        assertThat(testRepo.latestModification().get(0), is(modification));
 
     }
 

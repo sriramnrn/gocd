@@ -16,23 +16,22 @@
 
 package com.thoughtworks.go.util;
 
+import org.apache.commons.lang.StringUtils;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+import org.xml.sax.helpers.DefaultHandler;
+
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.thoughtworks.go.util.StringUtil;
-import org.apache.commons.lang.StringUtils;
-import org.xml.sax.SAXException;
-import org.xml.sax.SAXParseException;
-import org.xml.sax.helpers.DefaultHandler;
-
 public class XsdErrorTranslator extends DefaultHandler {
     private boolean validationError = false;
     private SAXParseException saxParseException = null;
 
-    static List<MappingEntry> errorMapping = new ArrayList<MappingEntry>();
+    static List<MappingEntry> errorMapping = new ArrayList<>();
 
     private static final int NONE = 0;
     private static final int CAPITALIZE = 1;
@@ -124,7 +123,7 @@ public class XsdErrorTranslator extends DefaultHandler {
             return args;
         }
 
-        private String[] applyTransforms(String[] args) {
+        private Object[] applyTransforms(String[] args) {
             for (int i = 0, transformsLength = transforms.length; i < transformsLength; i++) {
                 int transform = transforms[i];
                 if ((transform & HUMANIZE) != 0) {

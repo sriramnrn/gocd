@@ -14,11 +14,10 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::PipelinesController do
   before do
-    controller.stub(:populate_health_messages)
     controller.stub(:pipeline_pause_service).with().and_return(@pipeline_pause_service = double('Pipeline Pause Service'))
   end
 
@@ -71,7 +70,7 @@ describe Admin::PipelinesController do
     before(:each) do
       pipeline_config = PipelineConfigMother.pipelineConfigWithMingleConfiguration("HelloWorld", "http://mingleurl.com:7823", "go", "'status' > 'In Dev'")
 
-      pipeline_config_for_edit = ConfigForEdit.new(pipeline_config, CruiseConfig.new, CruiseConfig.new)
+      pipeline_config_for_edit = ConfigForEdit.new(pipeline_config, BasicCruiseConfig.new, BasicCruiseConfig.new)
 
       controller.stub(:go_config_service).with().and_return(@go_config_service = double('Go Config Service'))
       @result = HttpLocalizedOperationResult.new
@@ -97,7 +96,7 @@ describe Admin::PipelinesController do
     before(:each) do
       pipeline_config = PipelineConfigMother.pipelineConfigWithMingleConfiguration("HelloWorld", "http://mingleurl.com:7823", "go", "'status' > 'In Dev'")
       pipeline_config.setLabelTemplate("some_label_template")
-      @pipeline_config_for_edit = ConfigForEdit.new(pipeline_config, CruiseConfig.new, CruiseConfig.new)
+      @pipeline_config_for_edit = ConfigForEdit.new(pipeline_config, BasicCruiseConfig.new, BasicCruiseConfig.new)
 
       controller.stub(:go_config_service).with().and_return(@go_config_service = double('Go Config Service'))
 
@@ -141,9 +140,6 @@ describe Admin::PipelinesController do
       render_views
 
       before do
-        controller.stub(:populate_health_messages) do
-          controller.instance_variable_set :@current_server_health_states, com.thoughtworks.go.serverhealth.ServerHealthStates.new
-        end
         @go_config_service.stub(:isSecurityEnabled).and_return(false)
       end
 
@@ -166,7 +162,7 @@ describe Admin::PipelinesController do
     before(:each) do
       controller.stub(:populate_config_validity)
 
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       cruise_config_mother = GoConfigMother.new
       @pipeline = cruise_config_mother.addPipeline(@cruise_config, "pipeline-name", "stage-name", ["build-name"].to_java(java.lang.String))
 
@@ -291,7 +287,7 @@ describe Admin::PipelinesController do
       controller.stub(:go_config_service).with().and_return(@go_config_service = double('Go Config Service'))
       @go_config_service.stub(:checkConfigFileValid).and_return(com.thoughtworks.go.config.validation.GoConfigValidity.valid())
       @go_config_service.stub(:registry)
-      @cruise_config = CruiseConfig.new
+      @cruise_config = BasicCruiseConfig.new
       @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
       @cruise_config_mother = GoConfigMother.new
     end
@@ -301,10 +297,9 @@ describe Admin::PipelinesController do
 
       get :new
 
-      job_configs = JobConfigs.new
-      job_configs.add(JobConfig.new(CaseInsensitiveString.new("defaultJob")))
+      job_configs = JobConfigs.new([JobConfig.new(CaseInsensitiveString.new("defaultJob"), Resources.new, ArtifactPlans.new, com.thoughtworks.go.config.Tasks.new([AntTask.new].to_java(Task)))].to_java(JobConfig))
       pipeline = PipelineConfig.new(CaseInsensitiveString.new(""), MaterialConfigs.new, [StageConfig.new(CaseInsensitiveString.new("defaultStage"), job_configs)].to_java(StageConfig))
-      assigns[:pipeline_group].should == PipelineConfigs.new([pipeline].to_java(PipelineConfig))
+      assigns[:pipeline_group].should == BasicPipelineConfigs.new([pipeline].to_java(PipelineConfig))
       assigns[:pipeline].should == pipeline
       assigns[:all_pipelines].should == java.util.ArrayList.new
       assigns[:cruise_config].should == @cruise_config
@@ -337,7 +332,7 @@ describe Admin::PipelinesController do
 
     it "should have pipelines using templates listed in the pipelineStageJsontemplate list assigned" do
       template_name = "someTemplateName"
-      cruise_config_interpolated = CruiseConfig.new
+      cruise_config_interpolated = BasicCruiseConfig.new
       @cruise_config_mother.addPipeline(@cruise_config, "pipeline2", "stage-2", ["job-2"].to_java(java.lang.String))
       @cruise_config_mother.addPipelineWithTemplate(@cruise_config, "someTemplatePipeline", template_name, "stageName", ["jobName"].to_java(java.lang.String))
 
@@ -391,7 +386,7 @@ describe Admin::PipelinesController do
 
       controller.stub(:go_config_service).with().and_return(@go_config_service = double('Go Config Service'))
       @go_config_service.stub(:checkConfigFileValid).and_return(com.thoughtworks.go.config.validation.GoConfigValidity.valid())
-      @cruise_config = CruiseConfig.new
+      @cruise_config = BasicCruiseConfig.new
       @repository1 = PackageRepositoryMother.create("repo-id", "repo1-name", "pluginid", "version1.0", Configuration.new([ConfigurationPropertyMother.create("k1", false, "v1")].to_java(ConfigurationProperty)))
       @pkg = PackageDefinitionMother.create("pkg-id", "package3-name", Configuration.new([ConfigurationPropertyMother.create("k2", false, "p3v2")].to_java(ConfigurationProperty)), @repository1)
       @repository1.setPackages(Packages.new([@pkg].to_java(PackageDefinition)))
@@ -512,11 +507,11 @@ describe Admin::PipelinesController do
       assigns[:errors][0].should == "empty pipeline name"
       assigns[:groups_json].should == [{"group" => "group1"}, {"group" => "group2"}].to_json
       assigns[:pipeline_stages_json].should == "[{\"pipeline\":\"pipeline2\",\"stage\":\"stage-2\"}]"
-      job_configs = JobConfigs.new([JobConfig.new(CaseInsensitiveString.new("defaultJob"))].to_java(JobConfig))
+      job_configs = JobConfigs.new([JobConfig.new(CaseInsensitiveString.new("defaultJob"), Resources.new, ArtifactPlans.new, com.thoughtworks.go.config.Tasks.new([AntTask.new].to_java(Task)))].to_java(JobConfig))
       stage_config = StageConfig.new(CaseInsensitiveString.new("defaultStage"), job_configs)
       pipeline_config = PipelineConfig.new(CaseInsensitiveString.new(""), com.thoughtworks.go.config.materials.MaterialConfigs.new, [stage_config].to_java(StageConfig))
       assigns[:pipeline].should == pipeline_config
-      assigns[:pipeline_group].should == PipelineConfigs.new("new-group", Authorization.new, [pipeline_config].to_java(PipelineConfig))
+      assigns[:pipeline_group].should == BasicPipelineConfigs.new("new-group", Authorization.new, [pipeline_config].to_java(PipelineConfig))
       assigns[:group_name].should == "new-group"
       assigns[:task_view_models].should == task_view_models
       list_of_pipelines = java.util.ArrayList.new
@@ -639,7 +634,7 @@ describe Admin::PipelinesController do
       @pluggable_task_service.stub(:validate)
       task_view_service = double('Task View Service')
       controller.stub(:task_view_service).and_return(task_view_service)
-      @new_task = PluggableTask.new("", PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("Url", false, nil)].to_java(ConfigurationProperty)))
+      @new_task = PluggableTask.new( PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("Url", false, nil)].to_java(ConfigurationProperty)))
       task_view_service.should_receive(:taskInstanceFor).with("pluggableTask").and_return(@new_task)
       @go_config_service.should_receive(:getCurrentConfig).twice.and_return(Cloner.new().deepClone(@cruise_config))
       stub_save_for_success
@@ -665,7 +660,7 @@ describe Admin::PipelinesController do
       @pluggable_task_service.stub(:validate) do |task|
         task.getConfiguration().getProperty("key").addError("key", "some error")
       end
-      @new_task = PluggableTask.new("", PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("key", false, nil)].to_java(ConfigurationProperty)))
+      @new_task = PluggableTask.new( PluginConfiguration.new("curl.plugin", "1.0"), Configuration.new([ConfigurationPropertyMother.create("key", false, nil)].to_java(ConfigurationProperty)))
       task_view_service.should_receive(:taskInstanceFor).with("pluggableTask").and_return(@new_task)
       task_view_service.should_receive(:getViewModel).with(@new_task, "new").and_return(TaskViewModel.new(nil, nil, nil))
       task_view_service.should_receive(:getModelOfType).with(anything, anything).and_return(TaskViewModel.new(nil, nil, nil))
@@ -696,7 +691,7 @@ describe Admin::PipelinesController do
       controller.stub(:go_config_service).with().and_return(@go_config_service = double('Go Config Service'))
       @go_config_service.stub(:checkConfigFileValid).and_return(com.thoughtworks.go.config.validation.GoConfigValidity.valid())
       controller.stub(:security_service).and_return(@security_service = double('Security Service'))
-      @cruise_config = CruiseConfig.new
+      @cruise_config = BasicCruiseConfig.new
       @pipeline = PipelineConfigMother.pipelineConfig("foo.bar")
       @cruise_config.addPipeline("group1", @pipeline)
       @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
@@ -710,7 +705,7 @@ describe Admin::PipelinesController do
 
         clonedPipeline = @pipeline.duplicate()
         assigns[:pipeline].should == clonedPipeline
-        assigns[:pipeline_group].should == PipelineConfigs.new([clonedPipeline].to_java(PipelineConfig))
+        assigns[:pipeline_group].should == BasicPipelineConfigs.new([clonedPipeline].to_java(PipelineConfig))
         assigns[:group_name].should == "group1"
         assigns[:groups_list].should == ["group1", "group2"]
         assigns[:groups_json].should == [{"group" => "group1"}, {"group" => "group2"}].to_json
@@ -740,7 +735,7 @@ describe Admin::PipelinesController do
       end
 
 
-      it "should save cloned pipeline successfully for community edition when group is not set" do
+      it "should save cloned pipeline successfully when group is not set" do
         @cruise_config.addPipeline("foo.bar", @pipeline)
         stub_save_for_success
         @pipeline_pause_service.should_receive(:pause).with("new-pip", "Under construction", @user)

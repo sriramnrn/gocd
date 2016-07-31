@@ -14,12 +14,11 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::PipelineGroupsController do
   include MockRegistryModule
   before do
-    controller.stub(:populate_health_messages)
     controller.stub(:set_current_user)
   end
   include ConfigSaveStubbing
@@ -101,7 +100,7 @@ describe Admin::PipelineGroupsController do
       @security_service.stub(:isUserAdminOfGroup).and_return(true)
       @user = current_user
       @groups = PipelineConfigMother.createGroups(["group1", "group2", "group3"].to_java(java.lang.String))
-      @config = CruiseConfig.new(@groups.to_a.to_java(PipelineConfigs))
+      @config = BasicCruiseConfig.new(@groups.to_a.to_java(PipelineConfigs))
       group_for_edit = ConfigForEdit.new(@groups.get(0), @config, @config)
       @go_config_service.stub(:loadGroupForEditing).and_return(group_for_edit)
       @go_config_service.stub(:registry).and_return(MockRegistryModule::MockRegistry.new)
@@ -113,11 +112,11 @@ describe Admin::PipelineGroupsController do
 
     describe :new do
       it "should return a new pipeline group" do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
-        
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
+
         get :new
 
-        assigns[:group].should == PipelineConfigs.new
+        assigns[:group].should == BasicPipelineConfigs.new
         assert_template layout: false
       end
     end
@@ -125,12 +124,12 @@ describe Admin::PipelineGroupsController do
     describe :create do
 
       before do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
       end
 
       it "should create a new pipeline group with the given name" do
         stub_save_for_success(@config)
-        group = PipelineConfigs.new("name", Authorization.new(), [].to_java(PipelineConfig))
+        group = BasicPipelineConfigs.new("name", Authorization.new(), [].to_java(PipelineConfig))
 
         post :create, :config_md5 => "1234abcd", :group => { :group => "name"}
 
@@ -152,7 +151,7 @@ describe Admin::PipelineGroupsController do
 
     describe :index do
       before(:each) do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @pipeline_config_service.should_receive(:canDeletePipelines).and_return({
                 "pipeline_1" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
                 "pipeline_2" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
@@ -199,7 +198,7 @@ describe Admin::PipelineGroupsController do
 
       before :each do
         @pipeline = @groups.get(0).get(0)
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @pipeline_config_service.should_receive(:canDeletePipelines).and_return({
                 "pipeline_1" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
                 "pipeline_2" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
@@ -249,7 +248,7 @@ describe Admin::PipelineGroupsController do
 
     describe :edit do
       before do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @group = @groups.get(0)
         @user_service = stub_service(:user_service)
         @user_service.stub(:allUsernames).and_return(["foo", "bar", "baz"])
@@ -274,7 +273,7 @@ describe Admin::PipelineGroupsController do
 
     describe :show do
       before do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @group = @groups.get(0)
         @user_service = stub_service(:user_service)
         @user_service.stub(:allUsernames).and_return(["foo", "bar", "baz"])
@@ -299,7 +298,7 @@ describe Admin::PipelineGroupsController do
 
     describe :update do
       before(:each) do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @group = @groups.get(0)
       end
 
@@ -334,7 +333,7 @@ describe Admin::PipelineGroupsController do
       before do
         @result = stub_localized_result
         @pipeline = @groups.get(0).get(0)
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @pipeline_config_service = stub_service(:pipeline_config_service)
         @pipeline_config_service.should_receive(:canDeletePipelines).and_return({
                 "pipeline_1" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
@@ -367,8 +366,8 @@ describe Admin::PipelineGroupsController do
 
       before :each do
         @empty_group = PipelineConfigMother.createGroup("empty_group", [].to_java(java.lang.String))
-        @destroy_group_config = CruiseConfig.new(@empty_group.to_a.to_java(PipelineConfigs))
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@destroy_group_config)
+        @destroy_group_config = BasicCruiseConfig.new(@empty_group.to_a.to_java(PipelineConfigs))
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@destroy_group_config)
         @pipeline_config_service.should_receive(:canDeletePipelines).and_return({
                 "pipeline_1" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
                 "pipeline_2" => CanDeleteResult.new(true, LocalizedMessage.string("CAN_DELETE_PIPELINE")),
@@ -391,7 +390,7 @@ describe Admin::PipelineGroupsController do
 
     describe :possible_groups do
       it "should render possible groups for given pipeline" do
-        @go_config_service.should_receive(:getConfigForEditing).and_return(@config)
+        @go_config_service.should_receive(:getMergedConfigForEditing).and_return(@config)
         @go_config_service.should_receive(:doesMd5Match).with("my_md5").and_return(true)
 
         get :possible_groups, :pipeline_name => "pipeline_1", :config_md5 => "my_md5"

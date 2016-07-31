@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,30 +12,25 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.materials;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.CruiseConfig;
+import com.thoughtworks.go.config.*;
+import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.materials.ScmMaterial;
+import com.thoughtworks.go.config.materials.git.GitMaterialConfig;
 import com.thoughtworks.go.config.materials.svn.SvnMaterial;
 import com.thoughtworks.go.config.materials.svn.SvnMaterialConfig;
+import com.thoughtworks.go.domain.PipelineGroups;
 import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.helper.MaterialConfigsMother;
 import com.thoughtworks.go.helper.MaterialsMother;
 import com.thoughtworks.go.helper.PipelineConfigMother;
-import com.thoughtworks.go.metrics.domain.context.Context;
-import com.thoughtworks.go.metrics.domain.probes.ProbeType;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
+import com.thoughtworks.go.i18n.LocalizedMessage;
+import com.thoughtworks.go.listener.ConfigChangedListener;
+import com.thoughtworks.go.listener.EntityConfigChangedListener;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.materials.postcommit.PostCommitHookImplementer;
 import com.thoughtworks.go.server.materials.postcommit.PostCommitHookMaterialType;
@@ -44,15 +39,10 @@ import com.thoughtworks.go.server.perf.MDUPerformanceLogger;
 import com.thoughtworks.go.server.service.GoConfigService;
 import com.thoughtworks.go.server.service.MaterialConfigConverter;
 import com.thoughtworks.go.server.service.result.HttpLocalizedOperationResult;
-import com.thoughtworks.go.serverhealth.HealthStateScope;
-import com.thoughtworks.go.serverhealth.HealthStateType;
-import com.thoughtworks.go.serverhealth.ServerHealthService;
-import com.thoughtworks.go.serverhealth.ServerHealthState;
-import com.thoughtworks.go.serverhealth.ServerHealthStates;
+import com.thoughtworks.go.serverhealth.*;
 import com.thoughtworks.go.util.ProcessManager;
 import com.thoughtworks.go.util.ReflectionUtil;
 import com.thoughtworks.go.util.SystemEnvironment;
-import org.apache.commons.httpclient.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -61,25 +51,19 @@ import org.mockito.Matchers;
 import org.mockito.Mockito;
 import org.mockito.internal.verification.AtMost;
 
+import java.util.*;
+
 import static com.thoughtworks.go.helper.MaterialUpdateMessageMatcher.matchMaterialUpdateMessage;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.anySet;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class MaterialUpdateServiceTest {
     private MaterialUpdateQueue queue;
     private MaterialUpdateCompletedTopic completed;
+    private ConfigMaterialUpdateQueue configQueue;
+    private GoConfigWatchList watchList;
     private GoConfigService goConfigService;
     private static final SvnMaterialConfig MATERIAL_CONFIG = MaterialConfigsMother.svnMaterialConfig();
     private static final SvnMaterial MATERIAL = MaterialsMother.svnMaterial();
@@ -91,21 +75,23 @@ public class MaterialUpdateServiceTest {
     private PostCommitHookMaterialType invalidMaterialType;
     private ServerHealthService serverHealthService;
     private SystemEnvironment systemEnvironment;
-    private MetricsProbeService metricsProbeService;
     private MaterialConfigConverter materialConfigConverter;
 
     @Before
     public void setUp() throws Exception {
         queue = mock(MaterialUpdateQueue.class);
+        configQueue = mock(ConfigMaterialUpdateQueue.class);
+        watchList = mock(GoConfigWatchList.class);
         completed = mock(MaterialUpdateCompletedTopic.class);
         goConfigService = mock(GoConfigService.class);
         postCommitHookMaterialType = mock(PostCommitHookMaterialTypeResolver.class);
         serverHealthService = mock(ServerHealthService.class);
         systemEnvironment = new SystemEnvironment();
-        metricsProbeService = mock(MetricsProbeService.class);
+
         materialConfigConverter = mock(MaterialConfigConverter.class);
         MDUPerformanceLogger mduPerformanceLogger = mock(MDUPerformanceLogger.class);
-        service = new MaterialUpdateService(queue, completed, goConfigService, systemEnvironment, serverHealthService, postCommitHookMaterialType, mduPerformanceLogger, materialConfigConverter);
+        service = new MaterialUpdateService(queue,configQueue , completed,watchList, goConfigService, systemEnvironment,
+                serverHealthService, postCommitHookMaterialType, mduPerformanceLogger, materialConfigConverter);
         HashSet<MaterialConfig> materialConfigs = new HashSet(Collections.singleton(MATERIAL_CONFIG));
         HashSet<Material> materials = new HashSet(Collections.singleton(MATERIAL));
         when(goConfigService.getSchedulableMaterials()).thenReturn(materialConfigs);
@@ -126,25 +112,37 @@ public class MaterialUpdateServiceTest {
     }
 
     @Test
-    public void shouldSendMaterialUpdateCheckMessageWhenTimerIsCalled() throws Exception {
+    public void shouldSendMaterialUpdateMessageOnlyToMaterialQueueWhenTimerIsCalled() throws Exception {
         service.onTimer();
         Mockito.verify(queue).post(matchMaterialUpdateMessage(MATERIAL));
+        Mockito.verify(configQueue,times(0)).post(any(MaterialUpdateMessage.class));
+    }
+    @Test
+    public void shouldSendMaterialUpdateMessageOnlyToConfigQueue_WhenTimerIsCalled_AndMaterialIsConfigRepo() throws Exception {
+        when(watchList.hasConfigRepoWithFingerprint(MATERIAL.getFingerprint())).thenReturn(true);
+        service.onTimer();
+        Mockito.verify(configQueue).post(matchMaterialUpdateMessage(MATERIAL));
+        Mockito.verify(queue,times(0)).post(any(MaterialUpdateMessage.class));
     }
 
     @Test
-    public void shouldNotSendMaterialUpdateCheckMessageIfMaterialIsStillBeingChecked() throws Exception {
+    public void shouldNotSendMaterialUpdateMessageIfMaterialIsStillBeingChecked() throws Exception {
         service.onTimer();
         service.onTimer();
         Mockito.verify(queue, new AtMost(1)).post(matchMaterialUpdateMessage(MATERIAL));
+        Mockito.verify(configQueue,times(0)).post(any(MaterialUpdateMessage.class));
     }
 
     @Test
     public void shouldReturn401WhenUserIsNotAnAdmin_WhenInvokingPostCommitHookMaterialUpdate() {
         when(goConfigService.isUserAdmin(username)).thenReturn(false);
         service.notifyMaterialsForUpdate(username, new HashMap(), result);
-        assertThat(result.isSuccessful(), is(false));
-        assertThat(result.httpCode(), is(HttpStatus.SC_UNAUTHORIZED));
-        assertThat(result.hasMessage(), is(true));
+
+        HttpLocalizedOperationResult unauthorizedResult = new HttpLocalizedOperationResult();
+        unauthorizedResult.unauthorized(LocalizedMessage.string("API_ACCESS_UNAUTHORIZED"), HealthStateType.unauthorised());
+
+        assertThat(result, is(unauthorizedResult));
+
         verify(goConfigService).isUserAdmin(username);
     }
 
@@ -152,9 +150,12 @@ public class MaterialUpdateServiceTest {
     public void shouldReturn400WhenTypeIsMissing_WhenInvokingPostCommitHookMaterialUpdate() {
         when(goConfigService.isUserAdmin(username)).thenReturn(true);
         service.notifyMaterialsForUpdate(username, new HashMap(), result);
-        assertThat(result.isSuccessful(), is(false));
-        assertThat(result.httpCode(), is(HttpStatus.SC_BAD_REQUEST));
-        assertThat(result.hasMessage(), is(true));
+
+        HttpLocalizedOperationResult badRequestResult = new HttpLocalizedOperationResult();
+        badRequestResult.badRequest(LocalizedMessage.string("API_BAD_REQUEST"));
+
+        assertThat(result, is(badRequestResult));
+
         verify(goConfigService).isUserAdmin(username);
     }
 
@@ -165,10 +166,43 @@ public class MaterialUpdateServiceTest {
         final HashMap params = new HashMap();
         params.put(MaterialUpdateService.TYPE, "some_invalid_type");
         service.notifyMaterialsForUpdate(username, params, result);
-        assertThat(result.isSuccessful(), is(false));
-        assertThat(result.httpCode(), is(HttpStatus.SC_BAD_REQUEST));
-        assertThat(result.hasMessage(), is(true));
+
+        HttpLocalizedOperationResult badRequestResult = new HttpLocalizedOperationResult();
+        badRequestResult.badRequest(LocalizedMessage.string("API_BAD_REQUEST"));
+
+        assertThat(result, is(badRequestResult));
+
         verify(goConfigService).isUserAdmin(username);
+    }
+
+    @Test
+    public void shouldReturn404WhenThereAreNoMaterialsToSchedule_WhenInvokingPostCommitHookMaterialUpdate() {
+        when(goConfigService.isUserAdmin(username)).thenReturn(true);
+
+        PostCommitHookMaterialType materialType = mock(PostCommitHookMaterialType.class);
+        when(postCommitHookMaterialType.toType("type")).thenReturn(materialType);
+
+        PostCommitHookImplementer hookImplementer = mock(PostCommitHookImplementer.class);
+        when(materialType.getImplementer()).thenReturn(hookImplementer);
+        when(materialType.isKnown()).thenReturn(true);
+
+        CruiseConfig config = mock(BasicCruiseConfig.class);
+        when(goConfigService.currentCruiseConfig()).thenReturn(config);
+        when(config.getGroups()).thenReturn(new PipelineGroups());
+
+        when(hookImplementer.prune(anySet(), anyMap())).thenReturn(new HashSet<Material>());
+
+        final HashMap params = new HashMap();
+        params.put(MaterialUpdateService.TYPE, "type");
+
+        service.notifyMaterialsForUpdate(username, params, result);
+
+        HttpLocalizedOperationResult operationResult = new HttpLocalizedOperationResult();
+        operationResult.notFound(LocalizedMessage.string("MATERIAL_SUITABLE_FOR_NOTIFICATION_NOT_FOUND"), HealthStateType.general(HealthStateScope.GLOBAL));
+
+        assertThat(result, is(operationResult));
+
+        verify(hookImplementer).prune(anySet(), anyMap());
     }
 
     @Test
@@ -176,7 +210,7 @@ public class MaterialUpdateServiceTest {
         final HashMap params = new HashMap();
         params.put(MaterialUpdateService.TYPE, "svn");
         when(goConfigService.isUserAdmin(username)).thenReturn(true);
-        final CruiseConfig cruiseConfig = new CruiseConfig(PipelineConfigMother.createGroup("groupName", "pipeline1", "pipeline2"));
+        final CruiseConfig cruiseConfig = new BasicCruiseConfig(PipelineConfigMother.createGroup("groupName", "pipeline1", "pipeline2"));
         when(goConfigService.currentCruiseConfig()).thenReturn(cruiseConfig);
         when(postCommitHookMaterialType.toType("svn")).thenReturn(validMaterialType);
         final PostCommitHookImplementer svnPostCommitHookImplementer = mock(PostCommitHookImplementer.class);
@@ -188,6 +222,11 @@ public class MaterialUpdateServiceTest {
         spyService.notifyMaterialsForUpdate(username, params, result);
         verify(svnPostCommitHookImplementer).prune(anySet(), eq(params));
         verify(spyService).updateMaterial(svnMaterial);
+
+        HttpLocalizedOperationResult acceptedResult = new HttpLocalizedOperationResult();
+        acceptedResult.accepted(LocalizedMessage.string("MATERIAL_SCHEDULE_NOTIFICATION_ACCEPTED"));
+
+        assertThat(result, is(acceptedResult));
     }
 
     @Test
@@ -210,7 +249,7 @@ public class MaterialUpdateServiceTest {
 
         //then
         verify(serverHealthService).removeByScope(HealthStateScope.forMaterialUpdate(material));
-        ArgumentCaptor<ServerHealthState> argumentCaptor = new ArgumentCaptor<ServerHealthState>();
+        ArgumentCaptor<ServerHealthState> argumentCaptor = ArgumentCaptor.forClass(ServerHealthState.class);
         verify(serverHealthService).update(argumentCaptor.capture());
         assertThat(argumentCaptor.getValue().getMessage(), is("Material update for uri hung:"));
         assertThat(argumentCaptor.getValue().getDescription(),
@@ -270,7 +309,27 @@ public class MaterialUpdateServiceTest {
     public void shouldClearSchedulableMaterialCacheOnConfigChange() {
         when(serverHealthService.getAllLogs()).thenReturn(new ServerHealthStates());
         service.onTimer();
-        service.onConfigChange(mock(CruiseConfig.class));
+        service.onConfigChange(mock(BasicCruiseConfig.class));
+        service.onTimer();
+        verify(goConfigService, times(2)).getSchedulableMaterials();
+    }
+
+    @Test
+    public void shouldClearSchedulableMaterialCacheOnPipelineConfigChange() {
+        ArgumentCaptor<ConfigChangedListener> captor = ArgumentCaptor.forClass(ConfigChangedListener.class);
+        doNothing().when(goConfigService).register(captor.capture());
+        service.initialize();
+        List<ConfigChangedListener> listeners = captor.getAllValues();
+        assertThat(listeners.get(1) instanceof EntityConfigChangedListener, is(true));
+        EntityConfigChangedListener<PipelineConfig> pipelineConfigChangeListener= (EntityConfigChangedListener<PipelineConfig>) listeners.get(1);
+
+        when(serverHealthService.getAllLogs()).thenReturn(new ServerHealthStates());
+        when(goConfigService.getCurrentConfig()).thenReturn(mock(CruiseConfig.class));
+        service.onTimer();
+        PipelineConfig pipelineConfig = mock(PipelineConfig.class);
+        when(pipelineConfig.materialConfigs()).thenReturn(new MaterialConfigs(new GitMaterialConfig("url")));
+
+        pipelineConfigChangeListener.onEntityConfigChange(pipelineConfig);
         service.onTimer();
         verify(goConfigService, times(2)).getSchedulableMaterials();
     }
@@ -279,7 +338,6 @@ public class MaterialUpdateServiceTest {
     public void shouldAllowPostCommitNotificationsToPassThroughToTheQueue_WhenTheSameMaterialIsCurrentlyInProgressAndMaterialIsAutoUpdateFalse() throws Exception {
         ScmMaterial material = mock(ScmMaterial.class);
         when(material.isAutoUpdate()).thenReturn(false);
-        when(metricsProbeService.begin(ProbeType.MATERIAL_UPDATE_QUEUE_COUNTER)).thenReturn(mock(Context.class));
         MaterialUpdateMessage message = new MaterialUpdateMessage(material, 0);
         doNothing().when(queue).post(message);
         service.updateMaterial(material); //prune inprogress queue to have this material in it
@@ -292,7 +350,6 @@ public class MaterialUpdateServiceTest {
     public void shouldNotAllowPostCommitNotificationsToPassThroughToTheQueue_WhenTheSameMaterialIsCurrentlyInProgressAndMaterialIsAutoUpdateTrue() throws Exception {
         ScmMaterial material = mock(ScmMaterial.class);
         when(material.isAutoUpdate()).thenReturn(true);
-        when(metricsProbeService.begin(ProbeType.MATERIAL_UPDATE_QUEUE_COUNTER)).thenReturn(mock(Context.class));
         MaterialUpdateMessage message = new MaterialUpdateMessage(material, 0);
         doNothing().when(queue).post(message);
         service.updateMaterial(material); //prune inprogress queue to have this material in it
@@ -305,7 +362,6 @@ public class MaterialUpdateServiceTest {
     public void shouldAllowPostCommitNotificationsToPassThroughToTheQueue_WhenTheSameMaterialIsNotCurrentlyInProgressAndMaterialIsAutoUpdateTrue() throws Exception {
         ScmMaterial material = mock(ScmMaterial.class);
         when(material.isAutoUpdate()).thenReturn(true);
-        when(metricsProbeService.begin(ProbeType.MATERIAL_UPDATE_QUEUE_COUNTER)).thenReturn(mock(Context.class));
         MaterialUpdateMessage message = new MaterialUpdateMessage(material, 0);
         doNothing().when(queue).post(message);
         service.updateMaterial(material); // first call to the method
@@ -317,7 +373,6 @@ public class MaterialUpdateServiceTest {
     public void shouldAllowPostCommitNotificationsToPassThroughToTheQueue_WhenTheSameMaterialIsNotCurrentlyInProgressAndMaterialIsAutoUpdateFalse() throws Exception {
         ScmMaterial material = mock(ScmMaterial.class);
         when(material.isAutoUpdate()).thenReturn(false);
-        when(metricsProbeService.begin(ProbeType.MATERIAL_UPDATE_QUEUE_COUNTER)).thenReturn(mock(Context.class));
         MaterialUpdateMessage message = new MaterialUpdateMessage(material, 0);
         doNothing().when(queue).post(message);
         service.updateMaterial(material); // first call to the method

@@ -16,16 +16,6 @@
 
 package com.thoughtworks.go.server.service.dd;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.domain.PipelineTimelineEntry;
@@ -36,45 +26,33 @@ import com.thoughtworks.go.server.domain.PipelineTimeline;
 import com.thoughtworks.go.server.service.NoCompatibleUpstreamRevisionsException;
 import com.thoughtworks.go.util.Pair;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.collections.Predicate;
 import org.apache.log4j.Logger;
 
-import static com.thoughtworks.go.server.service.dd.DependencyFanInNode.RevisionAlteration.ALL_OPTIONS_EXHAUSTED;
-import static com.thoughtworks.go.server.service.dd.DependencyFanInNode.RevisionAlteration.ALTERED_TO_CORRECT_REVISION;
-import static com.thoughtworks.go.server.service.dd.DependencyFanInNode.RevisionAlteration.NEED_MORE_REVISIONS;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import static com.thoughtworks.go.server.service.dd.DependencyFanInNode.RevisionAlteration.*;
 
 public class DependencyFanInNode extends FanInNode {
     private static final Logger LOGGER = Logger.getLogger(DependencyFanInNode.class);
 
-    private static List<Class<? extends MaterialConfig>> DEPENDENCY_NODE_TYPES = new ArrayList<Class<? extends MaterialConfig>>();
     private int totalInstanceCount = Integer.MAX_VALUE;
     private int maxBackTrackLimit = Integer.MAX_VALUE;
     private int currentCount;
     StageIdentifier currentRevision;
-    private Map<StageIdentifier, Set<FaninScmMaterial>> stageIdentifierScmMaterial = new LinkedHashMap<StageIdentifier, Set<FaninScmMaterial>>();
-    public Set<FanInNode> children = new HashSet<FanInNode>();
+    private Map<StageIdentifier, Set<FaninScmMaterial>> stageIdentifierScmMaterial = new LinkedHashMap<>();
+    public Set<FanInNode> children = new HashSet<>();
 
     public Set<? extends FaninScmMaterial> stageIdentifierScmMaterialForCurrentRevision() {
         return stageIdentifierScmMaterial.get(currentRevision);
     }
 
     enum RevisionAlteration {
-        NOT_APPLICABLE, SAME_AS_CURRENT_REVISION, ALTERED_TO_CORRECT_REVISION, ALL_OPTIONS_EXHAUSTED,
-        NEED_MORE_REVISIONS
-    }
-
-    static {
-        DEPENDENCY_NODE_TYPES.add(DependencyMaterialConfig.class);
+        NOT_APPLICABLE, SAME_AS_CURRENT_REVISION, ALTERED_TO_CORRECT_REVISION, ALL_OPTIONS_EXHAUSTED, NEED_MORE_REVISIONS
     }
 
     DependencyFanInNode(MaterialConfig material) {
         super(material);
-        for (Class<? extends MaterialConfig> clazz : DEPENDENCY_NODE_TYPES) {
-            if (clazz.isAssignableFrom(material.getClass())) {
-                return;
-            }
-        }
-        throw new RuntimeException("Not a valid root node material type");
     }
 
     public void populateRevisions(CaseInsensitiveString pipelineName, FanInGraphContext context) {
@@ -154,15 +132,17 @@ public class DependencyFanInNode extends FanInNode {
     }
 
     private Pair<StageIdentifier, List<FaninScmMaterial>> getRevisionNthFor(int n, FanInGraphContext context) {
-        List<FaninScmMaterial> scmMaterials = new ArrayList<FaninScmMaterial>();
+        List<FaninScmMaterial> scmMaterials = new ArrayList<>();
         PipelineTimeline pipelineTimeline = context.pipelineTimeline;
-        Queue<PipelineTimelineEntry.Revision> revisionQueue = new ConcurrentLinkedQueue<PipelineTimelineEntry.Revision>();
+        Queue<PipelineTimelineEntry.Revision> revisionQueue = new ConcurrentLinkedQueue<>();
         DependencyMaterialConfig dependencyMaterial = (DependencyMaterialConfig) materialConfig;
         PipelineTimelineEntry entry = pipelineTimeline.instanceFor(dependencyMaterial.getPipelineName(), totalInstanceCount - n);
 
+        Set<CaseInsensitiveString> visitedNodes = new HashSet<>();
+
         StageIdentifier dependentStageIdentifier = dependentStageIdentifier(context, entry, CaseInsensitiveString.str(dependencyMaterial.getStageName()));
         if (!StageIdentifier.NULL.equals(dependentStageIdentifier)) {
-            addToRevisionQueue(entry, revisionQueue, scmMaterials, context);
+            addToRevisionQueue(entry, revisionQueue, scmMaterials, context, visitedNodes);
         } else {
             return null;
         }
@@ -170,29 +150,24 @@ public class DependencyFanInNode extends FanInNode {
             PipelineTimelineEntry.Revision revision = revisionQueue.poll();
             DependencyMaterialRevision dmr = DependencyMaterialRevision.create(revision.revision, null);
             PipelineTimelineEntry pte = pipelineTimeline.getEntryFor(new CaseInsensitiveString(dmr.getPipelineName()), dmr.getPipelineCounter());
-            addToRevisionQueue(pte, revisionQueue, scmMaterials, context);
+            addToRevisionQueue(pte, revisionQueue, scmMaterials, context, visitedNodes);
         }
 
-        return new Pair<StageIdentifier, List<FaninScmMaterial>>(dependentStageIdentifier, scmMaterials);
+        return new Pair<>(dependentStageIdentifier, scmMaterials);
     }
 
     private boolean validateAllScmRevisionsAreSameWithinAFingerprint(Pair<StageIdentifier, List<FaninScmMaterial>> pIdScmPair) {
         if (pIdScmPair == null) {
             return false;
         }
+        Map<FaninScmMaterial, PipelineTimelineEntry.Revision> versionsByMaterial = new HashMap<>();
         List<FaninScmMaterial> scmMaterialList = pIdScmPair.last();
         for (final FaninScmMaterial scmMaterial : scmMaterialList) {
-            Collection<FaninScmMaterial> scmMaterialOfSameFingerprint = CollectionUtils.select(scmMaterialList, new Predicate() {
-                @Override
-                public boolean evaluate(Object o) {
-                    return scmMaterial.equals(o);
-                }
-            });
-
-            for (FaninScmMaterial faninScmMaterial : scmMaterialOfSameFingerprint) {
-                if (!faninScmMaterial.revision.equals(scmMaterial.revision)) {
-                    return false;
-                }
+            PipelineTimelineEntry.Revision revision = versionsByMaterial.get(scmMaterial);
+            if (revision == null) {
+                versionsByMaterial.put(scmMaterial, scmMaterial.revision);
+            } else if (!revision.equals(scmMaterial.revision)) {
+                return false;
             }
         }
         return true;
@@ -200,12 +175,12 @@ public class DependencyFanInNode extends FanInNode {
 
     private void validateIfRevisionMatchesTheCurrentConfigAndUpdateTheMaterialMap(FanInGraphContext context, Pair<StageIdentifier, List<FaninScmMaterial>> stageIdentifierScmPair) {
         final Set<MaterialConfig> currentScmMaterials = context.pipelineScmDepMap.get(materialConfig);
-        final Set<FaninScmMaterial> scmMaterials = new HashSet<FaninScmMaterial>(stageIdentifierScmPair.last());
-        final Set<String> currentScmFingerprint = new HashSet<String>();
+        final Set<FaninScmMaterial> scmMaterials = new HashSet<>(stageIdentifierScmPair.last());
+        final Set<String> currentScmFingerprint = new HashSet<>();
         for (MaterialConfig currentScmMaterial : currentScmMaterials) {
             currentScmFingerprint.add(currentScmMaterial.getFingerprint());
         }
-        final Set<String> scmMaterialsFingerprint = new HashSet<String>();
+        final Set<String> scmMaterialsFingerprint = new HashSet<>();
         for (FaninScmMaterial scmMaterial : scmMaterials) {
             scmMaterialsFingerprint.add(scmMaterial.fingerprint);
         }
@@ -229,7 +204,7 @@ public class DependencyFanInNode extends FanInNode {
     }
 
     private void addToRevisionQueue(PipelineTimelineEntry entry, Queue<PipelineTimelineEntry.Revision> revisionQueue, List<FaninScmMaterial> scmMaterials,
-                                    FanInGraphContext context) {
+                                    FanInGraphContext context, Set<CaseInsensitiveString> visitedNodes) {
         for (Map.Entry<String, List<PipelineTimelineEntry.Revision>> revisionList : entry.revisions().entrySet()) {
             String fingerprint = revisionList.getKey();
             PipelineTimelineEntry.Revision revision = revisionList.getValue().get(0);
@@ -238,8 +213,9 @@ public class DependencyFanInNode extends FanInNode {
                 continue;
             }
 
-            if (isDependencyMaterial(fingerprint, context)) {
+            if (isDependencyMaterial(fingerprint, context) && !visitedNodes.contains(new CaseInsensitiveString(revision.revision))) {
                 revisionQueue.add(revision);
+                visitedNodes.add(new CaseInsensitiveString(revision.revision));
             }
         }
     }
@@ -266,11 +242,11 @@ public class DependencyFanInNode extends FanInNode {
         if (!stageIdentifierScmMaterial.get(currentRevision).contains(revisionToSet.faninScmMaterial)) {
             return RevisionAlteration.NOT_APPLICABLE;
         }
-        ArrayList<StageIdentifier> stageIdentifiers = new ArrayList<StageIdentifier>(stageIdentifierScmMaterial.keySet());
+        List<StageIdentifier> stageIdentifiers = new ArrayList<>(stageIdentifierScmMaterial.keySet());
         int currentRevIndex = stageIdentifiers.indexOf(currentRevision);
         for (int i = currentRevIndex; i < stageIdentifiers.size(); i++) {
             final StageIdentifier key = stageIdentifiers.get(i);
-            final List<FaninScmMaterial> materials = new ArrayList<FaninScmMaterial>(stageIdentifierScmMaterial.get(key));
+            final List<FaninScmMaterial> materials = new ArrayList<>(stageIdentifierScmMaterial.get(key));
             final int index = materials.indexOf(revisionToSet.faninScmMaterial);
             if (index == -1) {
                 return ALL_OPTIONS_EXHAUSTED;
@@ -293,7 +269,7 @@ public class DependencyFanInNode extends FanInNode {
     }
 
     public List<StageIdFaninScmMaterialPair> getCurrentFaninScmMaterials() {
-        List<StageIdFaninScmMaterialPair> stageIdScmPairs = new ArrayList<StageIdFaninScmMaterialPair>();
+        List<StageIdFaninScmMaterialPair> stageIdScmPairs = new ArrayList<>();
         Set<FaninScmMaterial> faninScmMaterials = stageIdentifierScmMaterial.get(currentRevision);
         for (FaninScmMaterial faninScmMaterial : faninScmMaterials) {
             StageIdFaninScmMaterialPair pIdScmPair = new StageIdFaninScmMaterialPair(currentRevision, faninScmMaterial);

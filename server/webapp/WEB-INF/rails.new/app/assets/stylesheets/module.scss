@@ -783,7 +783,7 @@ span.contextual_help.stage_approval{
 }
 
 a.add_item {
-    padding: 8px 5px 0 22px;
+    padding: 8px 5px 5px 22px;
     background: image_url('g9/icon_add_16.png') no-repeat 1px 5px;
     display: block;
     width: 80px;
@@ -2311,6 +2311,7 @@ label.label_with_help {
 
 .environment_variables_section #add_variables{
   float: none;
+  margin: 0;
 }
 
 
@@ -2384,10 +2385,6 @@ li.menu_item_last_with_border {
 #group_summary .list_aggregation,
 #user_summary .list_aggregation, #template_summary .list_aggregation {
     margin-top: 0;
-}
-
-input.searchbox.ac_loading {
-    background-image: image_url('g9/icons/spinny_white_16.gif');
 }
 
 #search_users_table {
@@ -2647,6 +2644,20 @@ li.task_property {
     opacity: 0.7;
 }
 
+.vsm-entity .warning {
+    background: image_url('g9/icons/icon_warning_16.png') no-repeat 0 0;
+    color: red;
+    padding-bottom: inherit;
+    font-weight: bold;
+    padding-left: 21px;
+    line-height: 20px;
+}
+
+.vsm-entity.conflicts {
+    border-color: red;
+    border-width: medium;
+}
+
 .vsm-entity h3 a {
     cursor: pointer;
 }
@@ -2877,6 +2888,9 @@ li.task_property {
     overflow: hidden;
     padding: 7px;
     text-overflow: ellipsis;
+    &.instance{
+        border-left: 2px solid #94399E;
+    }
 }
 
 #vsm-container > .instances li:first-child{
@@ -2886,7 +2900,7 @@ li.task_property {
     margin-top: -14px;
 }
 
-#vsm-container > .instances li:nth-child(2) {
+#vsm-container > .instances > .material_revision_header {
     border: 0 none;
     font-weight: bold;
     background-color: #eee;
@@ -3068,7 +3082,7 @@ li.task_property {
     width: 16px;
     height: 16px;
     float: right;
-    background: image_url('andare/ico-16x16.png') no-repeat scroll 0px -140px #F8F8F8;
+    background: image_url('andare/ico-16x16.png') no-repeat scroll 0px -140px transparent;
     text-indent: -6000px;
     margin: 8px 5px 5px 0px;
 }
@@ -3232,66 +3246,3 @@ ul.variables:after,
     visibility: hidden;
 }
 
-
-
-//<!--[if IE 7]>
-//
-//             *+html ul.variables,
-//             *+html .environments .stages,
-//             *+html .change_materials .materials,
-//             *+html .change_materials,
-//             *+html .environment .pipeline .deploy,
-//             *+html .page_title_bar .other_runs li,
-//             *+html .overview_widget,
-//             *+html .overview_widget .job_grouping,
-//             *+html .stage_history .stage,
-//             *+html .pipeline_bundle,
-//             *+html .pipeline_bundle .pipeline .title,
-//             *+html .pipeline_bundle .pipeline .pipeline_instance_details,
-//             *+html .pipeline_bundle .pipeline .previously,
-//             *+html #pipeline_visualization,
-//             *+html #pipelines .pipelines_selector,
-//             *+html #ajax_agents_header
-//             *+html .pipeline,
-//             *+html .pipeline_bundle .pipeline_operations,
-//             *+html #user_summary h1,
-//             *+html #oauth_page .certificate_details dl
-//             {
-//               display: inline-block;
-//               zoom: 1;
-//             }
-//<![endif]-->
-//
-//<!--[if IE 8]>
-//
-//<style type="text/css">
-//                      ul.variables,
-//                      .environments .stages,
-//                      .change_materials .materials,
-//                      .change_materials,
-//                      .environment .pipeline .deploy,
-//                      .page_title_bar .other_runs li,
-//                      .overview_widget,
-//                      .overview_widget .job_grouping,
-//                      .stage_history .stage,
-//                      .pipeline_bundle,
-//                      .pipeline_bundle .pipeline .title,
-//                      .pipeline_bundle .pipeline .pipeline_instance_details,
-//                      .pipeline_bundle .pipeline .previously,
-//                      #pipeline_visualization,
-//                      #pipelines .pipelines_selector,
-//                      #ajax_agents_header,
-//                      .pipeline,
-//                      .pipeline_bundle .pipeline_operations,
-//                      #user_summary h1,
-//                      #oauth_page .certificate_details dl {
-//                        zoom: 1; /* triggers hasLayout */
-//                        display: block; /* resets display for IE/Win */
-//                        height: 1%;
-//                      }
-//
-///* Only IE can see inside the conditional comment
-//and read this CSS rule. Don't ever use a normal HTML
-//comment inside the CC or it will close prematurely. */
-//</style>
-//<![endif]-->

@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import com.thoughtworks.go.config.remote.ConfigOrigin;
+import com.thoughtworks.go.config.remote.ConfigOriginTraceable;
 import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.domain.config.Admin;
 import com.thoughtworks.go.util.StringUtil;
@@ -27,7 +29,7 @@ import com.thoughtworks.go.util.StringUtil;
 import static java.util.Collections.sort;
 
 @ConfigTag("authorization")
-public class Authorization implements Validatable, ParamsAttributeAware {
+public class Authorization implements Validatable, ParamsAttributeAware, ConfigOriginTraceable {
     @ConfigSubtag
     private ViewConfig viewConfig = new ViewConfig();
 
@@ -43,6 +45,18 @@ public class Authorization implements Validatable, ParamsAttributeAware {
     public static final String VALUE = "value";
     public static final String PRIVILEGE_TYPE = "privilege_type";
     public static final String TYPE = "type";
+
+    private ConfigOrigin origin;
+
+    @Override
+    public ConfigOrigin getOrigin() {
+        return origin;
+    }
+
+    @Override
+    public void setOrigins(ConfigOrigin origins) {
+        origin = origins;
+    }
 
     public static enum UserType {
         USER {
@@ -155,7 +169,7 @@ public class Authorization implements Validatable, ParamsAttributeAware {
     }
 
     public List<PrivilegeType> privilagesOfRole(final CaseInsensitiveString roleName){
-        List<PrivilegeType> result = new ArrayList<PrivilegeType>();
+        List<PrivilegeType> result = new ArrayList<>();
         if (isRoleAnAdmin(roleName)){
             result.add(PrivilegeType.ADMIN);
         }
@@ -316,7 +330,7 @@ public class Authorization implements Validatable, ParamsAttributeAware {
     }
 
     public List<PresentationElement> getUserAuthorizations() {
-        ArrayList<PresentationElement> list = new ArrayList<PresentationElement>();
+        ArrayList<PresentationElement> list = new ArrayList<>();
         Class<AdminUser> allowOnly = AdminUser.class;
         addPrivilegesForView(list, operationConfig, PrivilegeType.OPERATE, allowOnly, UserType.USER);
         addPrivilegesForView(list, viewConfig, PrivilegeType.VIEW, allowOnly, UserType.USER);
@@ -326,7 +340,7 @@ public class Authorization implements Validatable, ParamsAttributeAware {
     }
 
     public List<PresentationElement> getRoleAuthorizations() {
-        ArrayList<PresentationElement> list = new ArrayList<PresentationElement>();
+        ArrayList<PresentationElement> list = new ArrayList<>();
         Class<AdminRole> onlyOfType = AdminRole.class;
         addPrivilegesForView(list, operationConfig, PrivilegeType.OPERATE, onlyOfType, UserType.ROLE);
         addPrivilegesForView(list, viewConfig, PrivilegeType.VIEW, onlyOfType, UserType.ROLE);

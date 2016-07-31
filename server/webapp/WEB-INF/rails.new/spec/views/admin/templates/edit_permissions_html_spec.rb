@@ -14,13 +14,13 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe "admin/templates/edit_permissions.html.erb" do
   include GoUtil, ReflectiveUtil
 
   before(:each) do
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     set(@cruise_config, "md5", "abcd1234")
 
     @template = PipelineTemplateConfigMother.createTemplate('some_template')

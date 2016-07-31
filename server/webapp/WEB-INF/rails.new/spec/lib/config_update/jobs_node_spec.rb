@@ -14,14 +14,14 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe ::ConfigUpdate::JobsNode do
   include ::ConfigUpdate::JobsNode
 
   before(:each) do
     allow(self).to receive(:params).and_return(@params = {})
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     @cruise_config.addPipeline("go-group", pipeline = PipelineConfigMother.createPipelineConfig("pipeline", "stage", ["foo", "bar", "baz"].to_java(java.lang.String)))
     @jobs = pipeline.getStage(CaseInsensitiveString.new("stage")).getJobs()
   end

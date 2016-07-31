@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe "_form.html.erb" do
   include GoUtil, FormUI
@@ -23,7 +23,7 @@ describe "_form.html.erb" do
     @material_config = DependencyMaterialConfig.new(CaseInsensitiveString.new("up-pipeline"), CaseInsensitiveString.new("up-stage"))
     @material_config.setName(CaseInsensitiveString.new("Dependency Material Name"))
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     set(@cruise_config, "md5", "abc")
   end
 

@@ -24,7 +24,7 @@ class Admin::PipelineGroupsController < AdminController
   layout "admin", :except => [:new, :create]
 
   def new
-    assert_load :group, PipelineConfigs.new
+    assert_load :group, BasicPipelineConfigs.new
     render layout: false
   end
 
@@ -37,7 +37,7 @@ class Admin::PipelineGroupsController < AdminController
   end
 
   def create
-    assert_load :group, PipelineConfigs.new
+    assert_load :group, BasicPipelineConfigs.new
     save_popup(params[:config_md5], Class.new(::ConfigUpdate::SaveAsSuperAdmin) do
       include ::ConfigUpdate::CruiseConfigNode
 
@@ -195,6 +195,6 @@ class Admin::PipelineGroupsController < AdminController
   end
 
   def load_config_for_edit
-    assert_load(:cruise_config, CLONER.deepClone(go_config_service.getConfigForEditing()))
+    assert_load(:cruise_config, go_config_service.getMergedConfigForEditing())
   end
 end

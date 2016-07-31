@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,21 +12,23 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.web;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
-
 import com.thoughtworks.go.config.CaseInsensitiveString;
+import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.service.SecurityService;
 import com.thoughtworks.go.server.util.UserHelper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import static javax.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
 
 @Controller
 public class AuthorizationInterceptor implements HandlerInterceptor {
@@ -45,9 +47,10 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
 
         String pipelineName = request.getParameter("pipelineName");
         if (pipelineName != null) {
-            String userName = CaseInsensitiveString.str(UserHelper.getUserName().getUsername());
+            Username username = UserHelper.getUserName();
+            String name = CaseInsensitiveString.str(username.getUsername());
             if (request.getMethod().equalsIgnoreCase("get")) {
-                if (!securityService.hasViewPermissionForPipeline(userName, pipelineName)) {
+                if (!securityService.hasViewPermissionForPipeline(username, pipelineName)) {
                     response.sendError(SC_UNAUTHORIZED);
                     return false;
                 }
@@ -55,20 +58,15 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
                 if (isEditingConfigurationRequest(request)) {
                     return true;
                 }
-                
+
                 String stageName = request.getParameter("stageName");
                 if (stageName != null) {
-                    if (!securityService.hasOperatePermissionForStage(pipelineName, stageName, userName)) {
+                    if (!securityService.hasOperatePermissionForStage(pipelineName, stageName, name)) {
                         response.sendError(SC_UNAUTHORIZED);
                         return false;
                     }
                 } else {
-                    if (isForcePipelineRequest(request)) {
-                        if (!securityService.hasOperatePermissionForFirstStage(pipelineName, userName)) {
-                            response.sendError(SC_UNAUTHORIZED);
-                            return false;
-                        }
-                    } else if (!securityService.hasOperatePermissionForPipeline(new CaseInsensitiveString(userName), pipelineName)) {
+                    if (!securityService.hasOperatePermissionForPipeline(username.getUsername(), pipelineName)) {
                         response.sendError(SC_UNAUTHORIZED);
                         return false;
                     }
@@ -79,11 +77,7 @@ public class AuthorizationInterceptor implements HandlerInterceptor {
     }
 
     private boolean isEditingConfigurationRequest(HttpServletRequest request) {
-        return request.getRequestURI().indexOf("/admin/restful/configuration") != -1;
-    }
-
-    private boolean isForcePipelineRequest(HttpServletRequest request) {
-        return request.getRequestURI().endsWith("/force");
+        return request.getRequestURI().contains("/admin/restful/configuration");
     }
 
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,

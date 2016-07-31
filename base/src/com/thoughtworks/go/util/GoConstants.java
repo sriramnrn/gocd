@@ -1,18 +1,18 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.util;
 
@@ -45,6 +45,7 @@ public class GoConstants {
     public static final String ERROR_FOR_GLOBAL_MESSAGE = "global_error_message";
     public static final String SUCCESS_MESSAGE = "success_message";
     public static final String RESPONSE_CHARSET = "text/plain; charset=utf-8";
+    public static final String RESPONSE_CHARSET_JSON = "application/json; charset=utf-8";
     public static final String CRUISE_PIPELINE_LABEL = "cruise_pipeline_label";
     public static final String CRUISE_PIPELINE_COUNTER = "cruise_pipeline_counter";
     public static final String CRUISE_STAGE_COUNTER = "cruise_stage_counter";
@@ -54,17 +55,10 @@ public class GoConstants {
     public static final String CRUISE_JOB_ID = "cruise_job_id";
     public static final String CRUISE_TIMESTAMP = "cruise_timestamp_";
     public static final String THOUGHTWORKS_LICENSE_URL = "http://www.thoughtworks.com/products/go-continuous-delivery/compare";
-    public static final String CRUISE_FREE = "<a href='" + THOUGHTWORKS_LICENSE_URL
-            + "' target='_license'>Go Community Edition</a>";
-    public static final String EXPIRY_DATE = "expiry_date";
-    public static final String MAX_AGENTS = "max_agents";
-    public static final String MAX_USERS = "max_users";
-    public static final String EDITION = "edition";
-    public static final String SUCCESSFULLY_CHANGED_LICENSE = "Your license has been updated successfully.";
 
     public static final String PRODUCT_NAME = "go";
 
-    public static final int CONFIG_SCHEMA_VERSION = 74;
+    public static final int CONFIG_SCHEMA_VERSION = 84;
 
     public static final String APPROVAL_SUCCESS = "success";
     public static final String APPROVAL_MANUAL = "manual";

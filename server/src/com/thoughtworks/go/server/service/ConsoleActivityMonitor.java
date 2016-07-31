@@ -18,6 +18,7 @@ package com.thoughtworks.go.server.service;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.thoughtworks.go.domain.JobIdentifier;
 import com.thoughtworks.go.domain.JobInstance;
@@ -41,19 +42,19 @@ public class ConsoleActivityMonitor {
     private final JobInstanceService jobInstanceService;
     private final ServerHealthService serverHealthService;
     private final GoConfigService goConfigService;
-    private final ArtifactsService artifactService;
-    private final ConcurrentHashMap<JobIdentifier, Long> jobLastActivityMap;
+    private ConsoleService consoleService;
+    private final ConcurrentMap<JobIdentifier, Long> jobLastActivityMap;
     private final long warningThreshold;
 
     @Autowired
     public ConsoleActivityMonitor(TimeProvider timeProvider, SystemEnvironment systemEnvironment, JobInstanceService jobInstanceService, ServerHealthService serverHealthService,
-                                  GoConfigService goConfigService, ArtifactsService artifactService) {
+                                  GoConfigService goConfigService, ConsoleService consoleService) {
         this.timeProvider = timeProvider;
         this.jobInstanceService = jobInstanceService;
         this.serverHealthService = serverHealthService;
         this.goConfigService = goConfigService;
-        this.artifactService = artifactService;
-        this.jobLastActivityMap = new ConcurrentHashMap<JobIdentifier, Long>();
+        this.consoleService = consoleService;
+        this.jobLastActivityMap = new ConcurrentHashMap<>();
         warningThreshold = systemEnvironment.getUnresponsiveJobWarningThreshold();
         jobInstanceService.registerJobStateChangeListener(new ActiveJobListener(this));
     }
@@ -82,7 +83,7 @@ public class ConsoleActivityMonitor {
             if (shouldCancelHungJob(jobIdentifier, difference)) {
                 scheduleService.cancelJob(jobIdentifier);
                 try {
-                    artifactService.appendToConsoleLog(jobIdentifier,
+                    consoleService.appendToConsoleLog(jobIdentifier,
                             String.format("Go cancelled this job as it has not generated any console output for more than %s minute(s)", inMinutes(jobTerminationThreshold(jobIdentifier))));
                 } catch (Exception e) {
                     LOGGER.error(String.format("Failed to update console log with reason for cancelling hung job '%s'", jobIdentifier.buildLocator()), e);
@@ -100,7 +101,7 @@ public class ConsoleActivityMonitor {
 
     private void addJobHungWarning(JobIdentifier jobIdentifier, long difference) {
         String namespacedJob = String.format("%s/%s/%s", jobIdentifier.getPipelineName(), jobIdentifier.getStageName(), jobIdentifier.getBuildName());
-        serverHealthService.update(ServerHealthState.warning(
+        serverHealthService.update(ServerHealthState.warningWithHtml(
                 String.format("Job '%s' is not responding", namespacedJob),
                 String.format("Job <a href='/go/tab/build/detail/%s'>%s</a> is currently running but has not shown any console activity in the last %s minute(s). This job may be hung.",
                         jobIdentifier.buildLocator(), namespacedJob, inMinutes(difference)),

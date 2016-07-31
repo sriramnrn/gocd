@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/* ************************GO-LICENSE-START*********************************
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,13 +12,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ * ************************GO-LICENSE-END***********************************/
 
 package com.thoughtworks.go.server.controller;
-
-import java.util.ArrayList;
-import java.util.List;
-import javax.servlet.http.HttpServletRequest;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.PipelineConfigs;
@@ -29,6 +25,7 @@ import com.thoughtworks.go.domain.User;
 import com.thoughtworks.go.helper.PipelineConfigMother;
 import com.thoughtworks.go.i18n.Localizer;
 import com.thoughtworks.go.server.domain.Username;
+import com.thoughtworks.go.server.service.PipelineConfigService;
 import com.thoughtworks.go.server.service.SecurityService;
 import com.thoughtworks.go.server.service.UserService;
 import com.thoughtworks.go.util.GoConstants;
@@ -36,6 +33,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.springframework.web.servlet.ModelAndView;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
@@ -48,6 +49,7 @@ public class MyGoControllerTest {
     public static final long USERID = 1L;
     @Mock UserService userService;
     @Mock SecurityService securityService;
+    @Mock PipelineConfigService pipelineConfigService;
     @Mock Localizer localizer;
     private MyGoController controller;
 
@@ -55,7 +57,7 @@ public class MyGoControllerTest {
     public void setUp() throws Exception {
         initMocks(this);
 
-        controller = new MyGoControllerWithMockedUser(userService, securityService, localizer);
+        controller = new MyGoControllerWithMockedUser(userService, pipelineConfigService, localizer);
     }
 
     @Test
@@ -72,7 +74,7 @@ public class MyGoControllerTest {
         groups.add(PipelineConfigMother.createGroup("g1", PipelineConfigMother.createPipelineConfigWithStages("PIPELINE2-1", "stage2-1")));
         groups.add(PipelineConfigMother.createGroup("g1", PipelineConfigMother.createPipelineConfigWithStages("pipeline1-1", "stage1-1", "stage1-2")));
 
-        when(securityService.viewableGroupsFor(new Username(new CaseInsensitiveString(user.getName())))).thenReturn(groups);
+        when(pipelineConfigService.viewableGroupsFor(new Username(new CaseInsensitiveString(user.getName())))).thenReturn(groups);
 
         ModelAndView modelAndView = controller.handleRequest(null, request);
 
@@ -90,8 +92,8 @@ public class MyGoControllerTest {
     }
 
     private class MyGoControllerWithMockedUser extends MyGoController {
-        public MyGoControllerWithMockedUser(UserService userService, SecurityService securityService, Localizer localizer) {
-            super(userService, securityService, localizer);
+        public MyGoControllerWithMockedUser(UserService userService, PipelineConfigService pipelineConfigService, Localizer localizer) {
+            super(userService, pipelineConfigService, localizer);
         }
 
         @Override

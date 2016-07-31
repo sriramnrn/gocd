@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import java.util.List;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -59,6 +60,36 @@ public class ApiBasedPackageRepositoryExtensionTest {
         RepositoryConfiguration repositoryConfiguration = new RepositoryConfiguration();
         when(packageMaterialConfiguration.getRepositoryConfiguration()).thenReturn(repositoryConfiguration);
         assertThat(extension.getRepositoryConfiguration(PLUGIN_ID), is(repositoryConfiguration));
+    }
+
+    @Test
+    public void shouldThrowExceptionForPluginSettingsConfiguration() {
+        try {
+            extension.getPluginSettingsConfiguration(PLUGIN_ID);
+            fail("should have thrown up");
+        } catch (Exception e) {
+            assertThat(e.getMessage(), is("not implemented"));
+        }
+    }
+
+    @Test
+    public void shouldThrowExceptionForPluginSettingsView() {
+        try {
+            extension.getPluginSettingsView(PLUGIN_ID);
+            fail("should have thrown up");
+        } catch (Exception e) {
+            assertThat(e.getMessage(), is("not implemented"));
+        }
+    }
+
+    @Test
+    public void shouldThrowExceptionForValidatePluginSettings() {
+        try {
+            extension.validatePluginSettings(PLUGIN_ID, null);
+            fail("should have thrown up");
+        } catch (Exception e) {
+            assertThat(e.getMessage(), is("not implemented"));
+        }
     }
 
     @Test
@@ -117,7 +148,7 @@ public class ApiBasedPackageRepositoryExtensionTest {
         RepositoryConfiguration repositoryConfiguration = new RepositoryConfiguration();
         PackageRevision previousPackageRevision = new PackageRevision("r1", null, "user");
         PackageRevision packageRevision = new PackageRevision("r1", null, "user");
-        when(packageMaterialPoller.latestModificationSince(packageConfiguration, repositoryConfiguration,previousPackageRevision)).thenReturn(packageRevision);
+        when(packageMaterialPoller.latestModificationSince(packageConfiguration, repositoryConfiguration, previousPackageRevision)).thenReturn(packageRevision);
         assertThat(extension.latestModificationSince(PLUGIN_ID, packageConfiguration, repositoryConfiguration, previousPackageRevision), is(packageRevision));
     }
 
@@ -157,11 +188,15 @@ public class ApiBasedPackageRepositoryExtensionTest {
             }
 
             @Override
-            public void startPluginInfrastructure() {
+            public void startInfrastructure() {
             }
 
             @Override
-            public void stopPluginInfrastructure() {
+            public void registerPluginsFolderChangeListener() {
+            }
+
+            @Override
+            public void stopInfrastructure() {
 
             }
 

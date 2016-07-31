@@ -1,18 +1,18 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
@@ -32,6 +32,7 @@ import com.thoughtworks.go.plugin.infra.PluginManager;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
 import com.thoughtworks.go.server.dao.JobInstanceDao;
 import com.thoughtworks.go.server.domain.JobStatusListener;
+import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.messaging.JobResultMessage;
 import com.thoughtworks.go.server.messaging.JobResultTopic;
 import com.thoughtworks.go.server.service.result.OperationResult;
@@ -88,7 +89,7 @@ public class JobInstanceService implements JobPlanLoader {
         this.goConfigService = goConfigService;
 		this.securityService = securityService;
         this.pluginManager = pluginManager;
-        this.listeners = new ArrayList<JobStatusListener>(Arrays.asList(listener));
+        this.listeners = new ArrayList<>(Arrays.asList(listener));
     }
 
     public JobInstances latestCompletedJobs(String pipelineName, String stageName, String jobConfigName) {
@@ -104,7 +105,7 @@ public class JobInstanceService implements JobPlanLoader {
 			result.notFound("Not Found", "Pipeline not found", HealthStateType.general(HealthStateScope.GLOBAL));
 			return null;
 		}
-		if (!securityService.hasViewPermissionForPipeline(username, pipelineName)) {
+		if (!securityService.hasViewPermissionForPipeline(Username.valueOf(username), pipelineName)) {
 			result.unauthorized("Unauthorized", NOT_AUTHORIZED_TO_VIEW_PIPELINE, HealthStateType.general(HealthStateScope.forPipeline(pipelineName)));
 			return null;
 		}
@@ -175,7 +176,7 @@ public class JobInstanceService implements JobPlanLoader {
             public void afterCommit() {
                 List<JobStatusListener> listeners1;
                 synchronized (LISTENERS_MODIFICATION_MUTEX) {
-                    listeners1 = new ArrayList<JobStatusListener>(listeners);
+                    listeners1 = new ArrayList<>(listeners);
                 }
                 for (JobStatusListener jobStatusListener : listeners1) {
                     try {
@@ -213,9 +214,9 @@ public class JobInstanceService implements JobPlanLoader {
 
     public List<WaitingJobPlan> waitingJobPlans() {
         List<JobPlan> jobPlans = orderedScheduledBuilds();
-        List<WaitingJobPlan> waitingJobPlans = new ArrayList<WaitingJobPlan>();
+        List<WaitingJobPlan> waitingJobPlans = new ArrayList<>();
         for (JobPlan jobPlan : jobPlans) {
-            String envForJob = environmentConfigService.envForJob(jobPlan.getPipelineName());
+            String envForJob = environmentConfigService.envForPipeline(jobPlan.getPipelineName());
             waitingJobPlans.add(new WaitingJobPlan(jobPlan, envForJob));
         }
         return waitingJobPlans;
@@ -333,7 +334,7 @@ public class JobInstanceService implements JobPlanLoader {
 		return new JobInstancesModel(new JobInstances(jobInstances), pagination);
 	}
 
-	public static enum JobHistoryColumns {
+	public enum JobHistoryColumns {
         pipeline("pipelineName"), stage("stageName"), job("name"), result("result"), completed("lastTransitionTime");
 
         private final String columnName;

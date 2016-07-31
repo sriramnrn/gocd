@@ -30,7 +30,6 @@ import com.thoughtworks.go.remote.work.ConsoleOutputTransmitter;
 import com.thoughtworks.go.server.service.AgentRuntimeInfo;
 import com.thoughtworks.go.util.GoConstants;
 import com.thoughtworks.go.util.SystemUtil;
-import com.thoughtworks.go.util.TimeProvider;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -44,7 +43,6 @@ public class DefaultGoPublisher implements GoPublisher {
     private final AgentRuntimeInfo agentRuntimeInfo;
     private ConsoleOutputTransmitter consoleOutputTransmitter;
     private static final Log LOG = LogFactory.getLog(DefaultGoPublisher.class);
-    private TimeProvider timeProvider = new TimeProvider();
     private String currentWorkingDirectory = SystemUtil.currentWorkingDirectory();
 
     public DefaultGoPublisher(GoArtifactsManipulator manipulator, JobIdentifier jobIdentifier,
@@ -119,13 +117,8 @@ public class DefaultGoPublisher implements GoPublisher {
     }
 
     public void reportAction(String action) {
-        String message = String.format("\n[%s] %s %s on %s [%s] at %s",
-                GoConstants.PRODUCT_NAME,
-                action,
-                jobIdentifier.buildLocatorForDisplay(),
-                agentIdentifier.getHostName(),
-                currentWorkingDirectory,
-                timeProvider.currentTime());
+        String message = String.format("[%s] %s %s on %s [%s]", GoConstants.PRODUCT_NAME, action, jobIdentifier.buildLocatorForDisplay(),
+                agentIdentifier.getHostName(), currentWorkingDirectory);
         if (LOG.isDebugEnabled()) {
             LOG.debug(message);
         }
@@ -134,7 +127,7 @@ public class DefaultGoPublisher implements GoPublisher {
 
     @Override
     public void consumeLineWithPrefix(String message) {
-        consumeLine(String.format("\n[%s] %s", GoConstants.PRODUCT_NAME, message));
+        consumeLine(String.format("[%s] %s", GoConstants.PRODUCT_NAME, message));
     }
 
     @Override

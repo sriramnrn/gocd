@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,16 @@
 
 package com.thoughtworks.go.util;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.StringReader;
-import java.net.URL;
-import java.util.regex.Pattern;
-
 import org.jdom.Document;
 import org.jdom.Element;
 import org.jdom.JDOMException;
 import org.jdom.input.SAXBuilder;
 import org.jdom.output.Format;
 import org.jdom.output.XMLOutputter;
+
+import java.io.*;
+import java.net.URL;
+import java.util.regex.Pattern;
 
 public class XmlUtils {
     public static void writeXml(Document document, OutputStream outputStream) throws IOException {
@@ -46,46 +42,23 @@ public class XmlUtils {
         xmlOutputer().output(element, outputStream);
     }
 
-    public static Element validate(InputStream inputStream, URL resource, XsdErrorTranslator errorHandler, SAXBuilder builder, String xsds) throws Exception {
-        builder.setFeature("http://apache.org/xml/features/validation/schema", true);
-        builder.setProperty("http://apache.org/xml/properties/schema/external-noNamespaceSchemaLocation", resource.toURI().toString());
-        builder.setProperty("http://apache.org/xml/properties/schema/external-schemaLocation", xsds);
-        builder.setValidation(true);
+    public static Document buildXmlDocument(InputStream inputStream, URL resource, String xsds) throws Exception {
+        return buildXmlDocument(inputStream, new ValidatingSaxBuilder(resource, xsds));
+    }
+
+    public static Document buildXmlDocument(String xmlContent, URL resource) throws Exception {
+        return buildXmlDocument(new ByteArrayInputStream(xmlContent.getBytes()), new ValidatingSaxBuilder(resource));
+    }
+
+    private static Document buildXmlDocument(InputStream inputStream, SAXBuilder builder) throws JDOMException, IOException {
+        XsdErrorTranslator errorHandler = new XsdErrorTranslator();
         builder.setErrorHandler(errorHandler);
+
         Document cruiseRoot = builder.build(inputStream);
         if (errorHandler.hasValidationError()) {
             throw new XsdValidationException(errorHandler.translate());
         }
-        return cruiseRoot.getRootElement();
-    }
-
-    public static Element validate(String xmlContent, URL resource, XsdErrorTranslator errorHandler, SAXBuilder builder) {
-        Document documentRoot = null;
-        try {
-            builder.setFeature("http://apache.org/xml/features/validation/schema", true);
-            builder.setProperty("http://apache.org/xml/properties/schema/external-noNamespaceSchemaLocation", resource.toURI().toString());
-            builder.setValidation(true);
-            builder.setErrorHandler(errorHandler);
-            documentRoot = builder.build(new StringReader(xmlContent));
-        } catch (Exception e) {
-            throw new XsdValidationException(e.getMessage());
-        }
-
-        if (errorHandler.hasValidationError()) {
-            throw new XsdValidationException(errorHandler.translate());
-        }
-        return documentRoot.getRootElement();
-    }
-
-    public static String asXml(Document document) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        writeXml(document, buffer);
-        return buffer.toString();
-    }
-
-    public static Document buildXmlDocument(String content) throws JDOMException, IOException {
-        SAXBuilder saxBuilder = new SAXBuilder();
-        return saxBuilder.build(new StringReader(content));
+        return cruiseRoot;
     }
 
     public static boolean doesNotMatchUsingXsdRegex(Pattern pattern, String textToMatch) {

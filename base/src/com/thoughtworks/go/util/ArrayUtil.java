@@ -16,12 +16,12 @@
 
 package com.thoughtworks.go.util;
 
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang.StringUtils;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
-import org.apache.commons.lang.ArrayUtils;
-import org.apache.commons.lang.StringUtils;
 
 public class ArrayUtil {
     private ArrayUtil() {
@@ -42,7 +42,8 @@ public class ArrayUtil {
     }
 
     public static <T> String join(T[] array, String separator) {
-        StringBuffer buffer = new StringBuffer();
+        if(array == null) return null;
+        StringBuilder buffer = new StringBuilder();
         for (int i = 0; i < array.length; i++) {
             T t = array[i];
             buffer.append(t.toString());
@@ -57,18 +58,25 @@ public class ArrayUtil {
      * Much like Arrays.asList, except the list is not fixed size.
      */
     public static <T> List<T> asList(T... a) {
-        if (a == null) { return new ArrayList<T>(); }
-        
-        ArrayList<T> list = new ArrayList<T>(a.length);
+        if (a == null) { return new ArrayList<>(); }
+
+        ArrayList<T> list = new ArrayList<>(a.length);
         list.addAll(Arrays.asList(a));
         return list;
     }
 
     public static <T> Object[] capitalizeContents(T[] array) {
-        ArrayList<String> list = new ArrayList<String>();
+        ArrayList<String> list = new ArrayList<>();
         for (T t : array) {
             list.add(StringUtils.capitalize(t.toString()));
         }
         return list.toArray();
+    }
+
+    public static <T> boolean isEmpty(T[] array) {
+        if (array == null || array.length == 0) {
+            return true;
+        }
+        return false;
     }
 }

@@ -1,37 +1,23 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-
 import com.thoughtworks.go.config.*;
-import com.thoughtworks.go.config.GoConfigFileDao;
-import com.thoughtworks.go.domain.NotificationFilter;
-import com.thoughtworks.go.domain.NullUser;
-import com.thoughtworks.go.domain.StageConfigIdentifier;
-import com.thoughtworks.go.domain.User;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.Users;
 import com.thoughtworks.go.domain.exception.ValidationException;
 import com.thoughtworks.go.i18n.LocalizedMessage;
@@ -45,42 +31,39 @@ import com.thoughtworks.go.server.exceptions.UserEnabledException;
 import com.thoughtworks.go.server.exceptions.UserNotFoundException;
 import com.thoughtworks.go.server.persistence.OauthRepository;
 import com.thoughtworks.go.server.security.OnlyKnownUsersAllowedException;
-import com.thoughtworks.go.server.security.UserLicenseLimitExceededException;
 import com.thoughtworks.go.server.service.result.HttpLocalizedOperationResult;
 import com.thoughtworks.go.server.service.result.LocalizedOperationResult;
-import com.thoughtworks.go.server.transaction.TransactionSynchronizationManager;
 import com.thoughtworks.go.server.transaction.TransactionTemplate;
 import com.thoughtworks.go.serverhealth.HealthStateScope;
 import com.thoughtworks.go.serverhealth.HealthStateType;
 import com.thoughtworks.go.util.Filter;
+import com.thoughtworks.go.util.TriState;
 import com.thoughtworks.go.util.comparator.AlphaAsciiCollectionComparator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 
+import java.util.*;
+
 @Service
 public class UserService {
     private final UserDao userDao;
     private final SecurityService securityService;
     private final GoConfigService goConfigService;
-    private final GoLicenseService licenseService;
     private final OauthRepository oauthRepository;
-    private final TransactionSynchronizationManager transactionSynchronizationManager;
     private final TransactionTemplate transactionTemplate;
 
     private final Object disableUserMutex = new Object();
     private final Object enableUserMutex = new Object();
 
     @Autowired
-    public UserService(UserDao userDao, SecurityService securityService, GoConfigService goConfigService, GoLicenseService licenseService, TransactionTemplate transactionTemplate,
-                       TransactionSynchronizationManager transactionSynchronizationManager, OauthRepository oauthRepository) {
+    public UserService(UserDao userDao, SecurityService securityService, GoConfigService goConfigService, TransactionTemplate transactionTemplate,
+                       OauthRepository oauthRepository) {
         this.userDao = userDao;
         this.securityService = securityService;
         this.goConfigService = goConfigService;
-        this.licenseService = licenseService;
         this.transactionTemplate = transactionTemplate;
-        this.transactionSynchronizationManager = transactionSynchronizationManager;
         this.oauthRepository = oauthRepository;
     }
 
@@ -115,7 +98,7 @@ public class UserService {
     }
 
     private List<String> toUserNames(List<User> enabledUsers) {
-        List<String> enabledUserNames = new ArrayList<String>();
+        List<String> enabledUserNames = new ArrayList<>();
         for (User enabledUser : enabledUsers) {
             enabledUserNames.add(enabledUser.getName());
         }
@@ -131,14 +114,48 @@ public class UserService {
         return false;
     }
 
+    public User save(final User user, TriState enabled, TriState emailMe, String email, String checkinAliases, LocalizedOperationResult result) {
+        if (enabled.isTrue()) {
+            user.enable();
+        }
+
+        if (enabled.isFalse()) {
+            user.disable();
+        }
+
+        if (email != null) {
+            user.setEmail(email);
+        }
+
+        if (checkinAliases != null) {
+            user.setMatcher(checkinAliases);
+        }
+
+        if (emailMe.isTrue()) {
+            user.setEmailMe(true);
+        }
+
+        if (emailMe.isFalse()) {
+            user.setEmailMe(false);
+        }
+
+        if (validate(result, user)) {
+            return user;
+        }
+
+        try {
+            saveOrUpdate(user);
+        } catch (ValidationException e) {
+            result.badRequest(LocalizedMessage.string("USER_FIELD_VALIDATIONS_FAILED", e.getMessage()));
+        }
+
+        return user;
+    }
+
     public void enable(List<String> usernames, LocalizedOperationResult result) {
         synchronized (enableUserMutex) {
-            Set<String> potentialEnabledUsers = new HashSet<String>(toUserNames(userDao.enabledUsers()));
+            Set<String> potentialEnabledUsers = new HashSet<>(toUserNames(userDao.enabledUsers()));
             potentialEnabledUsers.addAll(usernames);
-            if (licenseService.maximumUsersAllowed() < potentialEnabledUsers.size()) {
-                result.badRequest(LocalizedMessage.string("DID_NOT_ENABLE_SELECTED_USERS"));
-                return;
-            }
             userDao.enableUsers(usernames);
         }
     }
@@ -160,7 +177,7 @@ public class UserService {
             }
         }
         try {
-            final GoConfigFileDao.CompositeConfigCommand command = new GoConfigFileDao.CompositeConfigCommand();
+            final GoConfigDao.CompositeConfigCommand command = new GoConfigDao.CompositeConfigCommand();
             command.addCommand(goConfigService.modifyRolesCommand(users, roleSelections));
             command.addCommand(goConfigService.modifyAdminPrivilegesCommand(users, adminPrivilege));
             goConfigService.updateConfig(command);
@@ -171,7 +188,7 @@ public class UserService {
 
     public Set<String> allUsernames() {
         List<UserModel> userModels = allUsersForDisplay();
-        Set<String> users = new HashSet<String>();
+        Set<String> users = new HashSet<>();
         for (UserModel model : userModels) {
             users.add(model.getUser().getName());
         }
@@ -179,11 +196,15 @@ public class UserService {
     }
 
     public Collection<String> allRoleNames(CruiseConfig cruiseConfig) {
-        List<String> roles = new ArrayList<String>();
+        List<String> roles = new ArrayList<>();
         for (Role role : allRoles(cruiseConfig)) {
             roles.add(CaseInsensitiveString.str(role.getName()));
         }
         return roles;
+    }
+
+    public Collection<String> allRoleNames() {
+        return allRoleNames(goConfigService.cruiseConfig());
     }
 
     public Collection<Role> allRoles(CruiseConfig cruiseConfig) {
@@ -191,7 +212,7 @@ public class UserService {
     }
 
     public Set<String> usersThatCanOperateOnStage(CruiseConfig cruiseConfig, PipelineConfig pipelineConfig) {
-        SortedSet<String> users = new TreeSet<String>();
+        SortedSet<String> users = new TreeSet<>();
         PipelineConfigs group = cruiseConfig.findGroupOfPipeline(pipelineConfig);
         if (group.hasAuthorizationDefined()) {
             if (group.hasOperationPermissionDefined()) {
@@ -211,7 +232,7 @@ public class UserService {
 
     public Set<String> rolesThatCanOperateOnStage(CruiseConfig cruiseConfig, PipelineConfig pipelineConfig) {
         PipelineConfigs group = cruiseConfig.findGroupOfPipeline(pipelineConfig);
-        SortedSet<String> roles = new TreeSet<String>();
+        SortedSet<String> roles = new TreeSet<>();
         if (group.hasAuthorizationDefined()) {
             if (group.hasOperationPermissionDefined()) {
                 roles.addAll(group.getOperateRoleNames());
@@ -220,12 +241,6 @@ public class UserService {
             roles.addAll(allRoleNames(cruiseConfig));
         }
         return roles;
-    }
-
-    public void disableLicenseExpiryWarning(long userId) {
-        User user = userDao.load(userId);
-        user.disableLicenseExpiryWarning();
-        userDao.saveOrUpdate(user);
     }
 
     public User load(long id) {
@@ -243,7 +258,7 @@ public class UserService {
         }
     }
 
-    public static enum SortableColumn {
+    public enum SortableColumn {
         EMAIL {
             protected String get(UserModel model) {
                 return model.getUser().getEmail();
@@ -296,7 +311,7 @@ public class UserService {
             }
         };
 
-        private static final AlphaAsciiCollectionComparator<String> STRING_COMPARATOR = new AlphaAsciiCollectionComparator<String>();
+        private static final AlphaAsciiCollectionComparator<String> STRING_COMPARATOR = new AlphaAsciiCollectionComparator<>();
 
 
         public Comparator<UserModel> sorter() {
@@ -312,7 +327,7 @@ public class UserService {
         }
     }
 
-    public static enum SortDirection {
+    public enum SortDirection {
         ASC {
             @Override
             public Comparator<UserModel> forColumn(final SortableColumn column) {
@@ -338,9 +353,15 @@ public class UserService {
             User user = new User(CaseInsensitiveString.str(userName.getUsername()));
             if (!(user.isAnonymous() || userExists(user))) {
                 assertUnknownUsersAreAllowedToLogin();
-                assertLicenseLimitNotExceeded();
+
                 userDao.saveOrUpdate(user);
             }
+        }
+    }
+
+    public void withEnableUserMutex(Runnable runnable) {
+        synchronized (enableUserMutex) {
+            runnable.run();
         }
     }
 
@@ -350,16 +371,9 @@ public class UserService {
         }
     }
 
-    private void assertLicenseLimitNotExceeded() {
-        if (isLicenseUserLimitReached()) {
-            throw new UserLicenseLimitExceededException("User license limit exceeded, please contact the administrator");
-        }
-    }
-
     public void saveOrUpdate(User user) throws ValidationException {
         validate(user);
         synchronized (enableUserMutex) {
-            //TODO: MAY BE WE SHOULD CHECK FOR LICENSE LIMIT
             userDao.saveOrUpdate(user);
         }
     }
@@ -403,12 +417,13 @@ public class UserService {
         return users.filter(new Filter<User>() {
             public boolean matches(User user) {
                 return user.hasSubscribedFor(identifier.getPipelineName(), identifier.getStageName()) &&
-                       securityService.hasViewPermissionForPipeline(user.getName(), identifier.getPipelineName());
+                        securityService.hasViewPermissionForPipeline(user.getUsername(), identifier.getPipelineName());
             }
         });
     }
 
     public void validate(User user) throws ValidationException {
+        user.validateLoginName();
         user.validateMatcher();
         user.validateEmail();
     }
@@ -423,11 +438,11 @@ public class UserService {
 
     private List<UserModel> allUsersForDisplay() {
         Collection<User> users = allUsers();
-        ArrayList<UserModel> userModels = new ArrayList<UserModel>();
+        ArrayList<UserModel> userModels = new ArrayList<>();
         for (User user : users) {
             String userName = user.getName();
 
-            ArrayList<String> roles = new ArrayList<String>();
+            ArrayList<String> roles = new ArrayList<>();
             for (Role role : goConfigService.rolesForUser(new CaseInsensitiveString(userName))) {
                 roles.add(CaseInsensitiveString.str(role.getName()));
             }
@@ -438,7 +453,7 @@ public class UserService {
     }
 
     public Collection<User> allUsers() {
-        Set<User> result = new HashSet<User>();
+        Set<User> result = new HashSet<>();
         result.addAll(userDao.allUsers());
         return result;
     }
@@ -462,25 +477,13 @@ public class UserService {
                     return;
                 }
 
-                if (isLicenseUserLimitReached()) {
-                    result.badRequest(LocalizedMessage.string("LICENSE_LIMIT_EXCEEDED"));
-                    return;
-                }
-                if (!userSearchModel.getUserSourceType().equals(UserSourceType.PASSWORD_FILE) && validateEmailAndMatcher(result, user)) {
+                if (!userSearchModel.getUserSourceType().equals(UserSourceType.PASSWORD_FILE) && validate(result, user)) {
                     return;
                 }
                 userDao.saveOrUpdate(user);
                 result.setMessage(LocalizedMessage.string("USER_SUCCESSFULLY_ADDED", user.getName()));
             }
         }
-    }
-
-    public boolean isLicenseUserLimitReached() {
-        return licenseService.maximumUsersAllowed() <= userDao.enabledUserCount();
-    }
-
-    public boolean isLicenseUserLimitExceeded() {
-        return licenseService.maximumUsersAllowed() < userDao.enabledUserCount();
     }
 
     public static class AdminAndRoleSelections {
@@ -511,10 +514,10 @@ public class UserService {
     }
 
     private HashSet<Role> allRoles(SecurityConfig security) {
-        return new HashSet<Role>(security.getRoles());
+        return new HashSet<>(security.getRoles());
     }
 
-    private boolean validateEmailAndMatcher(HttpLocalizedOperationResult result, User user) {
+    private boolean validate(LocalizedOperationResult result, User user) {
         try {
             validate(user);
         } catch (ValidationException e) {

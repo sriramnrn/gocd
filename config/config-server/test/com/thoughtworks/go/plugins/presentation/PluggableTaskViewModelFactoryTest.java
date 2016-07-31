@@ -40,11 +40,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class PluggableTaskViewModelFactoryTest {
+    private TaskPreference taskPreference;
+
     @Before
     public void setUp() throws Exception {
         cleanupTaskPreferences();
 
-        TaskPreference taskPreference = mock(TaskPreference.class);
+        taskPreference = mock(TaskPreference.class);
         PluggableTaskConfigStore.store().setPreferenceFor("plugin-1", taskPreference);
         TaskView view = mock(TaskView.class);
         when(taskPreference.getView()).thenReturn(view);
@@ -59,7 +61,7 @@ public class PluggableTaskViewModelFactoryTest {
 
     @Test
     public void typeForDisplayAndTemplateOfViewModelShouldBeGotFromThePlugin() throws Exception {
-        PluggableTask pluggableTask = new PluggableTask("", new PluginConfiguration("plugin-1", "2"), new Configuration());
+        PluggableTask pluggableTask = new PluggableTask(new PluginConfiguration("plugin-1", "2"), new Configuration());
         PluggableTaskViewModelFactory factory = new PluggableTaskViewModelFactory();
         PluggableViewModel<PluggableTask> viewModel = factory.viewModelFor(pluggableTask, "new");
 
@@ -68,9 +70,33 @@ public class PluggableTaskViewModelFactoryTest {
     }
 
     @Test
+    public void templateShouldBeLoadedFromClasspathWithClasspathPrefix() throws Exception {
+        PluggableViewModel<PluggableTask> viewModel = getModelWithTaskTemplateAt("/com/thoughtworks/go/plugins/presentation/test-template.html");
+        assertThat((String) viewModel.getParameters().get("template"), is("<html>my-template</html>"));
+    }
+
+    @Test
+    public void shouldReturnErrorMessageIfTemplateIsMissingFromPlugin() {
+        PluggableViewModel<PluggableTask> viewModel = getModelWithTaskTemplateAt("/test-template-missing.html");
+        assertThat((String) viewModel.getParameters().get("template"), is("Template \"/test-template-missing.html\" is missing."));
+    }
+
+    @Test
+    public void shouldProvideATemplateWithAnErrorMessageWhenTemplateProvidedIsNull() throws Exception {
+        PluggableViewModel<PluggableTask> viewModel = getModelWithTaskTemplateHavingValue(null);
+        assertThat((String) viewModel.getParameters().get("template"), is("View template provided by plugin is null."));
+    }
+
+    @Test
+    public void shouldProvideNoTemplateWhenTemplateProvidedIsEmpty() throws Exception {
+        PluggableViewModel<PluggableTask> viewModel = getModelWithTaskTemplateHavingValue("");
+        assertThat((String) viewModel.getParameters().get("template"), is(""));
+    }
+
+    @Test
     public void dataForViewShouldBeGotFromTheTaskInJSONFormat() throws Exception {
         Configuration configuration = new Configuration(create("key1", false, "value1"), create("KEY2", false, "value2"));
-        PluggableTask taskConfig = new PluggableTask("", new PluginConfiguration("plugin-1", "2"), configuration);
+        PluggableTask taskConfig = new PluggableTask(new PluginConfiguration("plugin-1", "2"), configuration);
 
         PluggableTaskViewModelFactory factory = new PluggableTaskViewModelFactory();
         PluggableViewModel<PluggableTask> viewModel = factory.viewModelFor(taskConfig, "new");
@@ -90,7 +116,7 @@ public class PluggableTaskViewModelFactoryTest {
         property1.addError("key1", "error msg");
         ConfigurationProperty property2 = create("KEY2", false, "value2");
         Configuration configuration = new Configuration(property1, property2);
-        PluggableTask taskConfig = new PluggableTask("", new PluginConfiguration("plugin-1", "2"), configuration);
+        PluggableTask taskConfig = new PluggableTask(new PluginConfiguration("plugin-1", "2"), configuration);
 
         PluggableTaskViewModelFactory factory = new PluggableTaskViewModelFactory();
         PluggableViewModel<PluggableTask> viewModel = factory.viewModelFor(taskConfig, "new");
@@ -122,14 +148,14 @@ public class PluggableTaskViewModelFactoryTest {
     public void shouldReturnMissingPluginTaskViewIfPluginIsMissing() {
         String pluginId = "pluginId";
         PluggableTaskViewModelFactory factory = new PluggableTaskViewModelFactory();
-        PluggableViewModel<PluggableTask> viewModel = factory.viewModelFor(new PluggableTask("", new PluginConfiguration(pluginId, "1"), new Configuration()), "edit");
+        PluggableViewModel<PluggableTask> viewModel = factory.viewModelFor(new PluggableTask(new PluginConfiguration(pluginId, "1"), new Configuration()), "edit");
         assertThat((String) viewModel.getParameters().get("template"), is(String.format("Associated plugin '%s' not found. Please contact the Go admin to install the plugin.", pluginId)));
         assertThat(viewModel.getTypeForDisplay(), is(pluginId));
         assertThat(viewModel instanceof MissingPluggableTaskViewModel, is(true));
     }
 
     private void assertPluggableViewModel(String actionName, String expectedTemplatePath) {
-        PluggableTask pluggableTask = new PluggableTask("", new PluginConfiguration("plugin-1", "2"), new Configuration());
+        PluggableTask pluggableTask = new PluggableTask(new PluginConfiguration("plugin-1", "2"), new Configuration());
         PluggableTaskViewModelFactory factory = new PluggableTaskViewModelFactory();
 
         PluggableViewModel<PluggableTask> viewModel = factory.viewModelFor(pluggableTask, actionName);
@@ -140,9 +166,31 @@ public class PluggableTaskViewModelFactoryTest {
     }
 
     private void cleanupTaskPreferences() {
-        Set<String> plugins = PluggableTaskConfigStore.store().pluginsWithPreference();
+        Set<String> plugins = PluggableTaskConfigStore.store().pluginIds();
         for (String pluginId : plugins) {
             PluggableTaskConfigStore.store().removePreferenceFor(pluginId);
         }
+    }
+
+    private PluggableViewModel<PluggableTask> getModelWithTaskTemplateAt(final String filePath) {
+        return getModelWithTaskTemplateHavingValue(String.format("classpath:%s", filePath));
+    }
+
+    private PluggableViewModel<PluggableTask> getModelWithTaskTemplateHavingValue(final String templateContentValue) {
+        when(taskPreference.getView()).thenReturn(new TaskView() {
+            @Override
+            public String displayValue() {
+                return "view";
+            }
+
+            @Override
+            public String template() {
+                return templateContentValue;
+            }
+        });
+
+        PluggableTask pluggableTask = new PluggableTask(new PluginConfiguration("plugin-1", "2"), new Configuration());
+        PluggableTaskViewModelFactory factory = new PluggableTaskViewModelFactory();
+        return factory.viewModelFor(pluggableTask, "new");
     }
 }

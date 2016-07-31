@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,32 +12,18 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.EnvironmentVariableConfig;
-import com.thoughtworks.go.config.EnvironmentVariablesConfig;
-import com.thoughtworks.go.config.PipelineConfig;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.domain.PiplineConfigVisitor;
 import com.thoughtworks.go.listener.ConfigChangedListener;
+import com.thoughtworks.go.listener.EntityConfigChangedListener;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.messaging.GoMessageListener;
 import com.thoughtworks.go.server.perf.SchedulingPerformanceLogger;
-import com.thoughtworks.go.server.scheduling.BuildCauseProducerService;
-import com.thoughtworks.go.server.scheduling.ScheduleCheckCompletedMessage;
-import com.thoughtworks.go.server.scheduling.ScheduleCheckCompletedTopic;
-import com.thoughtworks.go.server.scheduling.ScheduleCheckMessage;
-import com.thoughtworks.go.server.scheduling.ScheduleCheckQueue;
-import com.thoughtworks.go.server.scheduling.ScheduleCheckState;
-import com.thoughtworks.go.server.scheduling.ScheduleOptions;
+import com.thoughtworks.go.server.scheduling.*;
 import com.thoughtworks.go.server.service.result.OperationResult;
 import com.thoughtworks.go.server.service.result.ServerHealthServiceUpdatingOperationResult;
 import com.thoughtworks.go.serverhealth.HealthStateScope;
@@ -48,6 +34,11 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static java.lang.String.format;
 
@@ -62,7 +53,7 @@ public class PipelineScheduler implements ConfigChangedListener, GoMessageListen
     private ScheduleCheckQueue scheduleCheckQueue;
     private ScheduleCheckCompletedTopic scheduleCheckCompletedTopic;
     private SchedulingPerformanceLogger schedulingPerformanceLogger;
-    private final Map<String, ScheduleCheckState> pipelines = new HashMap<String, ScheduleCheckState>();
+    private final Map<String, ScheduleCheckState> pipelines = new HashMap<>();
 
     protected PipelineScheduler() {
     }
@@ -85,7 +76,19 @@ public class PipelineScheduler implements ConfigChangedListener, GoMessageListen
 
     public void initialize() {
         goConfigService.register(this);
+        goConfigService.register(pipelineConfigChangedListener());
         scheduleCheckCompletedTopic.addListener(this);
+    }
+
+    protected EntityConfigChangedListener<PipelineConfig> pipelineConfigChangedListener() {
+        return new EntityConfigChangedListener<PipelineConfig>() {
+            @Override
+            public void onEntityConfigChange(PipelineConfig pipelineConfig) {
+                synchronized (pipelines) {
+                    addPipelineIfNotPresent(pipelineConfig, pipelines);
+                }
+            }
+        };
     }
 
     //NOTE: This is called on a thread by Spring
@@ -139,8 +142,7 @@ public class PipelineScheduler implements ConfigChangedListener, GoMessageListen
 
         LOGGER.info(String.format("[Pipeline Schedule] [Accepted] Manual trigger of pipeline '%s' accepted for user %s", pipelineName, CaseInsensitiveString.str(username.getUsername())));
         removeLicenseInvalidFromLog();
-        PipelineConfig pipelineConfig = goConfigService.pipelineConfigNamed(new CaseInsensitiveString(pipelineName));
-        buildCauseProducerService.manualSchedulePipeline(username, pipelineConfig, scheduleOptions, result);
+        buildCauseProducerService.manualSchedulePipeline(username, new CaseInsensitiveString(pipelineName), scheduleOptions, result);
         LOGGER.info(String.format("[Pipeline Schedule] [Processed] Manual trigger of pipeline '%s' processed with result '%s'", pipelineName, result.getServerHealthState()));
     }
 
@@ -196,16 +198,11 @@ public class PipelineScheduler implements ConfigChangedListener, GoMessageListen
         synchronized (pipelines) {
             newCruiseConfig.accept(new PiplineConfigVisitor() {
                 public void visit(PipelineConfig pipelineConfig) {
-                    if (!pipelines.containsKey(CaseInsensitiveString.str(pipelineConfig.name()))) {
-                        pipelines.put(CaseInsensitiveString.str(pipelineConfig.name()), ScheduleCheckState.IDLE);
-                        if (LOGGER.isDebugEnabled()) {
-                            LOGGER.debug(String.format("[Configuration Changed] Marking new pipeline %s as IDLE", pipelineConfig.name()));
-                        }
-                    }
+                    addPipelineIfNotPresent(pipelineConfig, pipelines);
                 }
             });
 
-            List<String> deletedPipeline = new ArrayList<String>();
+            List<String> deletedPipeline = new ArrayList<>();
             for (String pipelineName : pipelines.keySet()) {
                 if (!newCruiseConfig.hasPipelineNamed(new CaseInsensitiveString(pipelineName))) {
                     deletedPipeline.add(pipelineName);
@@ -214,6 +211,15 @@ public class PipelineScheduler implements ConfigChangedListener, GoMessageListen
 
             for (String pipelineName : deletedPipeline) {
                 pipelines.remove(pipelineName);
+            }
+        }
+    }
+
+    private void addPipelineIfNotPresent(PipelineConfig pipelineConfig, Map<String, ScheduleCheckState> pipelines) {
+        if (!pipelines.containsKey(CaseInsensitiveString.str(pipelineConfig.name()))) {
+            pipelines.put(CaseInsensitiveString.str(pipelineConfig.name()), ScheduleCheckState.IDLE);
+            if (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(String.format("[Configuration Changed] Marking new pipeline %s as IDLE", pipelineConfig.name()));
             }
         }
     }

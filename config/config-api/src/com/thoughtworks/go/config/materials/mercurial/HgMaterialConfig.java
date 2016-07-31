@@ -1,34 +1,33 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials.mercurial;
-
-import java.util.Map;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.ConfigAttribute;
 import com.thoughtworks.go.config.ConfigTag;
 import com.thoughtworks.go.config.ParamsAttributeAware;
-import com.thoughtworks.go.config.ValidationContext;
 import com.thoughtworks.go.config.materials.Filter;
 import com.thoughtworks.go.config.materials.ScmMaterialConfig;
 import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.util.StringUtil;
 import com.thoughtworks.go.util.command.HgUrlArgument;
 import com.thoughtworks.go.util.command.UrlArgument;
+
+import java.util.Map;
 
 @ConfigTag(value = "hg", label = "Mercurial")
 public class HgMaterialConfig extends ScmMaterialConfig implements ParamsAttributeAware {
@@ -38,7 +37,7 @@ public class HgMaterialConfig extends ScmMaterialConfig implements ParamsAttribu
     public static final String TYPE = "HgMaterial";
     public static final String URL = "url";
 
-    private HgMaterialConfig() {
+    public HgMaterialConfig() {
         super(TYPE);
     }
 
@@ -48,8 +47,8 @@ public class HgMaterialConfig extends ScmMaterialConfig implements ParamsAttribu
         this.folder = folder;
     }
 
-    public HgMaterialConfig(HgUrlArgument url, boolean autoUpdate, Filter filter, String folder, CaseInsensitiveString name) {
-        super(name, filter, folder, autoUpdate, TYPE, new ConfigErrors());
+    public HgMaterialConfig(HgUrlArgument url, boolean autoUpdate, Filter filter, boolean invertFilter, String folder, CaseInsensitiveString name) {
+        super(name, filter, invertFilter, folder, autoUpdate, TYPE, new ConfigErrors());
         this.url = url;
     }
 
@@ -85,7 +84,14 @@ public class HgMaterialConfig extends ScmMaterialConfig implements ParamsAttribu
 
     @Override
     public String getUrl() {
-        return url.forCommandline();
+        return url != null ? url.forCommandline() : null;
+    }
+
+    @Override
+    public void setUrl(String url) {
+        if (url != null) {
+            this.url = new HgUrlArgument(url);
+        }
     }
 
     @Override
@@ -127,8 +133,8 @@ public class HgMaterialConfig extends ScmMaterialConfig implements ParamsAttribu
     }
 
     @Override
-    protected void validateConcreteScmMaterial(ValidationContext validationContext) {
-        if (StringUtil.isBlank(url.forDisplay())) {
+    public void validateConcreteScmMaterial() {
+        if (url == null || StringUtil.isBlank(url.forDisplay())) {
             errors().add(URL, "URL cannot be blank");
         }
     }

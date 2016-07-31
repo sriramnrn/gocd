@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- *************************GO-LICENSE-START******************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@
     <context:component-scan base-package="com.thoughtworks.go.serverhealth"/>
     <context:component-scan base-package="com.thoughtworks.go.domain"/>
     <context:component-scan base-package="com.thoughtworks.go.service"/>
-    <context:component-scan base-package="com.thoughtworks.go.server.extensions"/>
     <context:component-scan base-package="com.thoughtworks.go.server.sweepers"/>
     <context:component-scan base-package="com.thoughtworks.go.server.cache"/>
     <context:component-scan base-package="com.thoughtworks.go.server.service"/>
@@ -50,11 +49,12 @@
     <context:component-scan base-package="com.thoughtworks.studios.shine"/>
     <context:component-scan base-package="com.thoughtworks.go.server.oauth"/>
     <context:component-scan base-package="com.thoughtworks.go.server.web"/>
+    <context:component-scan base-package="com.thoughtworks.go.server.websocket"/>
+    <context:component-scan base-package="com.thoughtworks.go.remote"/>
     <context:component-scan base-package="com.thoughtworks.go.config"/>
     <context:component-scan base-package="com.thoughtworks.go.presentation"/>
     <context:component-scan base-package="com.thoughtworks.go.server.initializers"/>
     <context:component-scan base-package="com.thoughtworks.go.server.valuestreammap"/>
-    <context:component-scan base-package="com.thoughtworks.go.metrics.service"/>
     <context:component-scan base-package="com.thoughtworks.go.plugin.access"/>
 
     <import resource="velocity-config.xml"/>
@@ -99,6 +99,7 @@
                 <value>HEAD</value>
             </list>
         </property>
+        <property name="alwaysUseFullPath" value="true"></property>
     </bean>
     <bean class="org.springframework.web.servlet.mvc.HttpRequestHandlerAdapter"/>
     <bean class="org.springframework.web.servlet.handler.BeanNameUrlHandlerMapping"/>
@@ -112,5 +113,4 @@
 
     <bean class="org.quartz.impl.StdSchedulerFactory" name="schedulerFactory"/>
     <bean class="com.thoughtworks.go.server.domain.PipelineTimeline" name="pipelineTimeline" lazy-init="true" autowire="autodetect"/>
-    <bean class="com.thoughtworks.go.util.ZipUtil"/>
 </beans>

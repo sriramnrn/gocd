@@ -1,5 +1,5 @@
 ##########################GO-LICENSE-START################################
-# Copyright 2014 ThoughtWorks, Inc.
+# Copyright 2016 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "/shared/_application_nav.html.erb" do
   include GoUtil
@@ -23,11 +23,11 @@ describe "/shared/_application_nav.html.erb" do
     class << view
       include ApplicationHelper
     end
-    stub_server_health_messages
     assign(:user, com.thoughtworks.go.server.domain.Username::ANONYMOUS)
     allow(view).to receive(:is_user_an_admin?).and_return(true)
   end
 
+  partial_page = "shared/application_nav.html.erb"
   describe :header do
     before :each do
       allow(view).to receive(:url_for_path).and_return('url_for_path')
@@ -36,32 +36,32 @@ describe "/shared/_application_nav.html.erb" do
     end
 
     it 'should have the header links' do
-      render :partial => "shared/application_nav.html.erb"
+      render :partial => partial_page
 
       assert_header_values = {'pipelines' => 'PIPELINES', 'environments' => 'ENVIRONMENTS', 'agents' => 'AGENTS', 'admin' => 'ADMIN'}
 
-      Capybara.string(response.body).find('ul.tabs').tap do |ul_tabs|
-        assert_header_values.each do |key, value|
-          ul_tabs.find("li#cruise-header-tab-#{key}") do |ul_tabs_li|
-            expect(ul_tabs_li).to have_selector("a", value)
-          end
+      assert_header_values.each do |key, value|
+        Capybara.string(response.body).find("li#cruise-header-tab-#{key}").tap do |ul_tabs_li|
+          expect(ul_tabs_li).to have_selector("a", text: value)
         end
       end
     end
   end
 
   describe "user name and logout" do
+
     it "should display username and logout botton if a user is logged in" do
       assign(:user, com.thoughtworks.go.server.domain.Username.new(CaseInsensitiveString.new("maulik suchak")))
       allow(view).to receive(:can_view_admin_page?).and_return(false)
-
       controller.request.path_parameters[:controller] = 'pipelines'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
-      expect(response.body).to have_selector(".current_user a[href='#']", "maulik suchak")
-      expect(response.body).to have_selector(".current_user a[href='/tab/mycruise/user']", "Preferences")
-      expect(response.body).to have_selector(".current_user a[href='/auth/logout']", "Sign out")
-      expect(response.body).to have_selector(".user .help a[href='http://www.go.cd/documentation/user/current']", "Help")
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
+
+      expect(response.body).to have_selector(".current_user a[href='#']", text: "maulik suchak")
+      expect(response.body).to have_selector(".user .help a[href='https://go.cd/help']", text: "Help")
+      expect(response.body).to have_selector(".current_user a[href='/tab/mycruise/user']", text: "Preferences")
+      expect(response.body).to have_selector(".current_user a[href='/auth/logout']", text: "Sign out")
     end
 
     it "should not display username and logout botton if anonymous user is logged in" do
@@ -69,13 +69,13 @@ describe "/shared/_application_nav.html.erb" do
       allow(view).to receive(:can_view_admin_page?).and_return(false)
 
       controller.request.path_parameters[:controller] = 'pipelines'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
+      controller.request.path_parameters[:action]     = 'index'
+      render :partial => partial_page
 
-      expect(response.body).to_not have_selector(".current_user a[href='#']", "maulik suchak")
-      expect(response.body).to_not have_selector(".current_user a[href='/tab/mycruise/user']", "Preferences")
-      expect(response.body).to_not have_selector(".current_user a[href='/auth/logout']", "Sign out")
-      expect(response.body).to have_selector(".user .help a[href='http://www.go.cd/documentation/user/current']", "Help")
+      expect(response.body).to_not have_selector(".current_user a[href='#']", text: "maulik suchak")
+      expect(response.body).to_not have_selector(".current_user a[href='/tab/mycruise/user']", text: "Preferences")
+      expect(response.body).to_not have_selector(".current_user a[href='/auth/logout']", text: "Sign out")
+      expect(response.body).to have_selector(".user .help a[href='https://go.cd/help']", text: "Help")
     end
   end
 
@@ -83,22 +83,23 @@ describe "/shared/_application_nav.html.erb" do
 
     it "should render header with pipelines tab selected as current" do
       allow(view).to receive(:can_view_admin_page?).and_return(false)
-
-      controller.request.path_parameters[:controller] = 'pipelines'
-      controller.request.path_parameters[:action] = 'index'
       assign(:current_tab_name, 'pipelines')
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
+      controller.request.path_parameters[:controller] = 'pipelines'
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
 
       expect(response.body).to have_selector("#cruise-header-tab-pipelines.current")
     end
-    
+
     it "should mark admin tab as hilighted when current_tab override used" do
       assign(:current_tab_name, "admin")
       assign(:user, com.thoughtworks.go.server.domain.Username::ANONYMOUS)
       allow(view).to receive(:can_view_admin_page?).and_return(true)
       controller.request.path_parameters[:controller] = 'pipelines'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
 
       expect(response.body).to have_selector("#cruise-header-tab-admin.current a[href='/admin/pipelines']")
     end
@@ -109,30 +110,34 @@ describe "/shared/_application_nav.html.erb" do
       allow(view).to receive(:can_view_admin_page?).and_return(true)
 
       controller.request.path_parameters[:controller] = 'environments'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "/foo/admin/pipelines"}}
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
 
       expect(response.body).to_not have_selector("#cruise-header-tab-admin.current")
     end
 
     it "should render header with pipelines not selected as current when visiting environment page" do
       assign(:user, com.thoughtworks.go.server.domain.Username::ANONYMOUS)
+      assign(:current_tab_name, 'environments')
       allow(view).to receive(:can_view_admin_page?).and_return(false)
-
       controller.request.path_parameters[:controller] = 'environments'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
+      controller.request.path_parameters[:action]     = 'index'
 
-      expect(response.body).to_not have_selector("#cruise-header-tab-recent-activity.current")
+      render :partial => partial_page
+
+      expect(response.body).to_not have_selector("#cruise-header-tab-pipelines.current")
     end
 
     it "should hookup auto refresh of server health messages" do
       assign(:user, com.thoughtworks.go.server.domain.Username::ANONYMOUS)
       allow(view).to receive(:can_view_admin_page?).and_return(false)
       controller.request.path_parameters[:controller] = 'agents'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
-      expect(response.body).to have_selector("script", visible: false, text: /Util.on_load\(function\(\) {new AjaxRefresher\('\/server\/messages.json', null\);}\);/)
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
+
+      expect(response.body).to have_selector("script", visible: false, text: /new AjaxRefresher\('\/server\/messages.json', /)
     end
 
     it "should hookup auto refresh with update once when auto refresh is false" do
@@ -140,169 +145,83 @@ describe "/shared/_application_nav.html.erb" do
       params[:autoRefresh] = 'false'
       allow(view).to receive(:can_view_admin_page?).and_return(false)
       controller.request.path_parameters[:controller] = 'agents'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
+
       expect(response.body).to_not have_selector("script[type='text/javascript']")
-    end
-  end
-
-  describe "licese expiry warning" do
-
-    before :each do
-      allow(view).to receive(:can_view_admin_page?).and_return(false)
-    end
-
-    it "should not render the popup to show that the license is about to expire when the request attribute is not set" do
-      controller.request.path_parameters[:controller] = 'agents'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
-
-      expect(response.body).to_not have_selector("div.license_about_to_expire")
-    end
-
-    it "should render the popup to show that the license is about to expire" do
-      session["LICENSE_EXPIRING_IN"] = 6
-      controller.request.path_parameters[:controller] = 'agents'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
-
-      Capybara.string(response.body).find('div.license_about_to_expire').tap do |license_div|
-        expect(license_div).to have_selector(".title", "Your Go license key will expire in 6 days.")
-        expect(license_div).to have_selector(".suggestion", "Please contact your ThoughtWorks Studios account executive or email studios@thoughtworks.com to obtain a new license")
-        expect(license_div).to have_selector("button", "Remind Me Later")
-        license_div.find("div[style='display:none']", visible: false) do |next_div|
-          next_div.find("form[method='post'][action='#{dismiss_license_expiry_warning_path}']") do |form|
-            expect(form).to have_selector("button", "DO NOT SHOW ME AGAIN")
-          end
-        end
-      end
-
-      expect(response.body).to have_selector("script", visible: false, text: /title: 'Go license expiry'/)
-      expect(session['LICENSE_EXPIRING_IN'].nil?).to be(true)
     end
   end
 
   describe :admin_dropdown do
     before :each do
       allow(view).to receive(:can_view_admin_page?).and_return(true)
-      allow(view).to receive(:tab_with_display_name).and_return('some_random_text')
-
-      allow(view).to receive(:pipeline_groups_path).and_return('pipeline_groups_path')
-      allow(view).to receive(:templates_path).and_return('templates_path')
-      allow(view).to receive(:config_view_path).and_return('config_view_path')
-      allow(view).to receive(:pipelines_snippet_path).and_return('pipelines_snippet_path')
-      allow(view).to receive(:edit_server_config_path).and_return('edit_server_config_path')
-      allow(view).to receive(:user_listing_path).and_return('user_listing_path')
-      allow(view).to receive(:oauth_clients_path).and_return('oauth_clients_path')
-      allow(view).to receive(:gadgets_oauth_clients_path).and_return('gadgets_oauth_clients_path')
-      allow(view).to receive(:backup_server_path).and_return('backup_server_path')
-      allow(view).to receive(:plugins_listing_path).and_return('plugins_listing_path')
-      allow(view).to receive(:package_repositories_new_path).and_return('package_repositories_new_path')
-
+      @assert_values = {"Pipelines"     => pipeline_groups_path, "Templates" => templates_path, "Config XML" => config_view_path, "Server Configuration" => edit_server_config_path, "User Summary" => user_listing_path,
+                        "OAuth Clients" => oauth_engine.clients_path, "OAuth Enabled Gadget Providers" => gadgets_oauth_clients_path, "Backup" => backup_server_path, "Plugins" => plugins_listing_path, "Package Repositories" => package_repositories_new_path}
     end
 
     it 'should show dropdown items for admin link on header' do
-      render :partial => "shared/application_nav.html.erb"
+      render :partial => partial_page
 
-      assert_values = {"Pipelines" => "pipeline_groups_path", "Templates" => "templates_path", "Config XML" => "config_view_path", "Server Configuration" => "edit_server_config_path", "User Summary" => "user_listing_path",
-                       "OAuth Clients" => "oauth_clients_path", "OAuth Enabled Gadget Providers" => "gadgets_oauth_clients_path", "Backup" => "backup_server_path", "Plugins" => "plugins_listing_path", "Package Repositories" => "package_repositories_new_path"}
-
-      Capybara.string(response.body).find('ul.tabs').tap do |ul_tabs|
-        ul_tabs.find("li#cruise-header-tab-admin") do |ul_tabs_li|
-          expect(ul_tabs_li).to have_selector("a[data-toggle='dropdown']", "ADMIN")
-
-          ul_tabs_li.find("ul.dropdown-menu[role='menu']") do |ul_dropdown|
-            assert_values.each do |key, value|
-              ul_dropdown.find("li[role='presentation']") do |ul_dropdown_li|
-                expect(ul_dropdown_li).to have_selector("a[href='#{value}']", key)
-              end
-            end
+      Capybara.string(response.body).find("li#cruise-header-tab-admin").tap do |ul_tabs_li|
+        @assert_values.each do |key, value|
+          ul_tabs_li.find("li:contains('#{key}')").tap do |li|
+            expect(li).to have_selector("a[href='#{value}']", text: key)
           end
         end
       end
     end
 
     it "should show only templates in admin dropdown if user is just template admin" do
-      allow(view).to receive(:is_user_a_view_admin?).and_return(true)
+      allow(view).to receive(:is_user_a_template_admin?).and_return(true)
       allow(view).to receive(:is_user_an_admin?).and_return(false)
       allow(view).to receive(:is_user_a_group_admin?).and_return(false)
 
-      render :partial => "shared/application_nav.html.erb"
+      render :partial => partial_page
 
-      assert_values = {"Pipelines" => "pipeline_groups_path", "Config XML" => "config_view_path", "Server Configuration" => "edit_server_config_path", "User Summary" => "user_listing_path",
-                       "OAuth Clients" => "oauth_clients_path", "OAuth Enabled Gadget Providers" => "gadgets_oauth_clients_path", "Backup" => "backup_server_path", "Plugins" => "plugins_listing_path", "Package Repositories" => "package_repositories_new_path"}
-
-      Capybara.string(response.body).find('ul.tabs').tap do |ul_tabs|
-        ul_tabs.find("li#cruise-header-tab-admin") do |ul_tabs_li|
-          expect(ul_tabs_li).to have_selector("a[data-toggle='dropdown']", "ADMIN")
-
-          ul_tabs_li.find("ul.dropdown-menu[role='menu']") do |ul_dropdown|
-            assert_values.each do |key, value|
-              expect(ul_dropdown).to_not have_selector("a[href='#{value}']", key)
-            end
-            ul_dropdown.find("li[role='presentation']") do |ul_dropdown_li|
-              expect(ul_dropdown_li).to have_selector("a[href='templates_path']", "Templates")
-            end
-          end
+      Capybara.string(response.body).find("li#cruise-header-tab-admin").tap do |ul_tabs_li|
+        ul_tabs_li.all("li[role='presentation']").tap do |li|
+          expect(li.size).to be(1)
+          expect(li.first).to have_selector("a[href='#{templates_path}']", text: 'Templates')
         end
       end
     end
 
-    it "should show only tabs relevent to group admin in admin dropdown if user is just group admin" do
+    it "should show only tabs relevant to group admin in admin dropdown if user is just group admin" do
       allow(view).to receive(:is_user_a_template_admin?).and_return(false)
       allow(view).to receive(:is_user_an_admin?).and_return(false)
       allow(view).to receive(:is_user_a_group_admin?).and_return(true)
 
-      render :partial => "shared/application_nav.html.erb"
+      render :partial => partial_page
 
-      assert_values_not_there = {"Templates" => "templates_path", "Server Configuration" => "edit_server_config_path", "User Summary" => "user_listing_path",
-                       "OAuth Clients" => "oauth_clients_path", "OAuth Enabled Gadget Providers" => "gadgets_oauth_clients_path", "Backup" => "backup_server_path"}
+      assert_values_there = {"Pipelines" => pipeline_groups_path, "Config XML" => pipelines_snippet_path, "Plugins" => plugins_listing_path, "Package Repositories" => package_repositories_new_path}
 
-      assert_values_there = {"Pipelines" => "pipeline_groups_path", "Config XML" => "pipelines_snippet_path", "Plugins" => "plugins_listing_path", "Package Repositories" => "package_repositories_new_path"}
+      Capybara.string(response.body).find("li#cruise-header-tab-admin").tap do |ul_tabs_li|
+        expect(ul_tabs_li.all("li").size).to be(assert_values_there.length)
 
-      Capybara.string(response.body).find('ul.tabs').tap do |ul_tabs|
-        ul_tabs.find("li#cruise-header-tab-admin") do |ul_tabs_li|
-          expect(ul_tabs_li).to have_selector("a[data-toggle='dropdown']", "ADMIN")
-
-          ul_tabs_li.find("ul.dropdown-menu[role='menu']") do |ul_dropdown|
-            assert_values_not_there.each do |key, value|
-              expect(ul_dropdown).to_not have_selector("a[href='#{value}']", key)
-            end
-            assert_values_there.each do |key, value|
-              ul_dropdown.find("li[role='presentation']") do |ul_dropdown_li|
-                expect(ul_dropdown_li).to have_selector("a[href='#{value}']", key)
-              end
-            end
+        assert_values_there.each do |key, value|
+          ul_tabs_li.find("li:contains('#{key}')").tap do |li|
+            expect(li).to have_selector("a[href='#{value}']", text: key)
           end
         end
       end
     end
 
-    it "should show tabs relevent to group admin in admin dropdown if user is both template and group admin" do
+    it "should show tabs relevant to group admin and template admin in admin dropdown if user is both template and group admin" do
       allow(view).to receive(:is_user_a_template_admin?).and_return(true)
       allow(view).to receive(:is_user_an_admin?).and_return(false)
       allow(view).to receive(:is_user_a_group_admin?).and_return(true)
 
-      render :partial => "shared/application_nav.html.erb"
+      render :partial => partial_page
 
-      assert_values_not_there = {"Server Configuration" => "edit_server_config_path", "User Summary" => "user_listing_path",
-                       "OAuth Clients" => "oauth_clients_path", "OAuth Enabled Gadget Providers" => "gadgets_oauth_clients_path", "Backup" => "backup_server_path"}
+      assert_values_there = {"Pipelines" => pipeline_groups_path, "Templates" => templates_path, "Config XML" => pipelines_snippet_path, "Plugins" => plugins_listing_path, "Package Repositories" => package_repositories_new_path}
 
-      assert_values_there = {"Pipelines" => "pipeline_groups_path", "Templates" => "templates_path", "Config XML" => "pipelines_snippet_path", "Plugins" => "plugins_listing_path", "Package Repositories" => "package_repositories_new_path"}
+      Capybara.string(response.body).find("li#cruise-header-tab-admin").tap do |ul_tabs_li|
+        expect(ul_tabs_li.all("li").size).to be(assert_values_there.length)
 
-      Capybara.string(response.body).find('ul.tabs').tap do |ul_tabs|
-        ul_tabs.find("li#cruise-header-tab-admin") do |ul_tabs_li|
-          expect(ul_tabs_li).to have_selector("a[data-toggle='dropdown']", "ADMIN")
-
-          ul_tabs_li.find("ul.dropdown-menu[role='menu']") do |ul_dropdown|
-            assert_values_not_there.each do |key, value|
-              have_selector("a[href='#{value}']", key)
-            end
-            assert_values_there.each do |key, value|
-              ul_dropdown.find("li[role='presentation']") do |ul_dropdown_li|
-                expect(ul_dropdown_li).to have_selector("a[href='#{value}']", key)
-              end
-            end
+        assert_values_there.each do |key, value|
+          ul_tabs_li.find("li:contains('#{key}')").tap do |li|
+            expect(li).to have_selector("a[href='#{value}']", text: key)
           end
         end
       end
@@ -311,21 +230,13 @@ describe "/shared/_application_nav.html.erb" do
     it "should disable admin link on header in case of non-admins" do
       allow(view).to receive(:can_view_admin_page?).and_return(false)
 
-      render :partial => "shared/application_nav.html.erb"
-
-      assert_values_not_there = {"Pipelines" => "pipeline_groups_path", "Templates" => "templates_path", "Config XML" => "config_view_path", "Server Configuration" => "edit_server_config_path", "User Summary" => "user_listing_path",
-                                 "OAuth Clients" => "oauth_clients_path", "OAuth Enabled Gadget Providers" => "gadgets_oauth_clients_path", "Backup" => "backup_server_path",  "Plugins" => "plugins_listing_path", "Package Repositories" => "package_repositories_new_path",}
+      render :partial => partial_page
 
       Capybara.string(response.body).find('ul.tabs').tap do |ul_tabs|
-        ul_tabs.find("li#cruise-header-tab-admin") do |ul_tabs_li|
-          expect(ul_tabs_li).to have_selector("span", "ADMIN")
+        ul_tabs.find("li#cruise-header-tab-admin").tap do |ul_tabs_li|
+          expect(ul_tabs_li).to have_selector("span", text: "ADMIN")
           expect(ul_tabs_li).to_not have_selector("a[data-toggle='dropdown']", "ADMIN")
-
           expect(ul_tabs_li).to_not have_selector("ul.dropdown-menu[role='menu']")
-
-          assert_values_not_there.each do |key, value|
-            expect(ul_tabs_li).to_not have_selector("a[href='#{value}']", key)
-          end
         end
       end
     end
@@ -333,8 +244,10 @@ describe "/shared/_application_nav.html.erb" do
     it "should add current css class to Admin menu when current tab is admin" do
       assign(:current_tab_name, "admin")
       controller.request.path_parameters[:controller] = 'pipelines'
-      controller.request.path_parameters[:action] = 'index'
-      render :partial => "shared/application_nav.html.erb", :locals => {:scope => {:admin_tab_url => "foo/admin"}}
+      controller.request.path_parameters[:action]     = 'index'
+
+      render :partial => partial_page
+
       expect(response.body).to have_selector("li[id='cruise-header-tab-admin'][class='current']")
     end
   end

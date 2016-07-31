@@ -14,14 +14,14 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe ::ConfigUpdate::PipelineOrTemplateNode do
   include ::ConfigUpdate::PipelineOrTemplateNode
 
   before(:each) do
     allow(self).to receive(:params).and_return(@params = {})
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     @cruise_config.addPipeline("foo-group", @pipeline = PipelineConfigMother.createPipelineConfig("pipeline-bar", "stage-baz", ["job-foo"].to_java(java.lang.String)))
     @cruise_config.addTemplate(@template = PipelineTemplateConfig.new(CaseInsensitiveString.new("template-bar"), [StageConfigMother.stageConfig("stage-baz")].to_java(StageConfig)))
   end

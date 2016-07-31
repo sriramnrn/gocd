@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials.dependency;
 
@@ -22,14 +22,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.ConfigAttribute;
-import com.thoughtworks.go.config.ConfigTag;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.FetchTask;
-import com.thoughtworks.go.config.ParamsAttributeAware;
-import com.thoughtworks.go.config.PipelineConfig;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.materials.AbstractMaterialConfig;
 import com.thoughtworks.go.config.materials.Filter;
 import com.thoughtworks.go.domain.ConfigErrors;
@@ -44,6 +37,7 @@ public class DependencyMaterialConfig extends AbstractMaterialConfig implements 
     public static final String PIPELINE_STAGE_NAME = "pipelineStageName";
     public static final String TYPE = "DependencyMaterial";
     private static final Pattern PIPELINE_STAGE_COMBINATION_PATTERN = Pattern.compile("^(.+) (\\[.+\\])$");
+    public static final String ORIGIN = "origin";
 
     @ConfigAttribute(value = "pipelineName")
     private com.thoughtworks.go.config.CaseInsensitiveString pipelineName = new CaseInsensitiveString("Unknown");
@@ -94,6 +88,11 @@ public class DependencyMaterialConfig extends AbstractMaterialConfig implements 
     }
 
     @Override
+    public boolean isInvertFilter() {
+        return false;
+    }
+
+    @Override
     public boolean matches(String name, String regex) {
         return false;
     }
@@ -114,6 +113,10 @@ public class DependencyMaterialConfig extends AbstractMaterialConfig implements 
     }
 
     @Override
+    public void setAutoUpdate(boolean autoUpdate) {
+    }
+
+    @Override
     protected void appendCriteria(Map<String, Object> parameters) {
         parameters.put("pipelineName", CaseInsensitiveString.str(pipelineName));
         parameters.put("stageName", CaseInsensitiveString.str(stageName));
@@ -128,8 +131,16 @@ public class DependencyMaterialConfig extends AbstractMaterialConfig implements 
         return pipelineName;
     }
 
+    public void setPipelineName(CaseInsensitiveString pipelineName) {
+        this.pipelineName = pipelineName;
+    }
+
     public CaseInsensitiveString getStageName() {
         return stageName;
+    }
+
+    public void setStageName(CaseInsensitiveString stageName) {
+        this.stageName = stageName;
     }
 
     @Override
@@ -183,12 +194,14 @@ public class DependencyMaterialConfig extends AbstractMaterialConfig implements 
     protected void validateConcreteMaterial(ValidationContext validationContext) {
         CaseInsensitiveString upstreamPipelineName = this.getPipelineName();
         CaseInsensitiveString upstreamStageName = this.getStageName();
-        CruiseConfig cruiseConfig = validationContext.getCruiseConfig();
-        if (!cruiseConfig.hasPipelineNamed(upstreamPipelineName)) {
-            errors.add(PIPELINE_STAGE_NAME, String.format("Pipeline with name '%s' does not exist", upstreamPipelineName));
+
+        PipelineConfig upstreamPipeline = validationContext.getPipelineConfigByName(upstreamPipelineName);
+        PipelineConfig pipeline = validationContext.getPipeline();
+        if (upstreamPipeline==null) {
+            errors.add(DependencyMaterialConfig.PIPELINE_STAGE_NAME, String.format("Pipeline with name '%s' does not exist, it is defined as a dependency for pipeline '%s' (%s)", upstreamPipelineName, pipeline.name(), pipeline.getOriginDisplayName()));
         }
-        if (!cruiseConfig.hasStageConfigNamed(upstreamPipelineName, upstreamStageName, true)) {
-            errors.add(PIPELINE_STAGE_NAME, String.format("Stage with name '%s' does not exist on pipeline '%s'", upstreamStageName, upstreamPipelineName));
+        else if (upstreamPipeline.findBy(upstreamStageName) == null) {
+            errors.add(DependencyMaterialConfig.PIPELINE_STAGE_NAME, String.format("Stage with name '%s' does not exist on pipeline '%s', it is being referred to from pipeline '%s' (%s)", upstreamStageName, upstreamPipelineName, pipeline.name(), pipeline.getOriginDisplayName()));
         }
     }
 

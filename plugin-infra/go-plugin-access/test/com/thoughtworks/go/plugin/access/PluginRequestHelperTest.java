@@ -15,8 +15,6 @@ import java.util.Map;
 import static java.util.Arrays.asList;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.*;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
 public class PluginRequestHelperTest {
@@ -63,8 +61,8 @@ public class PluginRequestHelperTest {
             });
             fail("should throw exception");
         } catch (Exception e) {
-            assertThat(e.getMessage(), is("Interaction with plugin with id 'pid' implementing 'some-extension' extension failed while requesting for 'req'. Reason: [Unsuccessful response from plugin. Plugin returned with code '500' and the following response: 'junk']"));
-            assertThat(e.getCause().getMessage(), is("Unsuccessful response from plugin. Plugin returned with code '500' and the following response: 'junk'"));
+            assertThat(e.getMessage(), is("Interaction with plugin with id 'pid' implementing 'some-extension' extension failed while requesting for 'req'. Reason: [The plugin sent a response that could not be understood by Go. Plugin returned with code '500' and the following response: 'junk']"));
+            assertThat(e.getCause().getMessage(), is("The plugin sent a response that could not be understood by Go. Plugin returned with code '500' and the following response: 'junk'"));
             assertFalse(isSuccessInvoked[0]);
             verify(pluginManager).submitTo(eq(pluginId), any(GoPluginApiRequest.class));
         }

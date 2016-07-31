@@ -21,15 +21,23 @@ class ApplicationController < ActionController::Base
 
   # Prevent CSRF attacks by raising an exception.
   # For APIs, you may want to use :null_session instead.
-  protect_from_forgery with: :exception
+  protect_from_forgery with: :exception, :except => :unresolved
 
   attr_accessor :error_template_for_request
 
-  before_filter :set_current_user, :populate_health_messages, :local_access_only, :populate_config_validity, :set_site_urls_in_thread
+  before_filter :set_current_user, :local_access_only, :populate_config_validity, :set_site_urls_in_thread
 
   helper_method :current_user_id_for_oauth
 
   LOCAL_ONLY_ACTIONS = Hash.new([]).merge("api/server" => ["info"])
+
+  helper Oauth2Provider::ApplicationHelper
+
+  if Rails.env.development?
+    before_filter do |controller|
+      response.headers["X-Controller-Action"] = "#{params[:controller]}##{params[:action]}"
+    end
+  end
 
   if Rails.env.production?
     include ActionRescue
@@ -73,11 +81,6 @@ class ApplicationController < ActionController::Base
 
   def set_flash_message(msg, klass)
     flash_message_service.add(FlashMessageModel.new(msg, klass))
-  end
-
-  # health messages
-  def populate_health_messages
-      @current_server_health_states = server_health_service.getAllValidLogs(go_config_service.getCurrentConfig())
   end
 
   def local_access_only

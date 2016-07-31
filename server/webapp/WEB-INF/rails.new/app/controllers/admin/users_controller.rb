@@ -21,8 +21,6 @@ module Admin
 
     layout :determine_layout
 
-    protect_from_forgery :except => :delete_all #NOT_IN_PRODUCTION don't remove this line, the build will remove this line when packaging the war
-
     def new
     end
 
@@ -49,10 +47,7 @@ module Admin
       @users = user_service.allUsersForDisplay(UserService::SortableColumn.valueOf((params[:column] || "username").upcase), UserService::SortDirection.valueOf(params[:order] || "ASC"))
       @total_enabled_users = user_service.enabledUserCount()
       @total_disabled_users = user_service.disabledUserCount()
-      @permitted_users = go_license_service.maximumUsersAllowed()
     end
-
-    skip_before_filter :verify_authenticity_token, :only => :operate #NOT_IN_PRODUCTION twist uses this to simulate admin changing user privileges while user is logged in on browser
 
     def operate
       operation = (params[:operation] || "").downcase
@@ -85,17 +80,6 @@ module Admin
       admin_and_role_selections = user_service.getAdminAndRoleSelections(users)
       @selections = admin_and_role_selections.getRoleSelections()
       @admin_selection = admin_and_role_selections.getAdminSelection()
-    end
-
-    # Used only in Twist tests. Don't remove the #NOT_IN_PRODUCTION comments, these are used to strip out lines when building the distributable'
-    def delete_all #NOT_IN_PRODUCTION
-      user_service.deleteAll() #NOT_IN_PRODUCTION
-      render :text => 'Deleted' #NOT_IN_PRODUCTION
-    end #NOT_IN_PRODUCTION
-
-    def dismiss_license_expiry_warning
-      user_service.disableLicenseExpiryWarning(current_user_entity_id)
-      render :text => "Disabled successfully"
     end
 
     def determine_layout

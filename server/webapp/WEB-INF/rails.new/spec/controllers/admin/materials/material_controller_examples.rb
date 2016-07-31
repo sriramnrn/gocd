@@ -19,10 +19,6 @@ shared_examples_for :material_controller do
   include ConfigSaveStubbing
   include MockRegistryModule
 
-  before do
-    controller.stub(:populate_health_messages)
-  end
-
   describe "routes should resolve and generate" do
     it "new" do
       {:get => "/admin/pipelines/pipeline.name/materials/#{@short_material_type}/new"}.should route_to(:controller => "admin/materials/#{@short_material_type}", :action => "new", :pipeline_name => "pipeline.name")
@@ -78,7 +74,7 @@ shared_examples_for :material_controller do
         setup_for_new_material
         @go_config_service.stub(:registry).and_return(MockRegistryModule::MockRegistry.new)
       end
-      
+
       it "should add new material" do
         stub_save_for_success
 
@@ -188,7 +184,7 @@ shared_examples_for :material_controller do
   def setup_data
     controller.stub(:populate_config_validity)
 
-    @cruise_config = CruiseConfig.new()
+    @cruise_config = BasicCruiseConfig.new()
     repository1 = PackageRepositoryMother.create("repo-id", "repo1-name", "pluginid", "version1.0", Configuration.new([ConfigurationPropertyMother.create("k1", false, "v1")].to_java(ConfigurationProperty)))
     @pkg = PackageDefinitionMother.create("pkg-id", "package3-name", Configuration.new([ConfigurationPropertyMother.create("k2", false, "p3v2")].to_java(ConfigurationProperty)), repository1)
     repository1.setPackages(Packages.new([@pkg].to_java(PackageDefinition)))

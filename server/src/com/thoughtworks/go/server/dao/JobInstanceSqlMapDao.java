@@ -1,18 +1,18 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.dao;
 
@@ -25,6 +25,7 @@ import com.thoughtworks.go.config.Resource;
 import com.thoughtworks.go.database.Database;
 import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.server.cache.GoCache;
+import com.thoughtworks.go.server.domain.JobStatusListener;
 import com.thoughtworks.go.server.persistence.ArtifactPlanRepository;
 import com.thoughtworks.go.server.persistence.ArtifactPropertiesGeneratorRepository;
 import com.thoughtworks.go.server.persistence.ResourceRepository;
@@ -53,13 +54,14 @@ import static com.thoughtworks.go.util.IBatisUtil.arguments;
 
 @SuppressWarnings("unchecked")
 @Component
-public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobInstanceDao {
+public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobInstanceDao, JobStatusListener {
     private static final Logger LOG = Logger.getLogger(JobInstanceSqlMapDao.class);
     private Cache cache;
     private TransactionSynchronizationManager transactionSynchronizationManager;
     private GoCache goCache;
     private TransactionTemplate transactionTemplate;
     private EnvironmentVariableDao environmentVariableDao;
+    private JobAgentMetadataDao jobAgentMetadataDao;
     private Cloner cloner = new Cloner();
     private ResourceRepository resourceRepository;
     private ArtifactPlanRepository artifactPlanRepository;
@@ -68,7 +70,8 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
     @Autowired
     public JobInstanceSqlMapDao(EnvironmentVariableDao environmentVariableDao, GoCache goCache, TransactionTemplate transactionTemplate, SqlMapClient sqlMapClient, Cache cache,
                                 TransactionSynchronizationManager transactionSynchronizationManager, SystemEnvironment systemEnvironment, Database database,
-                                ResourceRepository resourceRepository, ArtifactPlanRepository artifactPlanRepository, ArtifactPropertiesGeneratorRepository artifactPropertiesGeneratorRepository) {
+                                ResourceRepository resourceRepository, ArtifactPlanRepository artifactPlanRepository, ArtifactPropertiesGeneratorRepository artifactPropertiesGeneratorRepository,
+                                JobAgentMetadataDao jobAgentMetadataDao) {
         super(goCache, sqlMapClient, systemEnvironment, database);
         this.environmentVariableDao = environmentVariableDao;
         this.goCache = goCache;
@@ -78,6 +81,7 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
         this.resourceRepository = resourceRepository;
         this.artifactPlanRepository = artifactPlanRepository;
         this.artifactPropertiesGeneratorRepository = artifactPropertiesGeneratorRepository;
+        this.jobAgentMetadataDao = jobAgentMetadataDao;
     }
 
     public JobInstance buildByIdWithTransitions(long buildInstanceId) {
@@ -116,7 +120,7 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
     }
 
     private List<ActiveJob> getActiveJobs(List<Long> activeJobIds) {
-        List<ActiveJob> activeJobs = new ArrayList<ActiveJob>();
+        List<ActiveJob> activeJobs = new ArrayList<>();
         for (Long activeJobId : activeJobIds) {
             ActiveJob job = getActiveJob(activeJobId);
             if (job != null) {
@@ -183,18 +187,19 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
 
     public void save(long jobId, JobPlan plan) {
         for (Resource resource : plan.getResources()) {
-            resource.setBuildId(jobId);
-            resourceRepository.saveCopyOf(resource);
+            resourceRepository.saveCopyOf(jobId, resource);
         }
         for (ArtifactPropertiesGenerator generator : plan.getPropertyGenerators()) {
-            generator.setJobId(jobId);
-            artifactPropertiesGeneratorRepository.saveCopyOf(generator);
+            artifactPropertiesGeneratorRepository.saveCopyOf(jobId, generator);
         }
         for (ArtifactPlan artifactPlan : plan.getArtifactPlans()) {
-            artifactPlan.setBuildId(jobId);
-            artifactPlanRepository.saveCopyOf(artifactPlan);
+            artifactPlanRepository.saveCopyOf(jobId, artifactPlan);
         }
         environmentVariableDao.save(jobId, EnvironmentVariableSqlMapDao.EnvironmentVariableType.Job, plan.getVariables());
+
+        if (plan.requiresElasticAgent()){
+            jobAgentMetadataDao.save(new JobAgentMetadata(jobId, plan.getJobAgentConfig()));
+        }
     }
 
     public JobPlan loadPlan(long jobId) {
@@ -209,13 +214,16 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
         plan.setResources(resourceRepository.findByBuildId(plan.getJobId()));
         plan.setVariables(environmentVariableDao.load(plan.getJobId(), EnvironmentVariableSqlMapDao.EnvironmentVariableType.Job));
         plan.setTriggerVariables(environmentVariableDao.load(plan.getPipelineId(), EnvironmentVariableSqlMapDao.EnvironmentVariableType.Trigger));
+        JobAgentMetadata jobAgentMetadata = jobAgentMetadataDao.load(plan.getJobId());
+        if (jobAgentMetadata != null){
+            plan.setJobAgentConfig(jobAgentMetadata.jobAgentConfig());
+        }
     }
 
     public JobIdentifier findOriginalJobIdentifier(StageIdentifier stageIdentifier, String jobName) {
         String key = cacheKeyForOriginalJobIdentifier(stageIdentifier, jobName);
 
         JobIdentifier jobIdentifier = (JobIdentifier) goCache.get(key);
-
         if (jobIdentifier == null) {
             synchronized (key) {
                 jobIdentifier = (JobIdentifier) goCache.get(key);
@@ -264,7 +272,7 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
     }
 
     private List<JobIdentifier> buildingJobs(List<Long> activeJobIds) {
-        List<JobIdentifier> buildingJobs = new ArrayList<JobIdentifier>();
+        List<JobIdentifier> buildingJobs = new ArrayList<>();
         for (Long activeJobId : activeJobIds) {
             JobIdentifier jobIdentifier = (JobIdentifier) getSqlMapClientTemplate().queryForObject("getBuildingJobIdentifier", activeJobId);
             if (jobIdentifier != null) {
@@ -392,11 +400,11 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
 
 		return new JobInstances(results);
 	}
- 
+
     public List<JobPlan> orderedScheduledBuilds() {
         List<Long> jobIds = (List<Long>) getSqlMapClientTemplate().queryForList("scheduledPlanIds");
 
-        List<JobPlan> plans = new ArrayList<JobPlan>();
+        List<JobPlan> plans = new ArrayList<>();
         for (Long jobId : jobIds) {
             String cacheKey = cacheKeyForJobPlan(jobId);
             synchronized (cacheKey) {
@@ -472,5 +480,12 @@ public class JobInstanceSqlMapDao extends SqlMapClientDaoSupport implements JobI
         transition.setJobId(jobInstance.getId());
         transition.setStageId(jobInstance.getStageId());
         getSqlMapClientTemplate().insert("insertTransition", transition);
+    }
+
+    @Override
+    public void jobStatusChanged(final JobInstance job) {
+        if(job.isRescheduled()) {
+            goCache.remove(cacheKeyForOriginalJobIdentifier(job.getIdentifier().getStageIdentifier(), job.getName()));
+        }
     }
 }

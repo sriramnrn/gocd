@@ -40,7 +40,7 @@ class AgentsController < ApplicationController
 
   def index
     @agents = agent_service.agents
-    @agents.filter(params[:filter])
+    @agents.filter(filter)
     @agents.sortBy(ORDERS[params[:column]], specified_order)
 
     @agents_disabled = @agents.disabledCount()
@@ -63,10 +63,14 @@ class AgentsController < ApplicationController
   def edit_agents
     result = bulk_edit
     session[LISTING_MESSAGE_KEY] = FlashMessageModel.new(result.message(), result.canContinue() ? 'success' : 'error')
-    redirect_to action: "index"
+    redirect_to action: "index", filter: params[:filter], order: params[:order], column: params[:column]
   end
 
   private
+
+  def filter
+    CGI.unescapeHTML(params[:filter]) if params[:filter]
+  end
 
   def populate_agent_for_details
     uuid = params[:uuid]
@@ -86,10 +90,6 @@ class AgentsController < ApplicationController
     com.thoughtworks.go.server.ui.SortOrder.orderFor(params[:order] || default)
   end
 
-  helper_method :default_url_options
-  def default_url_options(options = nil)
-    super.reverse_merge(params.only(:filter, :order, :column).symbolize_keys)
-  end
 
   def set_tab_name
     @current_tab_name = "agents"

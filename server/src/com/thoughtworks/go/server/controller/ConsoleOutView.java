@@ -16,13 +16,13 @@
 
 package com.thoughtworks.go.server.controller;
 
-import java.io.PrintWriter;
-import java.util.Map;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import com.thoughtworks.go.util.GoConstants;
 import org.springframework.web.servlet.View;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.PrintWriter;
+import java.util.Map;
 
 public class ConsoleOutView implements View {
     private int offset;
@@ -39,11 +39,9 @@ public class ConsoleOutView implements View {
 
     public void render(Map model, HttpServletRequest request, HttpServletResponse response) throws Exception {
         response.addHeader("X-JSON", "[" + getOffset() + "]");
-        PrintWriter writer = response.getWriter();
-        try {
+        response.setContentType(getContentType());
+        try (PrintWriter writer = response.getWriter()) {
             writer.write(getContent());
-        } finally {
-            writer.close();
         }
 
     }

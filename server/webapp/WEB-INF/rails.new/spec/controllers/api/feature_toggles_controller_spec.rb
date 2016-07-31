@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe Api::FeatureTogglesController do
   before do
@@ -28,6 +28,7 @@ describe Api::FeatureTogglesController do
     end
 
     it "should resolve route to update the value of feature toggle" do
+      expect_any_instance_of(HeaderConstraint).to receive(:matches?).with(any_args).and_return(true)
       {:post => "/api/admin/feature_toggles/toggle.key"}.should route_to(:controller => "api/feature_toggles", :action => "update", :toggle_key => "toggle.key",
                                                                      :no_layout => true, :format => :json)
       api_admin_feature_toggle_update_path("abc").should == "/api/admin/feature_toggles/abc"

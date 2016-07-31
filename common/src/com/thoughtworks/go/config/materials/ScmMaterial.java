@@ -1,36 +1,33 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials;
-
-import java.io.File;
-import java.util.Map;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.domain.MaterialRevision;
-import com.thoughtworks.go.domain.materials.MatchedRevision;
-import com.thoughtworks.go.domain.materials.Modification;
-import com.thoughtworks.go.domain.materials.Modifications;
-import com.thoughtworks.go.domain.materials.Revision;
-import com.thoughtworks.go.util.StringUtil;
+import com.thoughtworks.go.domain.materials.*;
 import com.thoughtworks.go.util.command.EnvironmentVariableContext;
+import com.thoughtworks.go.util.command.InMemoryStreamConsumer;
+import com.thoughtworks.go.util.command.ProcessOutputStreamConsumer;
 import com.thoughtworks.go.util.command.UrlArgument;
-import com.thoughtworks.go.util.json.JsonMap;
 import org.apache.commons.lang.StringUtils;
+
+import java.io.File;
+import java.util.Map;
 
 import static com.thoughtworks.go.util.command.EnvironmentVariableContext.escapeEnvironmentVariable;
 
@@ -47,6 +44,7 @@ public abstract class ScmMaterial extends AbstractMaterial {
     protected Filter filter;
     protected String folder;
     protected boolean autoUpdate = true;
+    protected boolean invertFilter = false;
 
     public ScmMaterial(String typeName) {
         super(typeName);
@@ -63,12 +61,12 @@ public abstract class ScmMaterial extends AbstractMaterial {
         return new File(baseFolder, getFolder());
     }
 
-    protected String updatingTarget() {
+    public String updatingTarget() {
         return StringUtils.isEmpty(getFolder()) ? "files" : getFolder();
     }
 
-    public void toJson(JsonMap json, Revision revision) {
-        json.put("folder", getFolder());
+    public void toJson(Map json, Revision revision) {
+        json.put("folder", getFolder() == null ? "" : getFolder());
         json.put("scmType", getTypeForDisplay());
         json.put("location", getLocation());
         if (!CaseInsensitiveString.isBlank(getName())) {
@@ -85,6 +83,11 @@ public abstract class ScmMaterial extends AbstractMaterial {
             regex = regex.substring(1);
         }
         return name.matches(regex);
+    }
+
+    public void checkout(File baseDir, Revision revision, SubprocessExecutionContext execCtx) {
+        InMemoryStreamConsumer output = ProcessOutputStreamConsumer.inMemoryConsumer();
+        this.updateTo(output, baseDir, new RevisionContext(revision), execCtx);
     }
 
     public abstract String getUserName();
@@ -169,6 +172,18 @@ public abstract class ScmMaterial extends AbstractMaterial {
         autoUpdate = value;
     }
 
+    public boolean isInvertFilter() {
+        return invertFilter;
+    }
+
+    public boolean getInvertFilter() {
+        return invertFilter;
+    }
+
+    public void setInvertFilter(boolean value) {
+        invertFilter = value;
+    }
+
     public final MatchedRevision createMatchedRevision(Modification modification, String searchString) {
         return new MatchedRevision(searchString, getShortRevision(modification.getRevision()), modification.getRevision(), modification.getUserName(), modification.getModifiedTime(),
                 modification.getComment());
@@ -202,14 +217,9 @@ public abstract class ScmMaterial extends AbstractMaterial {
         return result;
     }
 
-    public boolean hasDestination() {
-        return !StringUtil.isBlank(folder);
-    }
-
     public static String changesetUrl(Modification modification, String baseUrl, final long id) {
         return baseUrl + "/api/materials/" + id + "/changeset/" + modification.getRevision() + ".xml";
     }
-
 
     public Boolean isUsedInFetchArtifact(PipelineConfig pipelineConfig) {
         return false;
@@ -222,5 +232,10 @@ public abstract class ScmMaterial extends AbstractMaterial {
 
     public Revision oldestRevision(Modifications modifications) {
         return Modification.oldestRevision(modifications);
+    }
+
+    @Override
+    public boolean supportsDestinationFolder() {
+        return true;
     }
 }

@@ -1,49 +1,40 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.presentation.models;
-
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.thoughtworks.go.config.AgentConfig;
 import com.thoughtworks.go.config.Tabs;
 import com.thoughtworks.go.config.TrackingTool;
-import com.thoughtworks.go.domain.DirectoryEntries;
-import com.thoughtworks.go.domain.JobIdentifier;
-import com.thoughtworks.go.domain.JobInstance;
-import com.thoughtworks.go.domain.JobInstances;
-import com.thoughtworks.go.domain.ModificationSummaries;
-import com.thoughtworks.go.domain.ModificationVisitor;
-import com.thoughtworks.go.domain.Pipeline;
-import com.thoughtworks.go.domain.Properties;
-import com.thoughtworks.go.domain.Stage;
-import com.thoughtworks.go.domain.StageIdentifier;
-import com.thoughtworks.go.domain.TestReportGenerator;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.exception.IllegalArtifactLocationException;
 import com.thoughtworks.go.server.service.ArtifactsService;
-import com.thoughtworks.go.server.web.JsonStringRenderer;
 import com.thoughtworks.go.util.ArtifactLogUtil;
 import com.thoughtworks.go.util.DirectoryReader;
 import com.thoughtworks.go.util.TimeConverter;
 import org.apache.commons.lang.StringUtils;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
 import static com.thoughtworks.go.config.TestArtifactPlan.TEST_OUTPUT_FOLDER;
 import static com.thoughtworks.go.domain.TestReportGenerator.TEST_RESULTS_FILE;
+import static com.thoughtworks.go.server.web.JsonRenderer.render;
+import static com.thoughtworks.go.util.ArtifactLogUtil.*;
 import static com.thoughtworks.go.util.FileUtil.normalizePath;
 import static org.apache.commons.lang.StringUtils.isEmpty;
 import static org.apache.commons.lang.math.NumberUtils.toInt;
@@ -132,10 +123,15 @@ public class JobDetailPresentationModel {
     }
 
     public DirectoryEntries getArtifactFiles(final DirectoryReader directoryReader) throws IllegalArtifactLocationException {
-        File artifact = artifactsService.findArtifact(jobIdentifier, "");
-        DirectoryEntries directoryEntries = directoryReader.listEntries(artifact, "");
-        directoryEntries.setIsArtifactsDeleted(stage.isArtifactsDeleted());
-        return directoryEntries;
+        return new DirectoryEntries() {{
+            if (!job.isCompleted()) {
+                addFolder(CRUISE_OUTPUT_FOLDER).addFile(CONSOLE_LOG_FILE_NAME,
+                        artifactsService.findArtifactUrl(jobIdentifier,
+                                getConsoleOutputFolderAndFileName()));
+            }
+            addAll(directoryReader.listEntries(artifactsService.findArtifact(jobIdentifier, ""), ""));
+            setIsArtifactsDeleted(stage.isArtifactsDeleted());
+        }};
     }
 
     public ModificationVisitor getModificationSummaries() {
@@ -145,7 +141,7 @@ public class JobDetailPresentationModel {
     public String getMaterialRevisionsJson() {
         MaterialRevisionsJsonBuilder jsonVisitor = new MaterialRevisionsJsonBuilder(trackingTool);
         pipeline.getMaterialRevisions().accept(jsonVisitor);
-        return JsonStringRenderer.render(jsonVisitor.json());
+        return render(jsonVisitor.json());
     }
 
     public String getModificationTime() {
@@ -158,7 +154,7 @@ public class JobDetailPresentationModel {
 
     public List<JobStatusJsonPresentationModel> getRecent25() {
         List<JobStatusJsonPresentationModel> recent25StatusJson =
-                new ArrayList<JobStatusJsonPresentationModel>();
+                new ArrayList<>();
         for (JobInstance jobInstance : this.recent25) {
             recent25StatusJson.add(new JobStatusJsonPresentationModel(jobInstance));
         }

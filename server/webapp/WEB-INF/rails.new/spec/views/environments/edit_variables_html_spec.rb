@@ -14,13 +14,13 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "environments/edit_variables.html.erb" do
   include GoUtil, FormUI, ReflectiveUtil
-  
+
   before do
-    @environment = EnvironmentConfig.new()
+    @environment = BasicEnvironmentConfig.new()
     @environment.addEnvironmentVariable("plain_name", "plain_value")
     assign(:environment, @environment)
 
@@ -31,7 +31,7 @@ describe "environments/edit_variables.html.erb" do
   end
 
   it "should display existing variables" do
-    Capybara.string(response.body).find("ul.variables").tap do |variables|
+    Capybara.string(response.body).find("div.plain-text-variables table.variables").tap do |variables|
       expect(variables).to have_selector("input.environment_variable_name[name='environment[variables][][name]'][value='plain_name']")
       expect(variables).to have_selector("input.environment_variable_value[name='environment[variables][][valueForDisplay]'][value='plain_value']")
     end
@@ -41,12 +41,10 @@ describe "environments/edit_variables.html.erb" do
     expect(response.body).to have_selector("form input[type='hidden'][name='cruise_config_md5'][value='foo_bar_baz']")
   end
 
-  # Capybara does not understand how to search for an input tag *inside* a textarea.
   it "should have a template for newly added environment variables" do
-    textarea_tag = 'textarea id="environment_variables_template"'
-    name_input = 'input class=".*environment_variable_name" name="environment\[variables\]\[\]\[name\]"'
-    value_input = 'input class="form_input environment_variable_value" name="environment\[variables\]\[\]\[valueForDisplay\]"'
-
-    expect(response.body).to match Regexp.new("#{textarea_tag}.*\n.*#{name_input}.*\n.*#{value_input}")
+    Capybara.string(response.body).find('div.plain-text-variables tbody.template', visible: false).tap do |template|
+      expect(template).to have_selector("input.environment_variable_name[name='environment[variables][][name]']", visible: false)
+      expect(template).to have_selector("input.environment_variable_value[name='environment[variables][][valueForDisplay]']", visible: false)
+    end
   end
 end

@@ -16,8 +16,8 @@
 
 package com.thoughtworks.go.server.service;
 
-import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.materials.PackageMaterial;
+import com.thoughtworks.go.config.materials.PluggableSCMMaterial;
 import com.thoughtworks.go.config.materials.SubprocessExecutionContext;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterial;
 import com.thoughtworks.go.config.materials.git.GitMaterial;
@@ -29,10 +29,12 @@ import com.thoughtworks.go.domain.MaterialInstance;
 import com.thoughtworks.go.domain.materials.*;
 import com.thoughtworks.go.i18n.LocalizedMessage;
 import com.thoughtworks.go.plugin.access.packagematerial.PackageAsRepositoryExtension;
+import com.thoughtworks.go.plugin.access.scm.SCMExtension;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
 import com.thoughtworks.go.server.service.materials.*;
 import com.thoughtworks.go.server.service.result.LocalizedOperationResult;
+import com.thoughtworks.go.server.transaction.TransactionTemplate;
 import com.thoughtworks.go.server.util.Pagination;
 import com.thoughtworks.go.serverhealth.HealthStateScope;
 import com.thoughtworks.go.serverhealth.HealthStateType;
@@ -54,14 +56,19 @@ public class MaterialService {
     private final GoConfigService goConfigService;
     private final SecurityService securityService;
     private PackageAsRepositoryExtension packageAsRepositoryExtension;
-    private Map<Class, MaterialPoller> materialPollerMap = new HashMap<Class, MaterialPoller>();
+    private SCMExtension scmExtension;
+    private TransactionTemplate transactionTemplate;
+    private Map<Class, MaterialPoller> materialPollerMap = new HashMap<>();
 
     @Autowired
-    public MaterialService(MaterialRepository materialRepository, GoConfigService goConfigService, SecurityService securityService, PackageAsRepositoryExtension packageAsRepositoryExtension) {
+    public MaterialService(MaterialRepository materialRepository, GoConfigService goConfigService, SecurityService securityService,
+                           PackageAsRepositoryExtension packageAsRepositoryExtension, SCMExtension scmExtension, TransactionTemplate transactionTemplate) {
         this.materialRepository = materialRepository;
         this.goConfigService = goConfigService;
         this.securityService = securityService;
         this.packageAsRepositoryExtension = packageAsRepositoryExtension;
+        this.scmExtension = scmExtension;
+        this.transactionTemplate = transactionTemplate;
         populatePollerImplementations();
     }
 
@@ -73,6 +80,7 @@ public class MaterialService {
         materialPollerMap.put(P4Material.class, new P4Poller());
         materialPollerMap.put(DependencyMaterial.class, new DependencyMaterialPoller());
         materialPollerMap.put(PackageMaterial.class, new PackageMaterialPoller(packageAsRepositoryExtension));
+        materialPollerMap.put(PluggableSCMMaterial.class, new PluggableSCMMaterialPoller(materialRepository, scmExtension, transactionTemplate));
     }
 
     public boolean hasModificationFor(Material material) {
@@ -80,16 +88,16 @@ public class MaterialService {
     }
 
     public List<MatchedRevision> searchRevisions(String pipelineName, String fingerprint, String searchString, Username username, LocalizedOperationResult result) {
-        if (!securityService.hasViewPermissionForPipeline(CaseInsensitiveString.str(username.getUsername()), pipelineName)) {
+        if (!securityService.hasViewPermissionForPipeline(username, pipelineName)) {
             result.unauthorized(LocalizedMessage.cannotViewPipeline(pipelineName), HealthStateType.general(HealthStateScope.forPipeline(pipelineName)));
-            return new ArrayList<MatchedRevision>();
+            return new ArrayList<>();
         }
         try {
             MaterialConfig materialConfig = goConfigService.materialForPipelineWithFingerprint(pipelineName, fingerprint);
             return materialRepository.findRevisionsMatching(materialConfig, searchString);
         } catch (RuntimeException e) {
             result.notFound(LocalizedMessage.materialWithFingerPrintNotFound(pipelineName, fingerprint), HealthStateType.general(HealthStateScope.forPipeline(pipelineName)));
-            return new ArrayList<MatchedRevision>();
+            return new ArrayList<>();
         }
     }
 
@@ -101,7 +109,7 @@ public class MaterialService {
         return getPollerImplementation(material).modificationsSince(material, baseDir, revision, execCtx);
     }
 
-    private MaterialPoller getPollerImplementation(Material material) {
+    public MaterialPoller getPollerImplementation(Material material) {
         MaterialPoller materialPoller = materialPollerMap.get(getMaterialClass(material));
         return materialPoller == null ? new NoOpPoller() : materialPoller;
     }

@@ -1,18 +1,18 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
@@ -26,7 +26,6 @@ import com.thoughtworks.go.i18n.Localizable;
 import com.thoughtworks.go.i18n.LocalizedKeyValueMessage;
 import com.thoughtworks.go.i18n.LocalizedMessage;
 import com.thoughtworks.go.i18n.Localizer;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.service.responses.GoConfigOperationalResponse;
 import com.thoughtworks.go.server.service.result.HttpLocalizedOperationResult;
@@ -53,7 +52,7 @@ public class PipelineConfigsServiceTest {
     private SecurityService securityService;
     private Username validUser;
     private HttpLocalizedOperationResult result;
-    private GoConfigFileDao dao;
+    private GoConfigDao dao;
     private CruiseConfig cruiseConfig;
 
     @Before
@@ -62,19 +61,18 @@ public class PipelineConfigsServiceTest {
         securityService = mock(SecurityService.class);
         configCache = new ConfigCache();
         registry = ConfigElementImplementationRegistryMother.withNoPlugins();
-        dao = mock(GoConfigFileDao.class);
+        dao = mock(GoConfigDao.class);
         validUser = new Username(new CaseInsensitiveString("validUser"));
-        MetricsProbeService metricsProbeService = mock(MetricsProbeService.class);
-        service = new PipelineConfigsService(configCache, registry, goConfigService, securityService, metricsProbeService);
+        service = new PipelineConfigsService(configCache, registry, goConfigService, securityService);
         result = new HttpLocalizedOperationResult();
 
-        cruiseConfig = new CruiseConfig();
+        cruiseConfig = new BasicCruiseConfig();
         ReflectionUtil.setField(cruiseConfig, "md5", "md5");
     }
 
     @Test
     public void shouldReturnXmlForGivenGroup_onGetXml() {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         String groupName = "group_name";
         new GoConfigMother().addPipelineWithGroup(cruiseConfig, groupName, "pipeline_name", "stage_name", "job_name");
         when(goConfigService.getConfigForEditing()).thenReturn(cruiseConfig);
@@ -92,9 +90,9 @@ public class PipelineConfigsServiceTest {
         Localizer localizer = mock(Localizer.class);
         when(localizer.localize("PIPELINE_GROUP_NOT_FOUND", groupName)).thenReturn("Not found");
         when(securityService.isUserAdminOfGroup(validUser.getUsername(), groupName)).thenThrow(new PipelineGroupNotFoundException());
-        
+
         service.getXml(groupName, validUser, result);
-        
+
         assertThat(result.httpCode(), is(404));
         assertThat(result.isSuccessful(), is(false));
         assertThat(result.message(localizer), is("Not found"));
@@ -112,7 +110,7 @@ public class PipelineConfigsServiceTest {
         when(securityService.isUserAdminOfGroup(invalidUser.getUsername(), groupName)).thenReturn(false);
 
         String actual = service.getXml(groupName, invalidUser, result);
-        
+
         assertThat(actual, is(nullValue()));
         assertThat(result.httpCode(), is(401));
         assertThat(result.isSuccessful(), is(false));
@@ -199,7 +197,7 @@ public class PipelineConfigsServiceTest {
         Username invalidUser = new Username(new CaseInsensitiveString("invalidUser"));
         when(securityService.isUserAdminOfGroup(invalidUser.getUsername(), groupName)).thenReturn(false);
         when(goConfigService.configFileMd5()).thenReturn("md5");
-        
+
         GoConfigOperationalResponse<PipelineConfigs> actual = service.updateXml(groupName, "", "md5", invalidUser, result);
         PipelineConfigs configElement = actual.getConfigElement();
         GoConfigValidity validity = actual.getValidity();
@@ -292,10 +290,10 @@ public class PipelineConfigsServiceTest {
 	@Test
 	public void shouldGetPipelineGroupsForUser() {
 		PipelineConfig pipelineInGroup1 = new PipelineConfig();
-		PipelineConfigs group1 = new PipelineConfigs(pipelineInGroup1);
+		PipelineConfigs group1 = new BasicPipelineConfigs(pipelineInGroup1);
 		group1.setGroup("group1");
 		PipelineConfig pipelineInGroup2 = new PipelineConfig();
-		PipelineConfigs group2 = new PipelineConfigs(pipelineInGroup2);
+		PipelineConfigs group2 = new BasicPipelineConfigs(pipelineInGroup2);
 		group2.setGroup("group2");
 		when(goConfigService.groups()).thenReturn(new PipelineGroups(group1, group2));
 		String user = "looser";

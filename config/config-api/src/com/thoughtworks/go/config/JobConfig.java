@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
@@ -23,7 +23,6 @@ import com.thoughtworks.go.domain.NullTask;
 import com.thoughtworks.go.domain.Task;
 import com.thoughtworks.go.service.TaskFactory;
 import com.thoughtworks.go.util.StringUtil;
-import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.util.XmlUtils;
 import org.apache.commons.lang.StringUtils;
 
@@ -52,6 +51,8 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
     private ArtifactPlans artifactPlans = new ArtifactPlans();
     @ConfigSubtag
     private ArtifactPropertiesGenerators artifactPropertiesGenerators = new ArtifactPropertiesGenerators();
+    @ConfigSubtag
+    private JobAgentConfig jobAgentConfig;
 
     @ConfigAttribute(value = "runOnAllAgents", optional = true) private boolean runOnAllAgents = false;
     @ConfigAttribute(value = "runInstanceCount", optional = true, allowNull = true) private String runInstanceCount;
@@ -114,27 +115,59 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
         return jobName;
     }
 
+    public void setName(String name) {
+        setName(new CaseInsensitiveString(name));
+    }
+
+    public void setName(CaseInsensitiveString name) {
+        this.jobName = name;
+    }
+
     public Resources resources() {
         return resources;
     }
 
+    public void setResources(Resources resources) {
+        this.resources = resources;
+    }
+
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
 
         JobConfig jobConfig = (JobConfig) o;
 
-        return !(jobName != null ? !jobName.equals(jobConfig.jobName) : jobConfig.jobName != null);
+        if (runOnAllAgents != jobConfig.runOnAllAgents) return false;
+        if (jobName != null ? !jobName.equals(jobConfig.jobName) : jobConfig.jobName != null) return false;
+        if (variables != null ? !variables.equals(jobConfig.variables) : jobConfig.variables != null) return false;
+        if (tasks != null ? !tasks.equals(jobConfig.tasks) : jobConfig.tasks != null) return false;
+        if (tabs != null ? !tabs.equals(jobConfig.tabs) : jobConfig.tabs != null) return false;
+        if (resources != null ? !resources.equals(jobConfig.resources) : jobConfig.resources != null) return false;
+        if (artifactPlans != null ? !artifactPlans.equals(jobConfig.artifactPlans) : jobConfig.artifactPlans != null)
+            return false;
+        if (artifactPropertiesGenerators != null ? !artifactPropertiesGenerators.equals(jobConfig.artifactPropertiesGenerators) : jobConfig.artifactPropertiesGenerators != null)
+            return false;
+        if (runInstanceCount != null ? !runInstanceCount.equals(jobConfig.runInstanceCount) : jobConfig.runInstanceCount != null)
+            return false;
+        if (timeout != null ? !timeout.equals(jobConfig.timeout) : jobConfig.timeout != null) return false;
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return jobName != null ? jobName.hashCode() : 0;
+        int result = jobName != null ? jobName.hashCode() : 0;
+        result = 31 * result + (variables != null ? variables.hashCode() : 0);
+        result = 31 * result + (tasks != null ? tasks.hashCode() : 0);
+        result = 31 * result + (tabs != null ? tabs.hashCode() : 0);
+        result = 31 * result + (resources != null ? resources.hashCode() : 0);
+        result = 31 * result + (artifactPlans != null ? artifactPlans.hashCode() : 0);
+        result = 31 * result + (artifactPropertiesGenerators != null ? artifactPropertiesGenerators.hashCode() : 0);
+        result = 31 * result + (runOnAllAgents ? 1 : 0);
+        result = 31 * result + (runInstanceCount != null ? runInstanceCount.hashCode() : 0);
+        result = 31 * result + (timeout != null ? timeout.hashCode() : 0);
+        return result;
     }
 
     public Tasks tasks() {
@@ -153,8 +186,16 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
         return artifactPlans;
     }
 
+    public void setArtifactPlans(ArtifactPlans artifactPlans) {
+        this.artifactPlans = artifactPlans;
+    }
+
     public Tabs getTabs() {
         return tabs;
+    }
+
+    public void setTabs(Tabs tabs) {
+        this.tabs = tabs;
     }
 
     public void addTab(String tab, String path) {
@@ -165,8 +206,16 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
         return artifactPropertiesGenerators;
     }
 
+    public void setProperties(ArtifactPropertiesGenerators properties) {
+        artifactPropertiesGenerators = properties;
+    }
+
     public Tasks getTasks() {
         return tasks;
+    }
+
+    public void setTasks(Tasks tasks) {
+        this.tasks = tasks;
     }
 
     public void addResource(String resource) {
@@ -195,7 +244,11 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
 	}
 
 	public void setRunInstanceCount(Integer runInstanceCount) {
-		this.runInstanceCount = Integer.toString(runInstanceCount);
+		setRunInstanceCount(Integer.toString(runInstanceCount));
+	}
+
+	public void setRunInstanceCount(String runInstanceCount) {
+		this.runInstanceCount = runInstanceCount;
 	}
 
 	public boolean isInstanceOf(String jobInstanceName, boolean ignoreCase) {
@@ -231,13 +284,20 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
         variables.add(name, value);
     }
 
-    // only called from tests
     public void setVariables(EnvironmentVariablesConfig variables) {
         this.variables = variables;
     }
 
     public EnvironmentVariablesConfig getVariables() {
         return variables;
+    }
+
+    public EnvironmentVariablesConfig getPlainTextVariables() {
+        return variables.getPlainTextVariables();
+    }
+
+    public EnvironmentVariablesConfig getSecureVariables() {
+        return variables.getSecureVariables();
     }
 
     public boolean hasVariable(String variableName) {
@@ -253,26 +313,50 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
         return false;
     }
 
+    public boolean validateTree(PipelineConfigSaveValidationContext validationContext) {
+        validate(validationContext);
+        boolean isValid = errors.isEmpty();
+        PipelineConfigSaveValidationContext contextForChildren = validationContext.withParent(this);
+        isValid = tasks.validateTree(contextForChildren) && isValid;
+        isValid = variables.validateTree(contextForChildren) && isValid;
+        isValid = resources.validateTree(contextForChildren) && isValid;
+        isValid = artifactPropertiesGenerators.validateTree(contextForChildren) && isValid;
+        isValid = tabs.validateTree(contextForChildren) && isValid;
+        isValid = artifactPlans.validateTree(contextForChildren) && isValid;
+        return isValid;
+    }
+
     public void validate(ValidationContext validationContext) {
-        if (CaseInsensitiveString.str(name()).length() > 255 || XmlUtils.doesNotMatchUsingXsdRegex(JOB_NAME_PATTERN_REGEX, CaseInsensitiveString.str(name()))) {
-            String message = String.format("Invalid job name '%s'. This must be alphanumeric and can contain underscores and periods. The maximum allowed length is %d characters.", name(),
-                    NameTypeValidator.MAX_LENGTH);
-            errors.add(NAME, message);
+
+        if (StringUtil.isBlank(CaseInsensitiveString.str(jobName))) {
+            errors.add(NAME, "Name is a required field");
+        } else {
+            if ((CaseInsensitiveString.str(jobName).length() > 255 || XmlUtils.doesNotMatchUsingXsdRegex(JOB_NAME_PATTERN_REGEX, CaseInsensitiveString.str(jobName)))) {
+                String message = String.format("Invalid job name '%s'. This must be alphanumeric and may contain underscores and periods. The maximum allowed length is %d characters.", jobName,
+                        NameTypeValidator.MAX_LENGTH);
+                errors.add(NAME, message);
+            }
+            if (RunOnAllAgentsJobTypeConfig.hasMarker(CaseInsensitiveString.str(jobName))) {
+                errors.add(NAME, String.format("A job cannot have '%s' in it's name: %s because it is a reserved keyword", RunOnAllAgentsJobTypeConfig.MARKER, jobName));
+            }
+            if (RunMultipleInstanceJobTypeConfig.hasMarker(CaseInsensitiveString.str(jobName))) {
+                errors.add(NAME, String.format("A job cannot have '%s' in it's name: %s because it is a reserved keyword", RunMultipleInstanceJobTypeConfig.MARKER, jobName));
+            }
         }
-		if (runInstanceCount != null) {
-			try {
-				int runInstanceCountForValidation = Integer.parseInt(this.runInstanceCount);
-				if (runInstanceCountForValidation < 0) {
-					errors().add(RUN_TYPE, "'Run Instance Count' cannot be a negative number as it represents number of instances Go needs to spawn during runtime.");
-				}
-			} catch (NumberFormatException e) {
-				errors().add(RUN_TYPE, "'Run Instance Count' should be a valid positive integer as it represents number of instances Go needs to spawn during runtime.");
-			}
-		}
-		if (isRunOnAllAgents() && isRunMultipleInstanceType()) {
-			errors.add(RUN_TYPE, "Job cannot be 'run on all agents' type and 'run multiple instance' type together.");
-		}
-		if (timeout != null) {
+        if (runInstanceCount != null) {
+            try {
+                int runInstanceCountForValidation = Integer.parseInt(this.runInstanceCount);
+                if (runInstanceCountForValidation < 0) {
+                    errors().add(RUN_TYPE, "'Run Instance Count' cannot be a negative number as it represents number of instances Go needs to spawn during runtime.");
+                }
+            } catch (NumberFormatException e) {
+                errors().add(RUN_TYPE, "'Run Instance Count' should be a valid positive integer as it represents number of instances Go needs to spawn during runtime.");
+            }
+        }
+        if (isRunOnAllAgents() && isRunMultipleInstanceType()) {
+            errors.add(RUN_TYPE, "Job cannot be 'run on all agents' type and 'run multiple instance' type together.");
+        }
+        if (timeout != null) {
             try {
                 double timeoutForValidation = Double.parseDouble(this.timeout);
                 if (timeoutForValidation < 0) {
@@ -283,13 +367,11 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
             }
         }
         for (Resource resource : resources) {
-            if(StringUtils.isEmpty(resource.getName()))
-            {
+            if (StringUtils.isEmpty(resource.getName())) {
                 CaseInsensitiveString pipelineName = validationContext.getPipeline().name();
                 CaseInsensitiveString stageName = validationContext.getStage().name();
-                CaseInsensitiveString jobName = name();
-                String message =String.format("Empty resource name in job \"%s\" of stage \"%s\" of pipeline \"%s\". If a template is used, please ensure that the resource parameters are defined for this pipeline.",jobName,stageName,pipelineName);
-                errors.add(RESOURCES,message);
+                String message = String.format("Empty resource name in job \"%s\" of stage \"%s\" of pipeline \"%s\". If a template is used, please ensure that the resource parameters are defined for this pipeline.", jobName, stageName, pipelineName);
+                errors.add(RESOURCES, message);
             }
         }
     }
@@ -367,6 +449,8 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
 	}
 
     public void validateNameUniqueness(Map<String, JobConfig> visitedConfigs) {
+        if (StringUtil.isBlank(CaseInsensitiveString.str(name()))) return;
+
         String currentJob = name().toLower();
         if (visitedConfigs.containsKey(CaseInsensitiveString.str(name())) || visitedConfigs.containsKey(currentJob)) {
             JobConfig conflictingConfig = visitedConfigs.get(currentJob);
@@ -407,5 +491,9 @@ public class JobConfig implements Validatable, ParamsAttributeAware, Environment
 
     public void injectTasksForTest(Tasks tasks) {
         this.tasks = tasks;
+    }
+
+    public JobAgentConfig getJobAgentConfig() {
+        return jobAgentConfig;
     }
 }

@@ -1,5 +1,5 @@
 ##########################GO-LICENSE-START################################
-# Copyright 2014 ThoughtWorks, Inc.
+# Copyright 2016 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/pipelines/new.html.erb" do
   include GoUtil, FormUI, ReflectiveUtil
@@ -29,7 +29,7 @@ describe "admin/pipelines/new.html.erb" do
     @material_config.setName(CaseInsensitiveString.new("Svn Material Name"))
     @pipeline.materialConfigs().clear()
     @pipeline.addMaterialConfig(@material_config)
-    @pipeline_group = PipelineConfigs.new
+    @pipeline_group = BasicPipelineConfigs.new
     @pipeline_group.add(@pipeline)
 
     assign(:pipeline, @pipeline)
@@ -41,7 +41,7 @@ describe "admin/pipelines/new.html.erb" do
     assign(:task_view_models, tvms)
     assign(:config_context, create_config_context(MockRegistryModule::MockRegistry.new))
 
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     repository1 = PackageRepositoryMother.create("repo1", "repo1-name", "pluginid", "version", Configuration.new([ConfigurationPropertyMother.create("k1", false, "v1")].to_java(ConfigurationProperty)))
     repository2 = PackageRepositoryMother.create("repo2", "repo2-name", "pluginid", "version", Configuration.new([ConfigurationPropertyMother.create("k1", false, "v1")].to_java(ConfigurationProperty)))
     pkg1 = PackageDefinitionMother.create("pkg1", "package1-name", Configuration.new([ConfigurationPropertyMother.create("k2", false, "v2")].to_java(ConfigurationProperty)), repository1)
@@ -106,7 +106,7 @@ describe "admin/pipelines/new.html.erb" do
         render
 
         expect(response.body).to have_selector("button#check_connection_svn", :text => "CHECK CONNECTION")
-        expect(response.body).to have_selector("#vcsconnection-message_svn", :text => "")
+        expect(response.body).to have_selector("#vcsconnection-message_svn", :text => "", visible: false)
       end
 
       it "should display new svn material view with errors" do
@@ -148,6 +148,9 @@ describe "admin/pipelines/new.html.erb" do
 
           expect(form).to have_selector("label", :text => "Poll for new changes")
           expect(form).to have_selector("input[type='checkbox'][name='pipeline_group[pipeline][materials][#{com.thoughtworks.go.config.materials.git.GitMaterialConfig::TYPE}][#{com.thoughtworks.go.config.materials.ScmMaterialConfig::AUTO_UPDATE}]'][checked='checked']")
+
+          expect(form).to have_selector("label", :text => "Shallow clone (recommended for large repositories)")
+          expect(form).to have_selector("input[type='checkbox'][name='pipeline_group[pipeline][materials][#{com.thoughtworks.go.config.materials.git.GitMaterialConfig::TYPE}][#{com.thoughtworks.go.config.materials.git.GitMaterialConfig::SHALLOW_CLONE}]']")
         end
       end
     end

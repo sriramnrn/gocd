@@ -14,13 +14,13 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "spec_helper")
+require 'spec_helper'
 load File.join(File.dirname(__FILE__), 'task_controller_examples.rb')
 
 describe Admin::TasksController do
   include TaskMother
   include FormUI
-  
+
   before do
     @example_task = rake_task
     @task_type = rake_task.getTaskType()
@@ -35,4 +35,6 @@ describe Admin::TasksController do
 
   it_should_behave_like :task_controller
 
+  def controller_specific_setup task_view_service
+  end
 end

@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,9 +12,29 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
+
+import com.rits.cloning.Cloner;
+import com.thoughtworks.go.config.exceptions.GoConfigInvalidException;
+import com.thoughtworks.go.config.exceptions.GoConfigInvalidMergeException;
+import com.thoughtworks.go.config.parser.ConfigReferenceElements;
+import com.thoughtworks.go.config.preprocessor.ConfigParamPreprocessor;
+import com.thoughtworks.go.config.preprocessor.ConfigRepoPartialPreprocessor;
+import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
+import com.thoughtworks.go.config.remote.FileConfigOrigin;
+import com.thoughtworks.go.config.remote.PartialConfig;
+import com.thoughtworks.go.config.validation.*;
+import com.thoughtworks.go.domain.ConfigErrors;
+import com.thoughtworks.go.security.GoCipher;
+import com.thoughtworks.go.util.CachedDigestUtils;
+import com.thoughtworks.go.util.ListUtil;
+import com.thoughtworks.go.util.SystemEnvironment;
+import org.apache.log4j.Logger;
+import org.jdom.Document;
+import org.jdom.Element;
+import org.jdom.input.SAXBuilder;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -23,28 +43,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import com.rits.cloning.Cloner;
-import com.thoughtworks.go.config.exceptions.GoConfigInvalidException;
-import com.thoughtworks.go.config.parser.ConfigReferenceElements;
-import com.thoughtworks.go.config.preprocessor.ConfigParamPreprocessor;
-import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
-import com.thoughtworks.go.config.validation.*;
-import com.thoughtworks.go.config.validation.GoConfigValidator;
-import com.thoughtworks.go.domain.ConfigErrors;
-import com.thoughtworks.go.metrics.domain.context.Context;
-import com.thoughtworks.go.metrics.domain.probes.ProbeType;
-import com.thoughtworks.go.metrics.service.MetricsProbeService;
-import com.thoughtworks.go.security.GoCipher;
-import com.thoughtworks.go.util.CachedDigestUtils;
-import com.thoughtworks.go.util.SystemEnvironment;
-import com.thoughtworks.go.util.XmlUtils;
-import com.thoughtworks.go.util.XsdErrorTranslator;
-import org.apache.log4j.Logger;
-import org.jdom.Document;
-import org.jdom.Element;
-import org.jdom.input.SAXBuilder;
-
 import static com.thoughtworks.go.config.parser.GoConfigClassLoader.classParser;
+import static com.thoughtworks.go.util.XmlUtils.buildXmlDocument;
 import static org.apache.commons.io.IOUtils.toInputStream;
 
 public class MagicalGoConfigXmlLoader {
@@ -52,14 +52,13 @@ public class MagicalGoConfigXmlLoader {
 
     public static final List<GoConfigPreprocessor> PREPROCESSORS = Arrays.asList(
             new TemplateExpansionPreprocessor(),
-            new ConfigParamPreprocessor());
+            new ConfigParamPreprocessor(),
+            new ConfigRepoPartialPreprocessor());
 
     public static final List<GoConfigValidator> VALIDATORS = Arrays.asList(
-            new TaskWorkingFolderValidator(),
             new ArtifactDirValidator(),
             new EnvironmentAgentValidator(),
             new EnvironmentPipelineValidator(),
-            new JobNameValidator(),
             new ServerIdImmutabilityValidator(),
             new CommandRepositoryLocationValidator(new SystemEnvironment())
     );
@@ -68,61 +67,61 @@ public class MagicalGoConfigXmlLoader {
 
     private static final Cloner CLONER = new Cloner();
     private ConfigCache configCache;
-    private SAXBuilder builder;
     private final ConfigElementImplementationRegistry registry;
-    private final MetricsProbeService metricsProbeService;
 
-    public MagicalGoConfigXmlLoader(ConfigCache configCache, ConfigElementImplementationRegistry registry, MetricsProbeService metricsProbeService) {
+    public MagicalGoConfigXmlLoader(ConfigCache configCache, ConfigElementImplementationRegistry registry) {
         this.configCache = configCache;
-        this.metricsProbeService = metricsProbeService;
-        builder = new SAXBuilder();
         this.registry = registry;
     }
 
-    public GoConfigHolder loadConfigHolder(final String content) throws Exception {
+    public interface Callback {
+        void call(CruiseConfig cruiseConfig);
+    }
+
+    public GoConfigHolder loadConfigHolder(final String content, Callback callback) throws Exception {
         CruiseConfig configForEdit;
         CruiseConfig config;
-        Context context = metricsProbeService.begin(ProbeType.CONVERTING_CONFIG_XML_TO_OBJECT);
-        try {
-            LOGGER.debug("[Config Save] Loading config holder");
-            String md5 = CachedDigestUtils.md5Hex(content);
-            Element element = parseInputStream(new ByteArrayInputStream(content.getBytes()));
-            LOGGER.debug("[Config Save] Updating config cache with new XML");
-
-            configForEdit = classParser(element, CruiseConfig.class, configCache, new GoCipher(), registry, new ConfigReferenceElements()).parse();
-            setMd5(configForEdit, md5);
-            config = preprocessAndValidate(configForEdit);
-        } finally {
-            metricsProbeService.end(ProbeType.CONVERTING_CONFIG_XML_TO_OBJECT, context);
-        }
+        LOGGER.debug("[Config Save] Loading config holder");
+        configForEdit = deserializeConfig(content);
+        if (callback != null) callback.call(configForEdit);
+        config = preprocessAndValidate(configForEdit);
 
         return new GoConfigHolder(config, configForEdit);
     }
 
+    public GoConfigHolder loadConfigHolder(final String content) throws Exception {
+        return loadConfigHolder(content, null);
+    }
+
+    public CruiseConfig deserializeConfig(String content) throws Exception {
+        String md5 = CachedDigestUtils.md5Hex(content);
+        Element element = parseInputStream(new ByteArrayInputStream(content.getBytes()));
+        LOGGER.debug("[Config Save] Updating config cache with new XML");
+
+        CruiseConfig configForEdit = classParser(element, BasicCruiseConfig.class, configCache, new GoCipher(), registry, new ConfigReferenceElements()).parse();
+        setMd5(configForEdit, md5);
+        configForEdit.setOrigins(new FileConfigOrigin());
+        return configForEdit;
+    }
+
     public static void setMd5(CruiseConfig configForEdit, String md5) throws NoSuchFieldException, IllegalAccessException {
-        Field field = CruiseConfig.class.getDeclaredField("md5");
+        Field field = BasicCruiseConfig.class.getDeclaredField("md5");
         field.setAccessible(true);
         field.set(configForEdit, md5);
     }
 
     public CruiseConfig preprocessAndValidate(CruiseConfig config) throws Exception {
         LOGGER.debug("[Config Save] In preprocessAndValidate: Cloning.");
-        Context context = metricsProbeService.begin(ProbeType.PREPROCESS_AND_VALIDATE);
-        CruiseConfig cloned;
-        try {
-            cloned = CLONER.deepClone(config);
-            LOGGER.debug("[Config Save] In preprocessAndValidate: Validating.");
-            validateCruiseConfig(cloned);
-            LOGGER.debug("[Config Save] In preprocessAndValidate: Done.");
-        } finally {
-            metricsProbeService.end(ProbeType.PREPROCESS_AND_VALIDATE, context);
-        }
+        CruiseConfig cloned = CLONER.deepClone(config);
+        LOGGER.debug("[Config Save] In preprocessAndValidate: Validating.");
+        validateCruiseConfig(cloned);
+        LOGGER.debug("[Config Save] In preprocessAndValidate: Done.");
         return cloned;
     }
 
     public static List<ConfigErrors> validate(CruiseConfig config) {
         preprocess(config);
-        List<ConfigErrors> validationErrors = new ArrayList<ConfigErrors>();
+        List<ConfigErrors> validationErrors = new ArrayList<>();
         validationErrors.addAll(config.validateAfterPreprocess());
         return validationErrors;
     }
@@ -135,29 +134,27 @@ public class MagicalGoConfigXmlLoader {
 
     private CruiseConfig validateCruiseConfig(CruiseConfig config) throws Exception {
         LOGGER.debug("[Config Save] In validateCruiseConfig: Starting.");
-        Context context = metricsProbeService.begin(ProbeType.VALIDATING_CONFIG);
-        try {
-            List<ConfigErrors> allErrors = validate(config);
-            if (!allErrors.isEmpty()) {
-                throw new GoConfigInvalidException(config, allErrors);
-            }
-
-            LOGGER.debug("[Config Save] In validateCruiseConfig: Running validate.");
-            for (GoConfigValidator validator : VALIDATORS) {
-                validator.validate(config);
-            }
-
-            LOGGER.debug("[Config Save] In validateCruiseConfig: Done.");
-        } finally {
-            metricsProbeService.end(ProbeType.VALIDATING_CONFIG, context);
+        List<ConfigErrors> allErrors = validate(config);
+        if (!allErrors.isEmpty()) {
+            if(config.isLocal())
+                throw new GoConfigInvalidException(config, allErrors.get(0).asString());
+            else
+                throw new GoConfigInvalidMergeException("Merged validation failed",config,config.getMergedPartials(),allErrors);
         }
+
+        LOGGER.debug("[Config Save] In validateCruiseConfig: Running validate.");
+        for (GoConfigValidator validator : VALIDATORS) {
+            validator.validate(config);
+        }
+
+        LOGGER.debug("[Config Save] In validateCruiseConfig: Done.");
         return config;
     }
 
     private Element parseInputStream(InputStream inputStream) throws Exception {
-        Element element = XmlUtils.validate(inputStream, GoConfigSchema.getCurrentSchema(), new XsdErrorTranslator(), builder, registry.xsds());
-        validateDom(element, registry);
-        return element;
+        Element rootElement = buildXmlDocument(inputStream, GoConfigSchema.getCurrentSchema(), registry.xsds()).getRootElement();
+        validateDom(rootElement, registry);
+        return rootElement;
     }
 
     public static void validateDom(Element element, final ConfigElementImplementationRegistry registry) throws Exception {
@@ -176,4 +173,12 @@ public class MagicalGoConfigXmlLoader {
         return classParser(element, o, configCache, new GoCipher(), registry, new ConfigReferenceElements()).parse();
     }
 
+    public GoConfigPreprocessor getPreprocessorOfType(final Class<? extends com.thoughtworks.go.config.GoConfigPreprocessor> clazz) {
+        return ListUtil.find(MagicalGoConfigXmlLoader.PREPROCESSORS, new ListUtil.Condition() {
+            @Override
+            public <GoConfigPreprocessor> boolean isMet(GoConfigPreprocessor item) {
+                return item.getClass().isAssignableFrom(clazz);
+            }
+        });
+    }
 }

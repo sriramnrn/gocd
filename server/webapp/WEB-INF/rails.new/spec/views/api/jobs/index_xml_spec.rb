@@ -1,5 +1,5 @@
-##########################GO-LICENSE-START################################
-# Copyright 2014 ThoughtWorks, Inc.
+##########################################################################
+# Copyright 2015 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-##########################GO-LICENSE-END##################################
+##########################################################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../../spec_helper')
+require 'spec_helper'
 
 describe "/api/jobs" do
 
@@ -23,9 +23,9 @@ describe "/api/jobs" do
     @properties.add(com.thoughtworks.go.domain.Property.new("foo", "value_of_property_foo"))
 
     @plans = ArtifactPlans.new
-    @plans.add(ArtifactPlan.new(ArtifactType::file, "artifact", "blahartifact/path"))
-    @plans.add(ArtifactPlan.new(ArtifactType::file, "logs/log-artifact", "log-path"))
-    @plans.add(ArtifactPlan.new(ArtifactType::unit, "test.xml", ""))
+    @plans.add(ArtifactPlan.new("artifact", "blahartifact/path"))
+    @plans.add(ArtifactPlan.new("logs/log-artifact", "log-path"))
+    @plans.add(TestArtifactPlan.new("test.xml", ""))
 
     @resources = Resources.new("linux, teapot")
 
@@ -44,7 +44,7 @@ describe "/api/jobs" do
     @artifacts_url_reader.stub(:findArtifactUrl).with(@job.getIdentifier()).and_return("/artifacts-url")
 
     @job_plan_loader = double("job_plan_loader")
-    @job_plan_loader.stub(:loadOriginalJobPlan).with(@job.getIdentifier()).and_return(DefaultJobPlan.new(@resources, @plans, nil, 1, @job.getIdentifier, 'UUID', @variables, @variables))
+    @job_plan_loader.stub(:loadOriginalJobPlan).with(@job.getIdentifier()).and_return(DefaultJobPlan.new(@resources, @plans, nil, 1, @job.getIdentifier, 'UUID', @variables, @variables, nil))
 
     @context = XmlWriterContext.new("http://test.host", @job_properties_reader, @artifacts_url_reader, @job_plan_loader, nil)
     assign(:doc, JobXmlViewModel.new(@job).toXml(@context))
@@ -120,9 +120,9 @@ describe "/api/jobs" do
       properties.add(com.thoughtworks.go.domain.Property.new("prop<er\"ty", "val<ue_of_prop\"erty_foo"))
 
       plans = ArtifactPlans.new
-      plans.add(ArtifactPlan.new(ArtifactType::file, "artifact", "blah<artif\"act/path"))
-      plans.add(ArtifactPlan.new(ArtifactType::file, "logs/log-arti\"fact", "log-path"))
-      plans.add(ArtifactPlan.new(ArtifactType::unit, "te<s\"t.xml", ""))
+      plans.add(ArtifactPlan.new("artifact", "blah<artif\"act/path"))
+      plans.add(ArtifactPlan.new("logs/log-arti\"fact", "log-path"))
+      plans.add(TestArtifactPlan.new("te<s\"t.xml", ""))
 
       variables = EnvironmentVariablesConfig.new
       variables.add("VARIA<BLE_NA\"ME", "varia<ble-val\"ue")
@@ -132,7 +132,7 @@ describe "/api/jobs" do
       @job_properties_reader.stub(:getPropertiesForJob).with(1).and_return(properties)
       @artifacts_url_reader.stub(:findArtifactUrl).with(@job.getIdentifier()).and_return("/artifacts-url")
       @artifacts_url_reader.stub(:findArtifactRoot).with(@job.getIdentifier()).and_return("/artifacts-path")
-      @job_plan_loader.stub(:loadOriginalJobPlan).with(@job.getIdentifier()).and_return(DefaultJobPlan.new(@resources, plans, nil, 1, @job.getIdentifier, 'UUID', variables, variables))
+      @job_plan_loader.stub(:loadOriginalJobPlan).with(@job.getIdentifier()).and_return(DefaultJobPlan.new(@resources, plans, nil, 1, @job.getIdentifier, 'UUID', variables, variables, nil))
 
       assign(:doc, JobXmlViewModel.new(@job).toXml(@context))
     end

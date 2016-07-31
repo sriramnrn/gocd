@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.pluggabletask;
 
@@ -20,6 +20,7 @@ import com.thoughtworks.go.config.AbstractTask;
 import com.thoughtworks.go.config.ConfigSubtag;
 import com.thoughtworks.go.config.ConfigTag;
 import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.builder.ConfigurationPropertyBuilder;
 import com.thoughtworks.go.domain.Task;
 import com.thoughtworks.go.domain.TaskProperty;
 import com.thoughtworks.go.domain.config.Configuration;
@@ -30,8 +31,10 @@ import com.thoughtworks.go.plugin.access.pluggabletask.PluggableTaskConfigStore;
 import com.thoughtworks.go.plugin.access.pluggabletask.TaskPreference;
 import com.thoughtworks.go.plugin.api.config.Property;
 import com.thoughtworks.go.plugin.api.task.TaskConfig;
+import com.thoughtworks.go.plugin.api.task.TaskConfigProperty;
 import com.thoughtworks.go.util.ListUtil;
 
+import javax.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +45,7 @@ import java.util.Map;
  */
 @ConfigTag("task")
 public class PluggableTask extends AbstractTask {
+    public static final String TYPE = "pluggable_task";
     public static final String VALUE_KEY = "value";
     public static final String ERRORS_KEY = "errors";
 
@@ -54,13 +58,17 @@ public class PluggableTask extends AbstractTask {
     public PluggableTask() {
     }
 
-    public PluggableTask(String name, PluginConfiguration pluginConfiguration, Configuration configuration) {
+    public PluggableTask(PluginConfiguration pluginConfiguration, Configuration configuration) {
         this.pluginConfiguration = pluginConfiguration;
         this.configuration = configuration;
     }
 
     public PluginConfiguration getPluginConfiguration() {
         return pluginConfiguration;
+    }
+
+    public void setPluginConfiguration(PluginConfiguration pluginConfiguration) {
+        this.pluginConfiguration = pluginConfiguration;
     }
 
     public Configuration getConfiguration() {
@@ -81,16 +89,83 @@ public class PluggableTask extends AbstractTask {
         for (Property property : taskConfig.list()) {
             String key = property.getKey();
             if (attributes.containsKey(key)) {
+                Boolean isSecure = property.getOption(Property.SECURE);
                 if (configuration.getProperty(key) == null) {
-                    configuration.addNewConfiguration(property.getKey(), property.getOption(Property.SECURE));
+                    configuration.addNewConfiguration(property.getKey(), isSecure);
                 }
                 configuration.getProperty(key).setConfigurationValue(new ConfigurationValue((String) attributes.get(key)));
+                configuration.getProperty(key).handleSecureValueConfiguration(isSecure);
+            }
+        }
+    }
+
+    public TaskConfig toTaskConfig() {
+        TaskConfig taskConfig = new TaskConfig();
+
+        for (ConfigurationProperty configurationProperty : configuration) {
+            taskConfig.add(new TaskConfigProperty(configurationProperty.getConfigurationKey().getName(), configurationProperty.getValue()));
+        }
+
+        return taskConfig;
+    }
+
+    public void addConfigurations(List<ConfigurationProperty> configurations) {
+        ConfigurationPropertyBuilder builder = new ConfigurationPropertyBuilder();
+        for (ConfigurationProperty property : configurations) {
+
+            if(isValidPluginConfiguration(property.getConfigKeyName())) {
+                configuration.add(builder.create(property.getConfigKeyName(), property.getConfigValue(), property.getEncryptedValue(),
+                                                 pluginConfigurationFor(property.getConfigKeyName()).getOption(Property.SECURE)));
+            } else {
+                configuration.add(property);
+            }
+        }
+    }
+
+    private boolean isValidPluginConfiguration(String configKey) {
+        return taskPreference() != null && pluginConfigurationFor(configKey) != null;
+    }
+
+    private Property pluginConfigurationFor(String configKey) {
+        TaskPreference taskPreference = taskPreference();
+        return taskPreference != null ? taskPreference.getConfig().get(configKey) : null;
+    }
+
+    private TaskPreference taskPreference() {
+        return PluggableTaskConfigStore.store().preferenceFor(pluginConfiguration.getId());
+    }
+
+    @PostConstruct
+    public void applyPluginMetadata() {
+        if (taskPreference() != null) {
+            for (ConfigurationProperty configurationProperty : configuration) {
+                if (isValidPluginConfiguration(configurationProperty.getConfigKeyName())) {
+                    Boolean isSecure = pluginConfigurationFor(configurationProperty.getConfigKeyName()).getOption(Property.SECURE);
+                    configurationProperty.handleSecureValueConfiguration(isSecure);
+                }
             }
         }
     }
 
     @Override
     protected void validateTask(ValidationContext validationContext) {
+    }
+
+    @Override
+    public boolean validateTree(ValidationContext validationContext) {
+        validate(validationContext);
+        return (onCancelConfig.validateTree(validationContext) && errors.isEmpty() && !configuration.hasErrors());
+    }
+
+//  This method is called from PluggableTaskService to validate Tasks.
+    public boolean isValid() {
+        if (PluggableTaskConfigStore.store().preferenceFor(pluginConfiguration.getId()) == null) {
+            addError(TYPE, String.format("Could not find plugin for given pluggable id:[%s].", pluginConfiguration.getId()));
+        }
+
+        configuration.validateTree();
+
+        return (errors.isEmpty() && !configuration.hasErrors());
     }
 
     @Override
@@ -105,13 +180,13 @@ public class PluggableTask extends AbstractTask {
 
     @Override
     public List<TaskProperty> getPropertiesForDisplay() {
-        ArrayList<TaskProperty> taskProperties = new ArrayList<TaskProperty>();
-        if(PluggableTaskConfigStore.store().hasPreferenceFor(pluginConfiguration.getId())){
-            TaskPreference preference = PluggableTaskConfigStore.store().preferenceFor(pluginConfiguration.getId());
+        ArrayList<TaskProperty> taskProperties = new ArrayList<>();
+        if (PluggableTaskConfigStore.store().hasPreferenceFor(pluginConfiguration.getId())) {
+            TaskPreference preference = taskPreference();
             List<? extends Property> propertyDefinitions = preference.getConfig().list();
             for (Property propertyDefinition : propertyDefinitions) {
                 ConfigurationProperty configuredProperty = configuration.getProperty(propertyDefinition.getKey());
-                if(configuredProperty == null) continue;
+                if (configuredProperty == null) continue;
                 taskProperties.add(new TaskProperty(propertyDefinition.getOption(Property.DISPLAY_NAME), configuredProperty.getDisplayValue(), configuredProperty.getConfigKeyName()));
             }
             return taskProperties;
@@ -124,10 +199,10 @@ public class PluggableTask extends AbstractTask {
     }
 
     public Map<String, Map<String, String>> configAsMap() {
-        Map<String, Map<String, String>> configMap = new HashMap<String, Map<String, String>>();
+        Map<String, Map<String, String>> configMap = new HashMap<>();
         for (ConfigurationProperty property : configuration) {
-            Map<String, String> mapValue = new HashMap<String, String>();
-            mapValue.put(VALUE_KEY, property.getConfigValue());
+            Map<String, String> mapValue = new HashMap<>();
+            mapValue.put(VALUE_KEY, property.getValue());
             if (!property.errors().isEmpty()) {
                 mapValue.put(ERRORS_KEY, ListUtil.join(property.errors().getAll()));
             }

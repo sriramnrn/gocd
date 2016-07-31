@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
@@ -70,6 +70,9 @@ public class Approval implements Validatable, ParamsAttributeAware {
     public AuthConfig getAuthConfig() {
         return authConfig;
     }
+    public void setAuthConfig(AuthConfig authConfig) {
+        this.authConfig = authConfig;
+    }
 
     public boolean isAuthorizationDefined() {
         return !this.authConfig.isEmpty();
@@ -103,6 +106,20 @@ public class Approval implements Validatable, ParamsAttributeAware {
     public String getType() {
         return type;
     }
+    public void setType(String type) {
+        this.type= type;
+    }
+
+    public boolean validateTree(PipelineConfigSaveValidationContext validationContext) {
+        validate(validationContext);
+        boolean isValid = errors.isEmpty();
+        for (Admin admin : authConfig) {
+            admin.validate(validationContext);
+            authConfig.errors().addAll(admin.errors());
+            isValid = admin.errors().isEmpty() && isValid;
+        }
+        return isValid;
+    }
 
     public void validate(ValidationContext validationContext) {
         if (!isValidTypeValue()) {
@@ -113,20 +130,23 @@ public class Approval implements Validatable, ParamsAttributeAware {
             if (!group.hasOperationPermissionDefined()) {
                 return;
             }
-            AdminsConfig adminsConfig = group.getAuthorization().getOperationConfig();
-            CruiseConfig cruiseConfig = validationContext.getCruiseConfig();
-            for (Admin user : authConfig) {
-                RolesConfig roles = cruiseConfig.server().security().getRoles();
-                if (!userIsAdmin(user, cruiseConfig) && !adminsConfig.has(user, roles.memberRoles(user))) {
-                    user.addError(String.format("%s \"%s\" who is not authorized to operate pipeline group can not be authorized to approve stage", user.describe(), user));
-                }
 
+            AdminsConfig groupOperators = group.getAuthorization().getOperationConfig();
+            SecurityConfig serverSecurityConfig = validationContext.getServerSecurityConfig();
+            RolesConfig roles = serverSecurityConfig.getRoles();
+
+            for (Admin approver : authConfig) {
+                boolean approverIsASuperAdmin = serverSecurityConfig.isAdmin(approver);
+                boolean approverIsAGroupAdmin = group.isUserAnAdmin(approver.getName(), roles.memberRoles(approver));
+
+                boolean approverIsNotAnAdmin = !(approverIsASuperAdmin || approverIsAGroupAdmin);
+                boolean approverIsNotAGroupOperator = !groupOperators.has(approver, roles.memberRoles(approver));
+
+                if (approverIsNotAnAdmin && approverIsNotAGroupOperator) {
+                    approver.addError(String.format("%s \"%s\" who is not authorized to operate pipeline group can not be authorized to approve stage", approver.describe(), approver, group.getGroup()));
+                }
             }
         }
-    }
-
-    private boolean userIsAdmin(Admin user, CruiseConfig cruiseConfig) {
-        return cruiseConfig.server().security().isAdmin(user);
     }
 
     private boolean isValidTypeValue() {
@@ -173,7 +193,7 @@ public class Approval implements Validatable, ParamsAttributeAware {
     }
 
     private Admin[] extractAdminUsers(List<Map<String, String>> map) {
-        List<Admin> result = new ArrayList<Admin>(map.size());
+        List<Admin> result = new ArrayList<>(map.size());
         for (Map<String, String> usernameMap : map) {
             String value = usernameMap.get("name").trim();
             if (!StringUtil.isBlank(value)) {
@@ -184,7 +204,7 @@ public class Approval implements Validatable, ParamsAttributeAware {
     }
 
     private Admin[] extractAdminRole(List<Map<String, String>> map) {
-        List<Admin> result = new ArrayList<Admin>(map.size());
+        List<Admin> result = new ArrayList<>(map.size());
         for (Map<String, String> usernameMap : map) {
             String value = usernameMap.get("name").trim();
             if (!StringUtil.isBlank(value)) {

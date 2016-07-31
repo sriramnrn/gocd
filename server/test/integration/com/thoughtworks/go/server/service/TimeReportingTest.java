@@ -21,7 +21,6 @@ import java.util.Date;
 import java.util.List;
 
 import com.thoughtworks.go.config.*;
-import com.thoughtworks.go.config.GoConfigFileDao;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
 import com.thoughtworks.go.config.update.ConfigUpdateResponse;
 import com.thoughtworks.go.config.update.UpdateConfigFromUI;
@@ -51,7 +50,7 @@ import static org.junit.Assert.assertThat;
         "classpath:WEB-INF/applicationContext-acegi-security.xml"
 })
 public class TimeReportingTest {
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private GoConfigService goConfigService;
     @Autowired private DatabaseAccessHelper dbHelper;
     private GoConfigFileHelper configHelper;
@@ -60,7 +59,7 @@ public class TimeReportingTest {
     public void setup() throws Exception {
         configHelper = new GoConfigFileHelper();
         dbHelper.onSetUp();
-        configHelper.usingCruiseConfigDao(goConfigFileDao).initializeConfigFile();
+        configHelper.usingCruiseConfigDao(goConfigDao).initializeConfigFile();
         configHelper.onSetUp();
         goConfigService.forceNotifyListeners();
     }
@@ -70,11 +69,11 @@ public class TimeReportingTest {
         configHelper.onTearDown();
         dbHelper.onTearDown();
     }
-    
+
     @Test
     @Ignore("Not really testing anything.")
     public void shouldBeAbleToShortlistPipelinesQuicklyWithPipelineSelections() throws Exception {
-        CruiseConfig cruiseConfig = new CruiseConfig();
+        CruiseConfig cruiseConfig = new BasicCruiseConfig();
         final CruiseConfig afterUpdate = getConfigWith(cruiseConfig, 60, 40);
         List<String> allNames = new ArrayList<String>();
         for (CaseInsensitiveString name : afterUpdate.getAllPipelineNames()) {
@@ -94,7 +93,7 @@ public class TimeReportingTest {
 
     @Test
     public void shouldSaveAndLoad2000pipelines() throws Exception {
-        final CruiseConfig oldConfig = goConfigFileDao.load();
+        final CruiseConfig oldConfig = goConfigDao.load();
         final int numberOfNewPipelines = 2000;
         TimeReportingUtil.report(TimeReportingUtil.Key.CONFIG_WRITE_2000, new TimeReportingUtil.TestAction() {
             @Override
@@ -112,8 +111,8 @@ public class TimeReportingTest {
 
     private CruiseConfig read(int numberOfPipelines) {
         Date a = new Date();
-        goConfigFileDao.forceReload();
-        CruiseConfig cruiseConfig = goConfigFileDao.load();
+        goConfigDao.forceReload();
+        CruiseConfig cruiseConfig = goConfigDao.load();
         Date b = new Date();
         assertThat(cruiseConfig.allPipelines().size(), is(numberOfPipelines));
 //        System.out.println("READ = " + (b.getTime() - a.getTime()) / 1000.0 + "s");

@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package com.thoughtworks.go.server.dao;
 import com.ibatis.sqlmap.client.SqlMapClient;
 import com.rits.cloning.Cloner;
 import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.PipelineNotFoundException;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterial;
 import com.thoughtworks.go.database.Database;
@@ -31,6 +31,7 @@ import com.thoughtworks.go.presentation.pipelinehistory.PipelineInstanceModel;
 import com.thoughtworks.go.presentation.pipelinehistory.PipelineInstanceModels;
 import com.thoughtworks.go.server.cache.GoCache;
 import com.thoughtworks.go.server.domain.StageStatusListener;
+import com.thoughtworks.go.server.initializers.Initializer;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
 import com.thoughtworks.go.server.transaction.SqlMapClientDaoSupport;
 import com.thoughtworks.go.server.transaction.TransactionSynchronizationManager;
@@ -56,7 +57,7 @@ import static com.thoughtworks.go.util.IBatisUtil.arguments;
 
 @SuppressWarnings({"ALL"})
 @Component
-public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements PipelineDao, StageStatusListener {
+public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Initializer, PipelineDao, StageStatusListener {
     private static final Logger LOGGER = Logger.getLogger(PipelineSqlMapDao.class);
     private StageDao stageDao;
     private MaterialRepository materialRepository;
@@ -65,7 +66,7 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     private TransactionTemplate transactionTemplate;
     private TransactionSynchronizationManager transactionSynchronizationManager;
     private final SystemEnvironment systemEnvironment;
-    private final GoConfigFileDao configFileDao;
+    private final GoConfigDao configFileDao;
     private final Cloner cloner = new Cloner();
     private final ReadWriteLock activePipelineRWLock = new ReentrantReadWriteLock();
     private final Lock activePipelineReadLock = activePipelineRWLock.readLock();
@@ -74,7 +75,7 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     @Autowired
     public PipelineSqlMapDao(StageDao stageDao, MaterialRepository materialRepository, GoCache goCache, EnvironmentVariableDao environmentVariableDao, TransactionTemplate transactionTemplate,
                              SqlMapClient sqlMapClient, TransactionSynchronizationManager transactionSynchronizationManager, SystemEnvironment systemEnvironment,
-                             GoConfigFileDao configFileDao, Database database) {
+                             GoConfigDao configFileDao, Database database) {
         super(goCache, sqlMapClient, systemEnvironment, database);
         this.stageDao = stageDao;
         this.materialRepository = materialRepository;
@@ -87,14 +88,15 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
 
     }
 
-    public void initialize() throws Exception {
+    @Override
+    public void initialize() {
         try {
             LOGGER.info("Loading active pipelines into memory.");
             cacheActivePipelines();
             LOGGER.info("Done loading active pipelines into memory.");
         } catch (Exception e) {
             LOGGER.fatal(e.getMessage(), e);
-            throw e;
+            throw new RuntimeException(e);
         }
     }
 
@@ -160,7 +162,7 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     }
 
     private String cacheKeyForBuildCauseByNameAndCounter(String name, int counter) {
-        return (PipelineSqlMapDao.class + "_buildCauseByNameAndCounter_" + name + "_and_" + counter).intern();
+        return (PipelineSqlMapDao.class + "_buildCauseByNameAndCounter_" + name.toLowerCase() + "_and_" + counter).intern();
     }
 
     public Pipeline findPipelineByNameAndLabel(String name, String label) {
@@ -306,7 +308,7 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     }
 
     private String cacheKeyForPipelineWithStageId(String pipelineName, long stageId) {
-        return (getClass().getName() + "_pipelineWithStageId_" + pipelineName + stageId).intern();
+        return (PipelineSqlMapDao.class + "_pipelineWithStageId_" + pipelineName.toLowerCase() + "_" + stageId).intern();
     }
 
     public Pipeline loadAssociations(Pipeline pipeline, String pipelineName) {
@@ -352,7 +354,7 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     }
 
     private String cacheKeyForPipelineHistoryByNameAndCounter(String pipelineName, int pipelineCounter) {
-        return (String.format("%s_cacheKeyForPipelineHistoryByName_%s_AndCounter_%s", PipelineSqlMapDao.class.getName(), pipelineName, pipelineCounter)).intern();
+        return (PipelineSqlMapDao.class + "_cacheKeyForPipelineHistoryByName_" + pipelineName.toLowerCase() + "_AndCounter_" + pipelineCounter).intern();
     }
 
     public PipelineDependencyGraphOld pipelineGraphByNameAndCounter(String pipelineName, int pipelineCounter) {
@@ -720,7 +722,7 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     }
 
     private String cacheKeyForLatestPipelineIdByPipelineName(String pipelineName) {
-        return (PipelineSqlMapDao.class.getName() + "_latestPipelineIdByPipelineName_" + pipelineName).intern();
+        return (PipelineSqlMapDao.class + "_latestPipelineIdByPipelineName_" + pipelineName.toLowerCase()).intern();
     }
 
     private PipelineInstanceModels loadHistory(String pipelineName, List<Long> ids) {
@@ -939,11 +941,11 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
     }
 
     private String cacheKeyForPauseState(String pipelineName) {
-        return (PipelineSqlMapDao.class + "_cacheKeyForPauseState_" + pipelineName).intern();
+        return (PipelineSqlMapDao.class + "_cacheKeyForPauseState_" + pipelineName.toLowerCase()).intern();
     }
 
     String cacheKeyForlatestPassedStage(long pipelineId, String stage) {
-        return (PipelineSqlMapDao.class + "_cacheKeyForlatestPassedStage_" + pipelineId + "_and_" + stage).intern();
+        return (PipelineSqlMapDao.class + "_cacheKeyForlatestPassedStage_" + pipelineId + "_and_" + stage.toLowerCase()).intern();
     }
 
     public StageIdentifier latestPassedStageIdentifier(long pipelineId, String stage) {
@@ -999,11 +1001,11 @@ public class PipelineSqlMapDao extends SqlMapClientDaoSupport implements Pipelin
 	}
 
     private String cacheKeyForPipelineInstancesTriggeredWithDependencyMaterial(String pipelineName, String dependencyPipelineName, Integer dependencyPipelineCounter) {
-        return (PipelineSqlMapDao.class + "_cacheKeyForPipelineInstancesWithDependencyMaterial_" + pipelineName + "_" + dependencyPipelineName + "_" + dependencyPipelineCounter).intern();
+        return (PipelineSqlMapDao.class + "_cacheKeyForPipelineInstancesWithDependencyMaterial_" + pipelineName.toLowerCase() + "_" + dependencyPipelineName.toLowerCase() + "_" + dependencyPipelineCounter).intern();
     }
 
 	String cacheKeyForPipelineInstancesTriggeredWithDependencyMaterial(String pipelineName, String fingerPrint, String revision) {
-		return (PipelineSqlMapDao.class + "_cacheKeyForPipelineInstancesWithDependencyMaterial_" + pipelineName + "_" + fingerPrint + "_" + revision).intern();
+        return (PipelineSqlMapDao.class + "_cacheKeyForPipelineInstancesWithDependencyMaterial_" + pipelineName.toLowerCase() + "_" + fingerPrint + "_" + revision).intern();
 	}
 
     private void invalidateCacheConditionallyForPipelineInstancesTriggeredWithDependencyMaterial(Pipeline pipeline) {

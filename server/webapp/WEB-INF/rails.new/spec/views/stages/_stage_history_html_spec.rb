@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe "_stage_history.html.erb" do
   include StageModelMother, GoUtil
@@ -147,19 +147,6 @@ describe "_stage_history.html.erb" do
       expect(f).to have_selector  ".color_code_stage.Passed"
       expect(f).to have_selector  ".pipeline_label", :text => "LABEL-1"
       expect(f).to have_selector ".stage_counter", :text => "(run 2)"
-    end
-  end
-
-  it "should wrap long pipeline labels" do
-    identifier = @stage_history_page.getStages()[9].getIdentifier()
-    longPipelineLabel = "a"*20
-    @stage_history_page.getStages()[0].setIdentifier(StageIdentifier.new(identifier.getPipelineName(), identifier.getPipelineCounter(), longPipelineLabel, identifier.getStageName(), "2"))
-    render :partial => "stages/stage_history", :locals => {:scope => {:stage_history_page => @stage_history_page, :tab => 'jobs', :current_stage_pipeline => @pipeline, :current_config_version => "md5-test"}}
-
-    Capybara.string(response.body).all(".stage_history .stage .label_counter_wrapper .pipeline_label").tap do |labels|
-      (0..labels.count()-1).each do |i|
-        expect(labels[i]).to have_selector "wbr"
-      end
     end
   end
 

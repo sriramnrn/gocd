@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- *************************GO-LICENSE-START******************************
- * Copyright 2014 ThoughtWorks, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *************************GO-LICENSE-END******************************* -->
+<!--
+  ~ Copyright 2016 ThoughtWorks, Inc.
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
 
 <!DOCTYPE urlrewrite PUBLIC "-//tuckey.org//DTD UrlRewrite 2.6//EN"
         "http://tuckey.org/res/dtds/urlrewrite3.2.dtd">
@@ -30,73 +30,12 @@
     </rule>
 
     <rule>
-        <name>Set flag if backup in progress</name>
-        <note>Figures out if the Go server backup is in progress and sets flag to indicate. Also sets original url only if backup in progress.</note>
-        <run class="com.thoughtworks.go.server.web.RedirectDuringBackup" method="setServerBackupFlag"/>
-    </rule>
-
-    <rule>
-        <name>Handle poll from maintenance page after backup is complete</name>
-        <note>Requests auto-refresher on maintenance page to throw user back to original url if backup is complete</note>
-        <condition type="attribute" name="backupInProgress">false</condition>
-        <from>^(/is_backup_finished\.json(\?.*)?)$</from>
-        <set name="X-GO-FORCE-LOAD-PAGE" type="response-header">%{param:from}</set>
-        <set name="Content-Type" type="response-header">application/json; charset=utf-8</set>
-        <set name="echo-body">{}</set>
-        <to last="true" type="forward">/echo-attribute/echo</to>
-    </rule>
-
-    <rule>
-        <name>Handle explicit maintenance page request after backup is complete</name>
-        <note>Redirects to original page if maintenance page requested after backup is complete</note>
-        <condition type="attribute" name="backupInProgress">false</condition>
-        <from>^(/static/backup_in_progress\.html(\?.*)?)$</from>
-        <to last="true" type="redirect">%{param:from}</to>
-    </rule>
-
-    <rule>
         <name>Static content when backup in progress</name>
         <note>Serve static content when backup in progress</note>
         <from>^((/static/.*)|(/images/.*)|(/javascripts/.*)|(/stylesheets/.*)|(/compressed/.*))$</from>
         <to last="true">$1</to>
     </rule>
 
-    <rule>
-        <name>no-op polling response</name>
-        <note>Informs auto-refresher to continue polling</note>
-        <from>^(/is_backup_finished\.json(\?.*)?)$</from>
-        <set name="Content-Type" type="response-header">application/json; charset=utf-8</set>
-        <set name="echo-body">{}</set>
-        <to last="true" type="forward">/echo-attribute/echo</to>
-    </rule>
-
-    <rule>
-        <name>HealthMessage poll if backup in progress</name>
-        <note>Informs ServerHealthMessage poll to take user to maintenance page if backup in progress</note>
-        <condition type="attribute" name="backupInProgress">true</condition>
-        <from>^(/server/messages.json(\?.*)?)$</from>
-        <set name="X-GO-FORCE-LOAD-PAGE" type="response-header">%{context-path}/static/backup_in_progress.html?from=%{attribute:redirected_from}&amp;backup_started_at=%{attribute:backup_started_at}&amp;backup_started_by=%{attribute:backup_started_by}</set>
-        <set name="Content-Type" type="response-header">application/json; charset=utf-8</set>
-        <set name="echo-body">{}</set>
-        <to last="true" type="forward">/echo-attribute/echo</to>
-    </rule>
-
-    <rule>
-        <name>API 503 if backup in progress</name>
-        <note>Informs Api that is server is unavailable</note>
-        <condition type="attribute" name="backupInProgress">true</condition>
-        <from>^((/api/.*)|(.*[^/]+\.(xml|json)(\?.*)?))$</from>
-        <set name="echo-body">Server is under maintenance mode, please try later.</set>
-        <set name="status" type="status">503</set>
-        <to last="true" type="forward">/echo-attribute/echo</to>
-    </rule>
-
-    <rule>
-        <name>App page request if backup in progress</name>
-        <note>Redirects app-page to maintenance page if backup in progress</note>
-        <condition type="attribute" name="backupInProgress">true</condition>
-        <to last="true" type="redirect">%{context-path}/static/backup_in_progress.html?from=%{attribute:redirected_from}&amp;backup_started_at=%{attribute:backup_started_at}&amp;backup_started_by=%{attribute:backup_started_by}</to>
-    </rule>
 
     <rule match-type="regex">
         <name>https enforcement opt-out</name>
@@ -129,14 +68,43 @@
             Prepends 'rails/' to Rails urls, so that the request does not go through Java at all
             (currently RackFilter passes a request to Rails only if Java returns a 40* HTTP response
         </note>
-        <from>^/((agents)|(agents/.*)|(agents\..*)|(environments)|(environments/.*)|(environments\..*)|(pipelines/.*)|(pipelines\.json)|(materials/.*)|(dashboard\.json)|(home/?)|(pipelines)|(history/.*)|(shine)|(shine/.*)|(gadgets/.*)|(server)|(server/.*)|(admin/config/.*)|(admin/users)|(admin/users/.*)|(admin/oauth/.*)|(admin/gadgets/.*)|(oauth/.*)|(gadgets/.*)|(failures/.*)|(compare/.*)|(admin/pipelines)|(admin/pipelines/.*)|(admin/pipeline/.*)|(admin/pipeline_group)|(admin/pipeline_group/.*)|(admin/templates)|(admin/templates/.*)|(users/dismiss_license_expiry_warning)|(users/dismiss_license_expiry_warning/.*)|(admin/backup)|(admin/backup/.*)|(admin/commands)|(admin/commands/.*)|(admin/plugins)|(admin/plugins/.*)|(config_change/.*)|(admin/config_xml)|(admin/config_xml/.*)|(admin/package_repositories)|(admin/package_repositories/.*)|(config_view/.*)|(admin/package_definitions)|(admin/package_definitions/.*)|(admin/garage)|(admin/garage/.*)|(assets/.*))$</from>
+        <from>^/((jasmine-specs)|(jasmine-specs/*)|(jasmine-specs-new)|(jasmine-specs-new/*)|(about)|(agents)|(agents/.*)|(agents\..*)|(environments)|(environments/.*)|(environments\..*)|(pipelines/.*)|(pipelines\.json)|(materials/.*)|(home/?)|(pipelines)|(history/.*)|(shine)|(shine/.*)|(gadgets/.*)|(server)|(server/.*)|(admin/config/.*)|(admin/users)|(admin/users/.*)|(admin/oauth/.*)|(admin/gadgets/.*)|(oauth/.*)|(gadgets/.*)|(failures/.*)|(compare/.*)|(admin/pipelines)|(admin/pipelines/.*)|(admin/pipeline/.*)|(admin/pipeline_group)|(admin/pipeline_group/.*)|(admin/templates)|(admin/templates/.*)|(admin/backup)|(admin/backup/.*)|(admin/commands)|(admin/commands/.*)|(admin/plugins)|(admin/plugins/.*)|(config_change/.*)|(admin/config_xml)|(admin/config_xml/.*)|(admin/package_repositories)|(admin/package_repositories/.*)|(config_view/.*)|(admin/package_definitions)|(admin/package_definitions/.*)|(admin/materials)|(admin/materials/.*)|(admin/garage)|(admin/garage/.*)|(assets/.*)|(cctray.xml)|(errors/inactive))$</from>
         <to last="true">/rails/$1</to>
+        <set name="rails_bound">true</set>
+    </rule>
+
+    <!-- Rule for Rails Users API should be above the generic rule 'Rails API' -->
+    <rule>
+        <name>Rails Users Index and Delete API</name>
+        <from>^/api/users$</from>
+        <to last="true">/rails/api/users</to>
+        <set name="rails_bound">true</set>
+    </rule>
+
+    <rule>
+        <name>Rails Users Show and Delete API</name>
+        <from>^/api/users/(.*)$</from>
+        <to last="true">/rails/api/users/${escape:$1}</to>
         <set name="rails_bound">true</set>
     </rule>
 
     <rule>
         <name>Rails API</name>
         <from>^/(api/(?!admin/config).*)$</from>
+        <to last="true">/rails/$1</to>
+        <set name="rails_bound">true</set>
+    </rule>
+
+    <rule>
+        <name>Rails Internal API</name>
+        <from>^/(api/config/internal/.*)$</from>
+        <to last="true">/rails/$1</to>
+        <set name="rails_bound">true</set>
+    </rule>
+
+    <rule>
+        <name>Update Check URLs</name>
+        <from>^/(api/version_infos/.*)$</from>
         <to last="true">/rails/$1</to>
         <set name="rails_bound">true</set>
     </rule>
@@ -210,12 +178,6 @@
     </rule>
 
     <rule>
-        <name>RESTful force - schedule pipeline or rerun its first stage</name>
-        <from>^/run/([^/]+)$</from>
-        <to type="forward">/admin/force?pipelineName=$1</to>
-    </rule>
-
-    <rule>
         <name>RESTful Artifacts - List All builds artifacts</name>
         <from>^/files/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+?)(\.(json|html))?(\?.*)?$</from>
         <to type="forward">/repository/restful/artifact/%{attribute:_method}/%{attribute:_type}?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=</to>
@@ -225,7 +187,7 @@
         <name>RESTful Artifacts with start LineNumber</name>
         <condition type="parameter" name="startLineNumber"/>
         <from>^/files/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+)/(.*?)(\?.*)?$</from>
-        <to type="forward">/consoleout.json?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=$6</to>
+        <to type="forward">/consoleout.json?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=${escape:$6}</to>
         <set name="startLineNumber">{parameter:startLineNumber}</set>
     </rule>
 
@@ -233,7 +195,7 @@
         <name>RESTful Artifacts with SHA1</name>
         <condition type="parameter" name="sha1"/>
         <from>^/files/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+)/(.*?)(\?.*)?$</from>
-        <to type="forward">/repository/restful/artifact/%{attribute:_method}/%{attribute:_type}?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=$6</to>
+        <to type="forward">/repository/restful/artifact/%{attribute:_method}/%{attribute:_type}?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=${escape:$6}</to>
         <set name="sha1">{parameter:sha1}</set>
     </rule>
 
@@ -241,7 +203,7 @@
     <rule>
         <name>RESTful Artifacts</name>
         <from>^/files/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+)/(.*?)(\?.*)?$</from>
-        <to type="forward">/repository/restful/artifact/%{attribute:_method}/%{attribute:_type}?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=$6</to>
+        <to type="forward">/repository/restful/artifact/%{attribute:_method}/%{attribute:_type}?pipelineName=$1&amp;pipelineLabel=$2&amp;stageName=$3&amp;stageCounter=$4&amp;buildName=$5&amp;filePath=${escape:$6}</to>
     </rule>
 
     <rule>
@@ -277,32 +239,6 @@
     </rule>
 
     <rule>
-        <name>Cruise Configuration Administration RESTful url - Builds</name>
-        <from>^/admin/configuration/([^/]+)/([^/]+)/([^/]+)/([\d]+)\.xml(\?.*)?$</from>
-        <to type="forward">/admin/restful/configuration/build/%{attribute:_method}/%{attribute:_type}?pipelineName=$2&amp;stageName=$3&amp;buildIndex=$4</to>
-    </rule>
-
-    <rule>
-        <name>Cruise Configuration Administration RESTful url - Templates</name>
-        <from>^/admin/configuration/Pipeline%20Templates/([^/]+)/([\d]+)\.xml(\?.*)?$</from>
-        <to type="forward">/admin/restful/configuration/template/stage/%{attribute:_method}/%{attribute:_type}?templateName=$1&amp;stageIndex=$2</to>
-    </rule>
-
-    <rule>
-        <name>Cruise Configuration Administration RESTful url - Stages</name>
-        <from>^/admin/configuration/([^/]+)/([^/]+)/([\d]+)\.xml(\?.*)?$</from>
-        <to type="forward">/admin/restful/configuration/stage/%{attribute:_method}/%{attribute:_type}?pipelineName=$2&amp;stageIndex=$3</to>
-    </rule>
-
-    <rule>
-        <name>Cruise Configuration Administration RESTful url - Pipelines</name>
-        <from>^/admin/configuration/([^/]+)/([\d]+)\.xml(\?.*)?$</from>
-        <to type="forward">
-            /admin/restful/configuration/pipeline/%{attribute:_method}/%{attribute:_type}?pipelineGroup=$1&amp;pipelineIndex=$2
-        </to>
-    </rule>
-
-    <rule>
         <name>Cruise Configuration Administration RESTful url - File</name>
         <from>^/api/admin/config.xml$</from>
         <to type="forward" last="true">/admin/restful/configuration/file/%{attribute:_method}/xml?version=current</to>
@@ -321,14 +257,6 @@
     </rule>
 
     <rule>
-        <name>Cruise Configuration Administration RESTful url - Pipeline Groups</name>
-        <from>^/admin/configuration/([^/]+)\.xml(\?.*)?$</from>
-        <to type="forward">
-            /admin/restful/configuration/group/%{attribute:_method}/%{attribute:_type}?pipelineGroup=$1
-        </to>
-    </rule>
-
-    <rule>
         <name>Specific Build Detail</name>
         <from>/tab/build/detail/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+)</from>
         <to type="forward">/tab/build/recent?pipelineName=$1&amp;label=$2&amp;stageName=$3&amp;stageCounter=$4&amp;jobName=$5</to>
@@ -339,12 +267,6 @@
         <name>Pipeline history</name>
         <from>/tab/pipeline/history/([^/]+)</from>
         <to type="forward">/tab/pipeline/history?pipelineName=$1</to>
-    </rule>
-
-    <rule>
-        <name>Add Simple Pipeline</name>
-        <from>/tab/admin/pipelines/([^/]+)\.json(\?.+)?$</from>
-        <to type="forward">/tab/admin/pipelines/management.json?name=$1</to>
     </rule>
 
     <rule>

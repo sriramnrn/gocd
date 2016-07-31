@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::PackageDefinitionsController do
   include ConfigSaveStubbing
@@ -60,8 +60,7 @@ describe Admin::PackageDefinitionsController do
   describe "action" do
     before(:each) do
       controller.stub(:populate_config_validity)
-      controller.stub(:populate_health_messages)
-      @cruise_config = CruiseConfig.new()
+      @cruise_config = BasicCruiseConfig.new()
       @go_config_service = stub_service(:go_config_service)
       @go_config_service.stub(:registry).and_return(MockRegistryModule::MockRegistry.new)
       @go_config_service.stub(:getConfigForEditing).and_return(@cruise_config)
@@ -192,8 +191,8 @@ describe Admin::PackageDefinitionsController do
         p1 = PipelineConfig.new(CaseInsensitiveString.new("pipeline1"), MaterialConfigs.new([packageOne, packageTwo].to_java(PackageMaterialConfig)), [StageConfig.new].to_java(StageConfig));
         p2 = PipelineConfig.new(CaseInsensitiveString.new("pipeline2"), MaterialConfigs.new([packageTwo].to_java(PackageMaterialConfig)), [StageConfig.new].to_java(StageConfig));
 
-        groupOne = PipelineConfigs.new([p1].to_java(PipelineConfig));
-        groupTwo = PipelineConfigs.new([p2].to_java(PipelineConfig));
+        groupOne = BasicPipelineConfigs.new([p1].to_java(PipelineConfig));
+        groupTwo = BasicPipelineConfigs.new([p2].to_java(PipelineConfig));
 
         @cruise_config.getGroups.add(groupOne)
         @cruise_config.getGroups.add(groupTwo)
@@ -316,15 +315,15 @@ describe Admin::PackageDefinitionsController do
         cruise_config.should_receive(:getPackageRepositories).and_return(repositories)
         @go_config_service.should_receive(:getCurrentConfig).and_return(cruise_config)
         @package_definition_service.should_receive(:check_connection).with(package_definition, an_instance_of(HttpLocalizedOperationResult)) do |p, r|
-          # we don't really care about the error itself. Just the fact that an error occurred. Hence the USER_LICENSE_LIMIT_EXCEEDED error being used here. (Sachin)
-          r.badRequest(LocalizedMessage.string("USER_LICENSE_LIMIT_EXCEEDED"))
+          # we don't really care about the error itself. Just the fact that an error occurred. Hence the PACKAGE_CHECK_FAILED error being used here. (Sachin)
+          r.badRequest(LocalizedMessage.string("PACKAGE_CHECK_FAILED", "foo"))
         end
 
         get :check_connection, :material => pkg_params
 
         json = JSON.parse(response.body)
         json["success"].should == nil
-        json["error"].should == "User license limit exceeded"
+        json["error"].should == "Package check Failed. Reason(s): foo"
       end
 
     end

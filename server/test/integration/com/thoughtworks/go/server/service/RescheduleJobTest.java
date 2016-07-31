@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,26 +12,24 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Date;
 
-import com.thoughtworks.go.config.GoConfigFileDao;
-import com.thoughtworks.go.domain.JobInstance;
-import com.thoughtworks.go.domain.JobPlan;
-import com.thoughtworks.go.domain.JobState;
-import com.thoughtworks.go.domain.Pipeline;
-import com.thoughtworks.go.domain.Stage;
-import com.thoughtworks.go.domain.StageIdentifier;
+import com.thoughtworks.go.config.*;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.activity.JobStatusCache;
 import com.thoughtworks.go.fixture.PipelineWithTwoStages;
 import com.thoughtworks.go.server.dao.DatabaseAccessHelper;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
 import com.thoughtworks.go.server.transaction.TransactionTemplate;
 import com.thoughtworks.go.util.GoConfigFileHelper;
+import com.thoughtworks.go.util.ReflectionUtil;
+import com.thoughtworks.go.util.TimeProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +51,7 @@ import static org.junit.Assert.assertThat;
         "classpath:WEB-INF/applicationContext-acegi-security.xml"
 })
 public class RescheduleJobTest {
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private DatabaseAccessHelper dbHelper;
 
     private static GoConfigFileHelper configHelper = new GoConfigFileHelper();
@@ -63,13 +61,14 @@ public class RescheduleJobTest {
     @Autowired private JobStatusCache jobStatusCache;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private TransactionTemplate transactionTemplate;
+    public static final String JOB_NAME = "unit";
     private static final String STAGE_NAME = "mingle";
     private static final String PIPELINE_NAME = "studios";
     private Stage stage;
 
     @Before
     public void setUp() throws Exception {
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         configHelper.onSetUp();
         fixture = new PipelineWithTwoStages(materialRepository, transactionTemplate);
         fixture.usingConfigHelper(configHelper).usingDbHelper(dbHelper).onSetUp();
@@ -136,11 +135,73 @@ public class RescheduleJobTest {
     }
 
     @Test
+    public void shouldRescheduleBuildAlongWithAssociatedEntitiesCorrectly() throws Exception {
+        dbHelper.cancelStage(stage);
+
+        Resources resources = new Resources(new Resource("r1"), new Resource("r2"));
+        ArtifactPlans artifactPlans = new ArtifactPlans(Arrays.asList(new ArtifactPlan("s1", "d1"), new ArtifactPlan("s2", "d2")));
+        ArtifactPropertiesGenerators artifactPropertiesGenerators = new ArtifactPropertiesGenerators(new ArtifactPropertiesGenerator("n1", "s1", "x1"), new ArtifactPropertiesGenerator("n2", "s2", "x2"));
+        configHelper.addAssociatedEntitiesForAJob(PIPELINE_NAME, STAGE_NAME, JOB_NAME, resources, artifactPlans, artifactPropertiesGenerators);
+
+        dbHelper.schedulePipeline(configHelper.currentConfig().getPipelineConfigByName(new CaseInsensitiveString(PIPELINE_NAME)), new TimeProvider());
+
+        JobPlan oldJobPlan = dbHelper.getBuildInstanceDao().orderedScheduledBuilds().get(0);
+        assertThat(oldJobPlan.getResources().size(), is(2));
+        assertThat(oldJobPlan.getArtifactPlans().size(), is(2));
+        assertThat(oldJobPlan.getPropertyGenerators().size(), is(2));
+
+        JobInstance oldJobInstance = dbHelper.getBuildInstanceDao().buildById(oldJobPlan.getJobId());
+        scheduleService.rescheduleJob(oldJobInstance);
+
+        JobInstance reloadedOldJobInstance = dbHelper.getBuildInstanceDao().buildById(oldJobInstance.getId());
+        assertThat(reloadedOldJobInstance.isIgnored(), is(true));
+        assertThat(reloadedOldJobInstance.getState(), is(JobState.Rescheduled));
+
+        JobPlan newJobPlan = dbHelper.getBuildInstanceDao().orderedScheduledBuilds().get(1);
+        assertThat(newJobPlan.getJobId(), is(not(oldJobInstance.getId())));
+
+        assertThat(newJobPlan.getResources().size(), is(2));
+        for (int i = 0; i < newJobPlan.getResources().size(); i++) {
+            Resource newResource = newJobPlan.getResources().get(i);
+            Resource oldResource = oldJobPlan.getResources().get(i);
+            assertThat(newResource.getId(), is(not(oldResource.getId())));
+            assertThat(newResource.getName(), is(oldResource.getName()));
+            assertThat((Long) ReflectionUtil.getField(newResource, "buildId"), is(newJobPlan.getJobId()));
+        }
+
+        assertThat(newJobPlan.getArtifactPlans().size(), is(2));
+        for (int i = 0; i < newJobPlan.getArtifactPlans().size(); i++) {
+            ArtifactPlan newArtifactPlan = newJobPlan.getArtifactPlans().get(i);
+            ArtifactPlan oldArtifactPlan = oldJobPlan.getArtifactPlans().get(i);
+            assertThat(newArtifactPlan.getId(), is(not(oldArtifactPlan.getId())));
+            assertThat(newArtifactPlan.getArtifactType(), is(oldArtifactPlan.getArtifactType()));
+            assertThat(newArtifactPlan.getSrc(), is(oldArtifactPlan.getSrc()));
+            assertThat(newArtifactPlan.getDest(), is(oldArtifactPlan.getDest()));
+            assertThat(newArtifactPlan.getArtifactType(), is(oldArtifactPlan.getArtifactType()));
+            assertThat((Long) ReflectionUtil.getField(newArtifactPlan, "buildId"), is(newJobPlan.getJobId()));
+        }
+
+        assertThat(newJobPlan.getPropertyGenerators().size(), is(2));
+        for (int i = 0; i < newJobPlan.getPropertyGenerators().size(); i++) {
+            ArtifactPropertiesGenerator newArtifactPropertiesGenerator = newJobPlan.getPropertyGenerators().get(i);
+            ArtifactPropertiesGenerator oldArtifactPropertiesGenerator = oldJobPlan.getPropertyGenerators().get(i);
+            assertThat(newArtifactPropertiesGenerator.getId(), is(not(oldArtifactPropertiesGenerator.getId())));
+            assertThat(newArtifactPropertiesGenerator.getName(), is(oldArtifactPropertiesGenerator.getName()));
+            assertThat(newArtifactPropertiesGenerator.getSrc(), is(oldArtifactPropertiesGenerator.getSrc()));
+            assertThat(newArtifactPropertiesGenerator.getXpath(), is(oldArtifactPropertiesGenerator.getXpath()));
+            assertThat((Long) ReflectionUtil.getField(newArtifactPropertiesGenerator, "jobId"), is(newJobPlan.getJobId()));
+        }
+
+        JobInstance newJobInstance = dbHelper.getBuildInstanceDao().buildById(newJobPlan.getJobId());
+        assertThat(newJobInstance.getState(), is(JobState.Scheduled));
+    }
+
+    @Test
     // #2882
     public void rescheduleShouldNotDuplicateResourcesEtc() throws Exception {
         JobInstance job = scheduledJob();
         JobPlan oldPlan = loadJobPlan(job);
-        
+
         scheduleService.rescheduleJob(job);
 
         JobPlan newPlan = dbHelper.getBuildInstanceDao().orderedScheduledBuilds().get(0);

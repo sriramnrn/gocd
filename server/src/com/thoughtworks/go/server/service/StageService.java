@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
@@ -33,7 +33,6 @@ import com.thoughtworks.go.server.cache.GoCache;
 import com.thoughtworks.go.server.dao.FeedModifier;
 import com.thoughtworks.go.server.dao.PipelineDao;
 import com.thoughtworks.go.server.dao.StageDao;
-import com.thoughtworks.go.server.dao.sparql.ShineDao;
 import com.thoughtworks.go.server.dao.sparql.StageRunFinder;
 import com.thoughtworks.go.server.domain.StageIdentity;
 import com.thoughtworks.go.server.domain.StageStatusListener;
@@ -70,7 +69,6 @@ public class StageService implements StageRunFinder, StageFinder {
     private StageDao stageDao;
     private JobInstanceService jobInstanceService;
     private SecurityService securityService;
-    private ShineDao shineDao;
     private PipelineDao pipelineDao;
     private final ChangesetService changesetService;
     private final GoConfigService goConfigService;
@@ -99,7 +97,7 @@ public class StageService implements StageRunFinder, StageFinder {
         this.transactionTemplate = transactionTemplate;
         this.transactionSynchronizationManager = transactionSynchronizationManager;
         this.goCache = goCache;
-        this.stageStatusListeners = new ArrayList<StageStatusListener>(Arrays.asList(stageStatusListeners));
+        this.stageStatusListeners = new ArrayList<>(Arrays.asList(stageStatusListeners));
     }
 
     public void addStageStatusListener(StageStatusListener listener) {
@@ -131,7 +129,7 @@ public class StageService implements StageRunFinder, StageFinder {
             result.notFound("Not Found", "Pipeline not found", HealthStateType.general(HealthStateScope.GLOBAL));
             return null;
         }
-        if (!securityService.hasViewPermissionForPipeline(username, pipelineName)) {
+        if (!securityService.hasViewPermissionForPipeline(Username.valueOf(username), pipelineName)) {
             result.unauthorized("Unauthorized", NOT_AUTHORIZED_TO_VIEW_PIPELINE, HealthStateType.general(HealthStateScope.forPipeline(pipelineName)));
             return null;
         }
@@ -144,7 +142,7 @@ public class StageService implements StageRunFinder, StageFinder {
     }
 
     public StageSummaryModel findStageSummaryByIdentifier(StageIdentifier stageId, Username username, LocalizedOperationResult result) {
-        if (!securityService.hasViewPermissionForPipeline(CaseInsensitiveString.str(username.getUsername()), stageId.getPipelineName())) {
+        if (!securityService.hasViewPermissionForPipeline(username, stageId.getPipelineName())) {
             result.unauthorized(LocalizedMessage.cannotViewPipeline(stageId.getPipelineName()), HealthStateType.general(HealthStateScope.forPipeline(stageId.getPipelineName())));
             return null;
         }
@@ -233,7 +231,7 @@ public class StageService implements StageRunFinder, StageFinder {
                 for (StageStatusListener stageStatusListener : stageStatusListeners.toArray(prototype)) {
                     try {
                         stageStatusListener.stageStatusChanged(savedStage);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         LOGGER.error("error notifying listener for stage " + savedStage, e);
                     }
                 }
@@ -349,7 +347,7 @@ public class StageService implements StageRunFinder, StageFinder {
     }
 
     private void populateAuthorsAndMingleCards(List<StageFeedEntry> stageEntries, String pipelineName, Username username) {
-        List<Long> pipelineIds = new ArrayList<Long>();
+        List<Long> pipelineIds = new ArrayList<>();
         for (StageFeedEntry stageEntry : stageEntries) {
             pipelineIds.add(stageEntry.getPipelineId());
         }
@@ -414,7 +412,7 @@ public class StageService implements StageRunFinder, StageFinder {
 			result.notFound("Not Found", "Pipeline not found", HealthStateType.general(HealthStateScope.GLOBAL));
 			return null;
 		}
-		if (!securityService.hasViewPermissionForPipeline(username, pipelineName)) {
+		if (!securityService.hasViewPermissionForPipeline(Username.valueOf(username), pipelineName)) {
 			result.unauthorized("Unauthorized", NOT_AUTHORIZED_TO_VIEW_PIPELINE, HealthStateType.general(HealthStateScope.forPipeline(pipelineName)));
 			return null;
 		}
@@ -485,7 +483,7 @@ public class StageService implements StageRunFinder, StageFinder {
         Pipeline pipelineThatLastPassed = pipelineDao.findEarlierPipelineThatPassedForStage(pipelineName, stageName, toNaturalOrder);
         double fromNaturalOrder = pipelineThatLastPassed != null ? pipelineThatLastPassed.getNaturalOrder() : 0.0;
 
-        List<StageIdentifier> finalIds = new ArrayList<StageIdentifier>();
+        List<StageIdentifier> finalIds = new ArrayList<>();
         List<StageIdentifier> failedStages = stageDao.findFailedStagesBetween(pipelineName, stageName, fromNaturalOrder, toNaturalOrder);
         if (failedStages.isEmpty() || !failedStages.get(0).equals(stageIdentifier)) {
             return finalIds;
@@ -516,7 +514,7 @@ public class StageService implements StageRunFinder, StageFinder {
         return stageDao.findLatestStageInstances();
     }
 
-    public static interface JobOperation {
+    public interface JobOperation {
         void invoke();
     }
 }

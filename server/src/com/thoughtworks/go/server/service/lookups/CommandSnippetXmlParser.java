@@ -1,5 +1,5 @@
 /*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,26 +25,24 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.thoughtworks.go.util.StringUtil;
-import com.thoughtworks.go.util.XmlUtils;
-import com.thoughtworks.go.util.XsdErrorTranslator;
 import org.apache.log4j.Logger;
 import org.jdom.Comment;
 import org.jdom.Document;
 import org.jdom.Element;
-import org.jdom.input.SAXBuilder;
+
+import static com.thoughtworks.go.util.XmlUtils.buildXmlDocument;
 
 public class CommandSnippetXmlParser {
     private static final Logger LOGGER = Logger.getLogger(CommandSnippetXmlParser.class);
 
     public CommandSnippet parse(String xmlContent, String fileName, String relativeFilePath) {
         try {
-            XmlUtils.validate(xmlContent, CommandSnippet.class.getResource("command-snippet.xsd"), new XsdErrorTranslator(), new SAXBuilder());
-            Document document = XmlUtils.buildXmlDocument(xmlContent);
+            Document document = buildXmlDocument(xmlContent, CommandSnippet.class.getResource("command-snippet.xsd"));
             CommandSnippetComment comment = getComment(document);
 
             Element execTag = document.getRootElement();
             String commandName = execTag.getAttributeValue("command");
-            List<String> arguments = new ArrayList<String>();
+            List<String> arguments = new ArrayList<>();
             for (Object child : execTag.getChildren()) {
                 Element element = (Element) child;
                 arguments.add(element.getValue());
@@ -70,7 +68,7 @@ public class CommandSnippetXmlParser {
         private final String SPACES = "\\s*";
         private final String content;
         private final Pattern commentLineKeyValuePattern = Pattern.compile(String.format("^%s(.+?)%s:%s(.+?)%s$", SPACES, SPACES, SPACES, SPACES));
-        private Map<String, String> snippetTagMap = new HashMap<String, String>();
+        private Map<String, String> snippetTagMap = new HashMap<>();
 
         public CommandSnippetTextComment(String content) {
             this.content = content;
@@ -106,7 +104,7 @@ public class CommandSnippetXmlParser {
         public List<String> getKeywords() {
             String keywords = snippetTagMap.get("keywords");
             if (StringUtil.isBlank(keywords)) {
-                return new ArrayList<String>();
+                return new ArrayList<>();
             }
             return Arrays.asList(keywords.toLowerCase().split(String.format("%s,%s", SPACES, SPACES)));
         }

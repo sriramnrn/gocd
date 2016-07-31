@@ -18,7 +18,7 @@ package com.thoughtworks.studios.shine.cruise.stage.details;
 
 import java.util.Date;
 
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.materials.ScmMaterial;
 import com.thoughtworks.go.domain.Pipeline;
 import com.thoughtworks.go.domain.Stage;
@@ -50,8 +50,8 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
 import static com.thoughtworks.studios.shine.AssertUtils.assertAskIsFalse;
 import static com.thoughtworks.studios.shine.AssertUtils.assertAskIsTrue;
-import static junit.framework.Assert.assertFalse;
-import static junit.framework.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = {
         "classpath:WEB-INF/applicationContext-global.xml",
@@ -65,7 +65,7 @@ public class StageResourceImporterTest {
     @Autowired private StageService stageService;
     @Autowired private PipelineHistoryService pipelineHistoryService;
     @Autowired private MaterialRepository materialRepository;
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private XmlApiService xmlApiService;
     @Autowired private TransactionTemplate transactionTemplate;
 
@@ -82,7 +82,7 @@ public class StageResourceImporterTest {
     @Before
     public void setup() throws Exception {
         dbHelper.onSetUp();
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         configHelper.onSetUp();
         graphFactory = new InMemoryTempGraphFactory();
         importer = new StageResourceImporter("test/data/cruise/artifacts", xmlApiService, stageService, pipelineHistoryService,systemEnvironment);

@@ -16,49 +16,59 @@
 
 package com.thoughtworks.go.remote.work;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.util.command.StreamConsumer;
 import org.apache.commons.collections.buffer.CircularFifoBuffer;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import static java.lang.String.format;
+
 public final class ConsoleOutputTransmitter implements StreamConsumer, Runnable {
     private static final Logger LOGGER = Logger.getLogger(ConsoleOutputTransmitter.class);
 
-    private volatile boolean isStopped = false;
     private CircularFifoBuffer buffer = new CircularFifoBuffer(10 * 1024); // maximum 10k lines
-    private Integer sleepInSeconds;
     private final ConsoleAppender consoleAppender;
-
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
+    private final ScheduledThreadPoolExecutor executor;
 
     public ConsoleOutputTransmitter(ConsoleAppender consoleAppender) {
-        this.consoleAppender = consoleAppender;
-        sleepInSeconds = new SystemEnvironment().getConsolePublishInterval();
-        new Thread(this).start();
+        this(consoleAppender, new SystemEnvironment().getConsolePublishInterval(), new ScheduledThreadPoolExecutor(1));
     }
 
+    protected ConsoleOutputTransmitter(ConsoleAppender consoleAppender, Integer consolePublishInterval,
+                                       ScheduledThreadPoolExecutor scheduledThreadPoolExecutor) {
+        this.consoleAppender = consoleAppender;
+        this.executor = scheduledThreadPoolExecutor;
+        executor.scheduleAtFixedRate(this, 0L, consolePublishInterval, TimeUnit.SECONDS);
+
+    }
 
     public void consumeLine(String line) {
         synchronized (buffer) {
-            buffer.add(line);
+            buffer.add(format("%s %s", dateFormat.format(new Date()), line));
         }
     }
 
     public void run() {
-        while (!isStopped) {
-            try {
-                Thread.sleep(sleepInSeconds * 1000);
-            } catch (InterruptedException ignore) {
-            }
+        try {
             flushToServer();
+        } catch (Throwable e) {
+            LOGGER.warn("Could not send console output to server", e);
         }
     }
 
     public void flushToServer() {
-        if (buffer.isEmpty()) { return; }
+        if (buffer.isEmpty()) {
+            return;
+        }
 
         List sent = new ArrayList();
         try {
@@ -85,8 +95,8 @@ public final class ConsoleOutputTransmitter implements StreamConsumer, Runnable 
     }
 
     public void stop() {
-        isStopped = true;
         flushToServer();
+        executor.shutdown();
     }
 
 }

@@ -30,6 +30,7 @@ import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.MaterialConfig;
 import com.thoughtworks.go.domain.materials.Modification;
 import com.thoughtworks.go.domain.materials.ModifiedAction;
+import com.thoughtworks.go.domain.scm.SCM;
 import com.thoughtworks.go.helper.MaterialsMother;
 import com.thoughtworks.go.helper.PipelineConfigMother;
 import com.thoughtworks.go.helper.StageConfigMother;
@@ -215,13 +216,13 @@ public class ScheduleTestUtil {
     private Pipeline scheduleWith(AddedPipeline pipeline, RevisionsForMaterial... revisions) {
         Pipeline oldInstance = triggeredPipelines.get(pipeline.config.name());
 
-        Map<Material, List<Modification>> modMap = new HashMap<Material, List<Modification>>();
-        Map<Modification, Modification> identityMap = new HashMap<Modification, Modification>();
+        Map<Material, List<Modification>> modMap = new HashMap<>();
+        Map<Modification, Modification> identityMap = new HashMap<>();
 
         MaterialRevisions buildCause = new MaterialRevisions();
         int i = 0;
         for (Material material : MaterialsMother.createMaterialsFromMaterialConfigs(pipeline.config.materialConfigs())) {
-            List<Modification> modifications = new ArrayList<Modification>();
+            List<Modification> modifications = new ArrayList<>();
             for (Modification modification : modForRev(revisions[i++])) {
                 if (!identityMap.containsKey(modification)) {
                     identityMap.put(modification, modification);
@@ -376,6 +377,10 @@ public class ScheduleTestUtil {
 
     public void addPackageDefinition(PackageMaterialConfig pkgMaterialConfig) {
         configHelper.addPackageDefinition(pkgMaterialConfig);
+    }
+
+    public void addSCMConfig(SCM scmConfig) {
+        configHelper.addSCMConfig(scmConfig);
     }
 
     public AddedPipeline saveConfigWith(String pipelineName, MaterialDeclaration... materialDecls) {

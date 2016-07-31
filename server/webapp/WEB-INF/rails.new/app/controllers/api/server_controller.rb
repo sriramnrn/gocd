@@ -15,20 +15,32 @@
 ##########################GO-LICENSE-END##################################
 
 class Api::ServerController < Api::ApiController
-  def info
-    @base_url = system_environment.getBaseUrlForShine()
-    @base_ssl_url = system_environment.getBaseSslUrlForShine()
-    @artifacts_dir = go_config_service.artifactsDir().getAbsolutePath()
-    @shine_db_path = system_environment.shineDb().getAbsolutePath()
-    @config_dir = system_environment.configDir().getAbsolutePath()
-  end
+
+  GSON = com.google.gson.GsonBuilder.new.setPrettyPrinting().serializeNulls().create()
 
   def capture_support_info
-    file = server_status_service.captureServerInfo(current_user, result = HttpLocalizedOperationResult.new)
-    if !result.isSuccessful()
-      render_localized_operation_result result
-    else
-      send_file file.getAbsolutePath(), :disposition => "inline", :stream => false, :type => "text"
+    respond_to do |format|
+      format.json do
+        information = server_status_service.asJson(current_user, result = HttpLocalizedOperationResult.new)
+
+        if result.isSuccessful()
+          render json: GSON.toJson(information)
+        else
+          render_localized_operation_result(result)
+        end
+      end
+
+      format.any do
+        information = server_status_service.captureServerInfo(current_user, result = HttpLocalizedOperationResult.new)
+
+        if result.isSuccessful()
+          render text: information, layout: false
+        else
+          render_localized_operation_result(result)
+        end
+      end
     end
+
   end
+
 end

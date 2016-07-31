@@ -1,44 +1,44 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.agent.service;
 
-import com.thoughtworks.go.config.AgentRegistrationPropertiesReader;
+import com.thoughtworks.go.agent.common.ssl.GoAgentServerHttpClient;
+import com.thoughtworks.go.agent.common.ssl.GoAgentServerHttpClientBuilder;
+import com.thoughtworks.go.config.AgentAutoRegistrationProperties;
 import com.thoughtworks.go.config.AgentRegistry;
 import com.thoughtworks.go.config.GuidService;
-import com.thoughtworks.go.security.AuthSSLProtocolSocketFactory;
 import com.thoughtworks.go.security.KeyStoreManager;
 import com.thoughtworks.go.security.Registration;
 import com.thoughtworks.go.server.service.AgentRuntimeInfo;
 import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.util.SystemUtil;
 import com.thoughtworks.go.util.URLService;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
-import org.apache.commons.httpclient.methods.PostMethod;
-import org.apache.commons.httpclient.params.HttpConnectionManagerParams;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.input.NullInputStream;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.client.methods.RequestBuilder;
 import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
 
 import static com.thoughtworks.go.security.CertificateUtil.md5Fingerprint;
 import static com.thoughtworks.go.security.SelfSignedCertificateX509TrustManager.CRUISE_SERVER;
@@ -47,51 +47,43 @@ import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 @Service
 public class SslInfrastructureService {
 
-    public static final File AGENT_CERTIFICATE_FILE = new File("config", "agent.jks");
-    public static final File AGENT_TRUST_FILE = new File("config", "trust.jks");
-    public static final String CHAIN_ALIAS = "agent";
-    static final String AGENT_STORE_PASSWORD = "agent5s0repa55w0rd";
+    private static final String CHAIN_ALIAS = "agent";
     private static final Logger LOGGER = Logger.getLogger(SslInfrastructureService.class);
     private static final int REGISTER_RETRY_INTERVAL = 5000;
     private final RemoteRegistrationRequester remoteRegistrationRequester;
     private final KeyStoreManager keyStoreManager;
-    private final HttpClient httpClient;
-    private AuthSSLProtocolSocketFactory protocolSocketFactory;
+    private final GoAgentServerHttpClient httpClient;
     private transient boolean registered = false;
-    private HttpConnectionManagerParams httpConnectionManagerParams;
 
     @Autowired
-    public SslInfrastructureService(URLService urlService, HttpClient httpClient, HttpConnectionManagerParams httpConnectionManagerParams, AgentRegistry agentRegistry) throws Exception {
-        this(new RemoteRegistrationRequester(urlService.getAgentRegistrationURL(), agentRegistry, new HttpClient()), httpClient, httpConnectionManagerParams);
+    public SslInfrastructureService(URLService urlService, GoAgentServerHttpClient httpClient, AgentRegistry agentRegistry) throws Exception {
+        this(new RemoteRegistrationRequester(urlService.getAgentRegistrationURL(), agentRegistry, httpClient), httpClient);
     }
 
     // For mocking out remote call
-    SslInfrastructureService(RemoteRegistrationRequester requester, HttpClient httpClient, HttpConnectionManagerParams httpConnectionManagerParams)
+    SslInfrastructureService(RemoteRegistrationRequester requester, GoAgentServerHttpClient httpClient)
             throws Exception {
         this.remoteRegistrationRequester = requester;
         this.httpClient = httpClient;
-        this.httpConnectionManagerParams = httpConnectionManagerParams;
         this.keyStoreManager = new KeyStoreManager();
-        this.keyStoreManager.preload(AGENT_CERTIFICATE_FILE, AGENT_STORE_PASSWORD);
+        this.keyStoreManager.preload(GoAgentServerHttpClientBuilder.AGENT_CERTIFICATE_FILE, httpClientBuilder().keystorePassword());
+    }
+
+    private GoAgentServerHttpClientBuilder httpClientBuilder() {
+        return new GoAgentServerHttpClientBuilder(new SystemEnvironment());
     }
 
     public void createSslInfrastructure() throws IOException {
-        File parentFile = AGENT_TRUST_FILE.getParentFile();
-        if (parentFile.exists() || parentFile.mkdirs()) {
-            protocolSocketFactory = new AuthSSLProtocolSocketFactory(
-                    AGENT_TRUST_FILE, AGENT_CERTIFICATE_FILE, AGENT_STORE_PASSWORD);
-            protocolSocketFactory.registerAsHttpsProtocol();
-        } else {
-            bomb("Unable to create folder " + parentFile.getAbsolutePath());
-        }
+        httpClientBuilder().initialize();
+        httpClient.reset();
     }
 
-    public void registerIfNecessary() throws Exception {
-        registered = keyStoreManager.hasCertificates(CHAIN_ALIAS, AGENT_CERTIFICATE_FILE,
-                AGENT_STORE_PASSWORD) && GuidService.guidPresent();
+    public void registerIfNecessary(AgentAutoRegistrationProperties agentAutoRegistrationProperties) throws Exception {
+        registered = keyStoreManager.hasCertificates(CHAIN_ALIAS, GoAgentServerHttpClientBuilder.AGENT_CERTIFICATE_FILE,
+                httpClientBuilder().keystorePassword()) && GuidService.guidPresent();
         if (!registered) {
             LOGGER.info("[Agent Registration] Starting to register agent");
-            register();
+            register(agentAutoRegistrationProperties);
             createSslInfrastructure();
             registered = true;
             LOGGER.info("[Agent Registration] Successfully registered agent");
@@ -102,30 +94,15 @@ public class SslInfrastructureService {
         return registered;
     }
 
-    private void register() throws Exception {
+    private void register(AgentAutoRegistrationProperties agentAutoRegistrationProperties) throws Exception {
         String hostName = SystemUtil.getLocalhostNameOrRandomNameIfNotFound();
         Registration keyEntry = null;
         while (keyEntry == null || keyEntry.getChain().length == 0) {
-            File autoRegisterPropertiesFile = new File("config", "autoregister.properties");
-            AgentRegistrationPropertiesReader agentRegistrationPropertiesReader = new AgentRegistrationPropertiesReader(autoRegisterPropertiesFile);
             try {
-                keyEntry = remoteRegistrationRequester.requestRegistration(hostName, agentRegistrationPropertiesReader);
+                keyEntry = remoteRegistrationRequester.requestRegistration(hostName, agentAutoRegistrationProperties);
             } catch (Exception e) {
-                LOGGER.error("[Agent Registration] Problems getting the Agent Certificate from Go Server", e);
+                LOGGER.error("[Agent Registration] There was a problem registering with the go server.", e);
                 throw e;
-            } finally {
-                agentRegistrationPropertiesReader = null;
-                if (autoRegisterPropertiesFile != null && autoRegisterPropertiesFile.exists()) {
-                    if (FileUtils.deleteQuietly(autoRegisterPropertiesFile)) {
-                        if (LOGGER.isDebugEnabled()) {
-                            LOGGER.debug("[Agent Auto Registration] Successfully deleted auto registration properties file on agent.");
-                        }
-                    } else {
-                        if (LOGGER.isDebugEnabled()) {
-                            LOGGER.debug("[Agent Auto Registration] Failed deleting auto registration properties file on agent.");
-                        }
-                    }
-                }
             }
 
             try {
@@ -136,11 +113,12 @@ public class SslInfrastructureService {
         }
         LOGGER.info("[Agent Registration] Retrieved registration from Go server.");
         storeChainIntoAgentStore(keyEntry);
+        agentAutoRegistrationProperties.scrubRegistrationProperties();
     }
 
-    void storeChainIntoAgentStore(Registration keyEntry) {
+    private void storeChainIntoAgentStore(Registration keyEntry) {
         try {
-            keyStoreManager.storeCertificate(CHAIN_ALIAS, AGENT_CERTIFICATE_FILE, AGENT_STORE_PASSWORD, keyEntry);
+            keyStoreManager.storeCertificate(CHAIN_ALIAS, GoAgentServerHttpClientBuilder.AGENT_CERTIFICATE_FILE, httpClientBuilder().keystorePassword(), keyEntry);
             LOGGER.info(String.format("[Agent Registration] Stored registration for cert with hash code: %s not valid before: %s", md5Fingerprint(keyEntry.getFirstCertificate()),
                     keyEntry.getCertificateNotBeforeDate()));
         } catch (Exception e) {
@@ -149,67 +127,63 @@ public class SslInfrastructureService {
     }
 
     public void invalidateAgentCertificate() {
-        resetHttpConnectionManager();
         try {
-            keyStoreManager.deleteEntry(CHAIN_ALIAS, AGENT_CERTIFICATE_FILE, AGENT_STORE_PASSWORD);
-            keyStoreManager.deleteEntry(CRUISE_SERVER, AGENT_TRUST_FILE, AGENT_STORE_PASSWORD);
+            httpClient.reset();
+            keyStoreManager.deleteEntry(CHAIN_ALIAS, GoAgentServerHttpClientBuilder.AGENT_CERTIFICATE_FILE, httpClientBuilder().keystorePassword());
+            keyStoreManager.deleteEntry(CRUISE_SERVER, GoAgentServerHttpClientBuilder.AGENT_TRUST_FILE, httpClientBuilder().keystorePassword());
         } catch (Exception e) {
             LOGGER.fatal("[Agent Registration] Error while deleting key from key store", e);
             deleteKeyStores();
         }
     }
 
-    private void resetHttpConnectionManager() {
-        MultiThreadedHttpConnectionManager httpConnectionManager =
-                (MultiThreadedHttpConnectionManager) httpClient.getHttpConnectionManager();
-        httpConnectionManager.shutdown();
-        httpConnectionManager = new MultiThreadedHttpConnectionManager();
-        httpConnectionManager.setParams(httpConnectionManagerParams);
-        httpClient.setHttpConnectionManager(httpConnectionManager);
-    }
-
-    public void deleteKeyStores() {
-        FileUtils.deleteQuietly(AGENT_CERTIFICATE_FILE);
-        FileUtils.deleteQuietly(AGENT_TRUST_FILE);
+    private void deleteKeyStores() {
+        FileUtils.deleteQuietly(GoAgentServerHttpClientBuilder.AGENT_CERTIFICATE_FILE);
+        FileUtils.deleteQuietly(GoAgentServerHttpClientBuilder.AGENT_TRUST_FILE);
     }
 
     public static class RemoteRegistrationRequester {
         private final AgentRegistry agentRegistry;
         private String serverUrl;
-        private HttpClient httpClient;
+        private GoAgentServerHttpClient httpClient;
 
-        public RemoteRegistrationRequester(String serverUrl, AgentRegistry agentRegistry, HttpClient httpClient) {
+        public RemoteRegistrationRequester(String serverUrl, AgentRegistry agentRegistry, GoAgentServerHttpClient httpClient) {
             this.serverUrl = serverUrl;
             this.httpClient = httpClient;
             this.agentRegistry = agentRegistry;
         }
 
-        protected Registration requestRegistration(String agentHostName, AgentRegistrationPropertiesReader agentAutoRegisterProperties) throws IOException, ClassNotFoundException {
+        protected Registration requestRegistration(String agentHostName, AgentAutoRegistrationProperties agentAutoRegisterProperties) throws IOException, ClassNotFoundException {
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(String.format("[Agent Registration] Using URL %s to register.", serverUrl));
             }
-            PostMethod postMethod = new PostMethod(serverUrl);
-            postMethod.addParameter("hostname", agentHostName);
-            postMethod.addParameter("uuid", agentRegistry.uuid());
-            String workingdir = SystemUtil.currentWorkingDirectory();
-            postMethod.addParameter("location", workingdir);
-            postMethod.addParameter("usablespace",
-                    String.valueOf(AgentRuntimeInfo.usableSpace(workingdir)));
-            postMethod.addParameter("operating_system", new SystemEnvironment().getOperatingSystemName());
-            postMethod.addParameter("agentAutoRegisterKey", agentAutoRegisterProperties.getAgentAutoRegisterKey());
-            postMethod.addParameter("agentAutoRegisterResources", agentAutoRegisterProperties.getAgentAutoRegisterResources());
-            postMethod.addParameter("agentAutoRegisterEnvironments", agentAutoRegisterProperties.getAgentAutoRegisterEnvironments());
+
+            HttpRequestBase postMethod = (HttpRequestBase) RequestBuilder.post(serverUrl)
+                    .addParameter("hostname", agentHostName)
+                    .addParameter("uuid", agentRegistry.uuid())
+                    .addParameter("location", SystemUtil.currentWorkingDirectory())
+                    .addParameter("usablespace", String.valueOf(AgentRuntimeInfo.usableSpace(SystemUtil.currentWorkingDirectory())))
+                    .addParameter("operatingSystem", new SystemEnvironment().getOperatingSystemName())
+                    .addParameter("agentAutoRegisterKey", agentAutoRegisterProperties.agentAutoRegisterKey())
+                    .addParameter("agentAutoRegisterResources", agentAutoRegisterProperties.agentAutoRegisterResources())
+                    .addParameter("agentAutoRegisterEnvironments", agentAutoRegisterProperties.agentAutoRegisterEnvironments())
+                    .addParameter("agentAutoRegisterHostname", agentAutoRegisterProperties.agentAutoRegisterHostname())
+                    .addParameter("elasticAgentId", agentAutoRegisterProperties.agentAutoRegisterElasticAgentId())
+                    .addParameter("elasticPluginId", agentAutoRegisterProperties.agentAutoRegisterElasticPluginId())
+                    .build();
+
             try {
-                httpClient.executeMethod(postMethod);
-                InputStream is = postMethod.getResponseBodyAsStream();
-                return readResponse(is);
+                CloseableHttpResponse response = httpClient.execute(postMethod);
+                try (InputStream is = response.getEntity() == null ? new NullInputStream(0) : response.getEntity().getContent()) {
+                    return readResponse(is);
+                }
             } finally {
                 postMethod.releaseConnection();
             }
         }
 
         protected Registration readResponse(InputStream is) throws IOException, ClassNotFoundException {
-            return (Registration) new ObjectInputStream(is).readObject();
+            return Registration.fromJson(IOUtils.toString(is));
         }
     }
 }

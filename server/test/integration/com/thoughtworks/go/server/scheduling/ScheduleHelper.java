@@ -47,6 +47,7 @@ import java.util.Map;
 import static com.thoughtworks.go.utils.Assertions.assertAlwaysHappens;
 import static com.thoughtworks.go.utils.Assertions.assertWillHappen;
 import static com.thoughtworks.go.utils.Timeout.TEN_SECONDS;
+import static junit.framework.TestCase.assertNull;
 import static org.junit.Assert.fail;
 
 @Component
@@ -127,6 +128,24 @@ public class ScheduleHelper {
             }
         }
         return afterLoad;
+    }
+    public void waitForNotScheduled(int seconds,String pipelineName) {
+        int count = 0;
+        Map<String, BuildCause> afterLoad = pipelineScheduleQueue.toBeScheduled();
+        while (true) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            afterLoad = pipelineScheduleQueue.toBeScheduled();
+            if (count++ > seconds) {
+                return ;
+            }
+
+            BuildCause cause = afterLoad.get(pipelineName);
+            assertNull(cause);
+        }
     }
 
     public void autoSchedulePipelinesWithRealMaterials(String... pipelines) throws Exception {

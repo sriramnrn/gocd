@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "/../../../spec_helper")
+require 'spec_helper'
 
 describe "admin/pipelines/general.html.erb" do
   include GoUtil, ReflectiveUtil
@@ -23,7 +23,7 @@ describe "admin/pipelines/general.html.erb" do
     @pipeline = PipelineConfigMother.pipelineConfigWithTimer("pipeline-name", "1 1 1 1 1 1 1")
     assign(:pipeline, @pipeline)
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     @cruise_config.addPipeline("group-1", @pipeline)
 
     set(@cruise_config, "md5", "abc")
@@ -79,7 +79,7 @@ describe "admin/pipelines/general.html.erb" do
   end
 
   it "should render form with approval type as disabled if pipeline refers to a template" do
-    @cruise_config = CruiseConfig.new
+    @cruise_config = BasicCruiseConfig.new
     @pipeline = GoConfigMother.new.addPipelineWithTemplate(@cruise_config, "pipeline", "template", "stage", ["job"].to_java(java.lang.String))
     assign(:pipeline, @pipeline)
     assign(:cruise_config, @cruise_config)
@@ -107,7 +107,7 @@ describe "admin/pipelines/general.html.erb" do
     Capybara.string(response.body).find('#pipeline_edit_form').tap do |form|
       expect(form).to have_selector("div.field_with_errors input[type='text'][name='pipeline[#{PipelineConfig::LABEL_TEMPLATE}]'][value='bad-label-template']")
       expect(form).to have_selector("div.form_error", :text => "Invalid label template")
-      
+
       expect(form).to have_selector("div.field_with_errors input[type='checkbox'][name='pipeline[#{PipelineConfig::LOCK}]']")
       expect(form).to have_selector("div.form_error", :text => "Lock has a bad value")
 

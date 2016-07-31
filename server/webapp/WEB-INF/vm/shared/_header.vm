@@ -13,15 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *************************GO-LICENSE-END***********************************#
-
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<!--[if lt IE 7]> <html lang="en" class="no-js ie6 oldie"> <![endif]-->
-<!--[if IE 7]> <html lang="en" class="no-js ie7 oldie"> <![endif]-->
-<!--[if IE 8]> <html lang="en" class="no-js ie8 oldie"> <![endif]-->
-<!--[if gt IE 8]><!-->
-<html lang='en'>
-<!--<![endif]-->
+<!DOCTYPE HTML>
+<html xmlns="http://www.w3.org/1999/xhtml" lang='en'>
 
 <head>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
@@ -41,7 +34,6 @@
         <script type="text/javascript" src="$req.getContextPath()/$concatenatedJavascriptFilePath"></script>
 
     <script type="text/javascript"> var contextPath = "$req.getContextPath()"; </script>
-    <!--[if IE 6]><script type="text/javascript">window.cruise_is_running_in_ie6 = true;</script><![endif]-->
     <title>
         #if($title)
         $title
@@ -63,12 +55,17 @@
 ##    #end
 
 
-        <div id="header"><div class="header">
+        <div id="header">
+            <div class="header">
             <a href="$req.getContextPath()/pipelines" id="application_logo"></a>
+            #if ($l)
             <div class="application_nav">
 
                     #if ($principal)
                     <ul class="user">
+                        <li class="help">
+                            <a href="https://go.cd/help" target="_blank">$l.localize("HELP_SMALL")</a>
+                        </li>
                         <li class="current_user icon">
                             <a href="#" class="current_user_name dropdown-arrow-icon icon">$principal</a>
                                 <ul class="enhanced_dropdown hidden">
@@ -80,17 +77,24 @@
                                     </li>
                               </ul>
                         </li>
-
-                        <li class="help">
-                          <a href="http://www.go.cd/documentation/user/current" target="_blank">$l.localize("HELP_SMALL")</a>
-                        </li>
                     </ul>
                     #else
                     <ul class="user">
                         <li class="help">
-                          <a href="http://www.go.cd/documentation/user/current" target="_blank">$l.localize("HELP_SMALL")</a>
+                          <a href="https://go.cd/help" target="_blank">$l.localize("HELP_SMALL")</a>
                         </li>
                     </ul>
+                    #end
+
+                    #if( $goUpdateCheckEnabled && $goUpdate)
+                        <div class="notifications">
+                            <span class="bell"></span>
+                            <div class="hover-container">
+                                <div class="hover">
+                                    <span>A new release of GoCD - <a href="http://www.go.cd/download/" target="_blank">$goUpdate</a> is available.</span>
+                                </div>
+                            </div>
+                        </div>
                     #end
 
                     <ul class="tabs">
@@ -124,9 +128,11 @@
                         </li>
                     </ul>
                     <div id="cruise_message_counts" class="cruise_messages"></div>
-                    <div id="cruise_message_body" style="display:none;"></div>
+                    <div id="cruise_message_body" style="display:none;" class="cruise_message_body"></div>
                 </div>
-        </div></div>
+            #end
+            </div>
+        </div>
 
-            <div id="bd">
-                   
+        <div id="bd">
+

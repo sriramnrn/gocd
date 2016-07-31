@@ -165,7 +165,7 @@ public class UserSqlMapDao  extends HibernateDaoSupport implements UserDao {
     }
 
     public List<User> enabledUsers() {
-        List<User> enabledUsers = new ArrayList<User>();
+        List<User> enabledUsers = new ArrayList<>();
         for (User user : allUsers()) {
             if (user.isEnabled()) {
                 enabledUsers.add(user);
@@ -174,18 +174,9 @@ public class UserSqlMapDao  extends HibernateDaoSupport implements UserDao {
         return enabledUsers;
     }
 
-    public void resetLicenseExpiryWarning() {
-        transactionTemplate.execute(new TransactionCallbackWithoutResult() {
-            @Override
-            protected void doInTransactionWithoutResult(TransactionStatus status) {
-                sessionFactory.getCurrentSession().createQuery(String.format("UPDATE %s SET disableLicenseExpiryWarning = 'false'", User.class.getName())).executeUpdate();
-            }
-        });
-    }
-
     public Set<String> findUsernamesForIds(final Set<Long> userIds) {
         List<User> users = allUsers();
-        Set<String> userNames = new HashSet<String>();
+        Set<String> userNames = new HashSet<>();
         for (User user : users) {
             if (userIds.contains(user.getId())) {
                 userNames.add(user.getName());

@@ -14,12 +14,13 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Api::CommandsController do
 
   describe "routes" do
     it "should generate path for command snippet cache reload " do
+      expect_any_instance_of(HeaderConstraint).to receive(:matches?).with(any_args).and_return(true)
       expect(:post => '/api/admin/command-repo-cache/reload').to route_to(:no_layout => true, :controller => "api/commands", :action => "reload_cache")
       expect(admin_command_cache_reload_path).to eq("/api/admin/command-repo-cache/reload")
     end

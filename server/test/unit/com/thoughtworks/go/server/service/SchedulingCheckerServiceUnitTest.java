@@ -33,6 +33,7 @@ import com.thoughtworks.go.util.SystemEnvironment;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Matchers;
 
 import static org.hamcrest.Matchers.startsWith;
@@ -44,28 +45,28 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.MockitoAnnotations.initMocks;
 
 public class SchedulingCheckerServiceUnitTest {
 
     private SchedulingCheckerService schedulingChecker;
-    private GoLicenseService goLicenseService;
     private SecurityService securityService;
     private UserService userService;
-    private ArgumentCaptor<List<SchedulingChecker>> argumentCaptor;
     private CompositeChecker compositeChecker;
     private OperationResult operationResult;
+    @Captor
+    private ArgumentCaptor<List<SchedulingChecker>> argumentCaptor;
 
 
     @Before
     public void setUp() throws Exception {
-        goLicenseService = mock(GoLicenseService.class);
+        initMocks(this);
         securityService = mock(SecurityService.class);
         userService = mock(UserService.class);
-        schedulingChecker = spy(new SchedulingCheckerService(mock(GoConfigService.class), mock(CurrentActivityService.class), goLicenseService, mock(SystemEnvironment.class),
+        schedulingChecker = spy(new SchedulingCheckerService(mock(GoConfigService.class), mock(CurrentActivityService.class), mock(SystemEnvironment.class),
                 securityService, mock(PipelineLockService.class), mock(TriggerMonitor.class), mock(PipelineScheduleQueue.class), userService, mock(ServerHealthService.class),
                 mock(PipelinePauseService.class)));
 
-        argumentCaptor = new ArgumentCaptor<List<SchedulingChecker>>();
         compositeChecker = mock(CompositeChecker.class);
         operationResult = mock(OperationResult.class);
 
@@ -82,7 +83,6 @@ public class SchedulingCheckerServiceUnitTest {
         verify(compositeChecker).check(operationResult);
 
         assertFor(argumentCaptor.getValue(), StageAuthorizationChecker.class);
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
         assertFor(argumentCaptor.getValue(), PipelinePauseChecker.class);
         assertFor(argumentCaptor.getValue(), PipelineActiveChecker.class);
         assertFor(argumentCaptor.getValue(), StageActiveChecker.class);
@@ -98,10 +98,8 @@ public class SchedulingCheckerServiceUnitTest {
         verify(schedulingChecker).buildScheduleCheckers(argumentCaptor.capture());
         verify(compositeChecker).check(operationResult);
 
-        assertFor(argumentCaptor.getValue(), LicenseChecker.class);
         assertFor(argumentCaptor.getValue(), AboutToBeTriggeredChecker.class);
         assertFor(argumentCaptor.getValue(), StageAuthorizationChecker.class);
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
         assertFor(argumentCaptor.getValue(), PipelinePauseChecker.class);
         assertFor(argumentCaptor.getValue(), PipelineLockChecker.class);
         assertFor(argumentCaptor.getValue(), StageActiveChecker.class);
@@ -116,7 +114,6 @@ public class SchedulingCheckerServiceUnitTest {
         verify(schedulingChecker).buildScheduleCheckers(argumentCaptor.capture());
         verify(compositeChecker).check(operationResult);
 
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
         assertFor(argumentCaptor.getValue(), StageAuthorizationChecker.class);
         assertFor(argumentCaptor.getValue(), StageLockChecker.class);
         assertFor(argumentCaptor.getValue(), PipelinePauseChecker.class);
@@ -133,8 +130,6 @@ public class SchedulingCheckerServiceUnitTest {
         verify(schedulingChecker).buildScheduleCheckers(argumentCaptor.capture());
         verify(compositeChecker).check(operationResult);
 
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
-        assertFor(argumentCaptor.getValue(), LicenseChecker.class);
         assertFor(argumentCaptor.getValue(), ArtifactsDiskSpaceFullChecker.class);
         assertFor(argumentCaptor.getValue(), DatabaseDiskSpaceFullChecker.class);
     }
@@ -146,8 +141,6 @@ public class SchedulingCheckerServiceUnitTest {
         verify(schedulingChecker).buildScheduleCheckers(argumentCaptor.capture());
         verify(compositeChecker).check(operationResult);
 
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
-        assertFor(argumentCaptor.getValue(), LicenseChecker.class);
         assertFor(argumentCaptor.getValue(), AboutToBeTriggeredChecker.class);
         assertFor(argumentCaptor.getValue(), PipelinePauseChecker.class);
         assertFor(argumentCaptor.getValue(), StageActiveChecker.class);
@@ -163,8 +156,6 @@ public class SchedulingCheckerServiceUnitTest {
         verify(schedulingChecker).buildScheduleCheckers(argumentCaptor.capture());
         verify(compositeChecker).check(operationResult);
 
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
-        assertFor(argumentCaptor.getValue(), LicenseChecker.class);
         assertFor(argumentCaptor.getValue(), AboutToBeTriggeredChecker.class);
         assertFor(argumentCaptor.getValue(), PipelinePauseChecker.class);
         assertFor(argumentCaptor.getValue(), StageActiveChecker.class);
@@ -180,7 +171,6 @@ public class SchedulingCheckerServiceUnitTest {
         verify(schedulingChecker).buildScheduleCheckers(argumentCaptor.capture());
         verify(compositeChecker).check(operationResult);
 
-        assertFor(argumentCaptor.getValue(), EnabledUsersLicenseLimitChecker.class);
         assertFor(argumentCaptor.getValue(), PipelineLockChecker.class);
         assertFor(argumentCaptor.getValue(), ManualPipelineChecker.class);
         assertFor(argumentCaptor.getValue(), PipelinePauseChecker.class);

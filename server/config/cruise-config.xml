@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<cruise xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="cruise-config.xsd" schemaVersion="74">
-  <server artifactsdir="logs" commandRepositoryLocation="default" serverId="dev-id">
+<cruise xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="cruise-config.xsd" schemaVersion="84">
+  <server artifactsdir="logs" agentAutoRegisterKey="041b5c7e-dab2-11e5-a908-13f95f3c6ef6" commandRepositoryLocation="default" serverId="dev-id">
     <security>
       <passwordFile path="../manual-testing/ant_hg/password.properties" />
       <roles>
@@ -22,7 +22,7 @@
     </authorization>
     <pipeline name="up42">
       <materials>
-        <hg url="../manual-testing/ant_hg/dummy" dest="dest_dir" />
+        <hg url="../manual-testing/ant_hg/dummy" dest="dest_dir" materialName="dummyhg" />
       </materials>
       <stage name="up42_stage">
         <jobs>
@@ -35,8 +35,5 @@
       </stage>
     </pipeline>
   </pipelines>
-  <agents>
-    <agent hostname="blrstdcrspair02" ipaddress="10.4.7.202" uuid="f6a76eaa-96ac-43a2-8255-7c898236ba22" />
-  </agents>
 </cruise>
 

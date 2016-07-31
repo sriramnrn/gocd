@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.config.materials.Filter;
 import com.thoughtworks.go.config.materials.IgnoredFiles;
@@ -56,6 +56,7 @@ import com.thoughtworks.go.server.service.result.ServerHealthStateOperationResul
 import com.thoughtworks.go.server.transaction.TransactionTemplate;
 import com.thoughtworks.go.serverhealth.ServerHealthService;
 import com.thoughtworks.go.util.GoConfigFileHelper;
+import com.thoughtworks.go.util.SystemEnvironment;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -82,7 +83,7 @@ import static org.junit.Assert.assertThat;
 public class BuildCauseProducerServiceIntegrationTest {
     private static final String STAGE_NAME = "dev";
 
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private GoConfigService goConfigService;
     @Autowired private PipelineDao pipelineDao;
     @Autowired private PipelineScheduler buildCauseProducer;
@@ -123,7 +124,7 @@ public class BuildCauseProducerServiceIntegrationTest {
 
         dbHelper.onSetUp();
         configHelper.onSetUp();
-        configHelper.usingCruiseConfigDao(goConfigFileDao).initializeConfigFile();
+        configHelper.usingCruiseConfigDao(goConfigDao).initializeConfigFile();
 
         repository = new SvnCommand(null, svnRepository.projectRepositoryUrl());
 
@@ -133,7 +134,7 @@ public class BuildCauseProducerServiceIntegrationTest {
 
         svnMaterialRevs = new MaterialRevisions();
         SvnMaterial svnMaterial = SvnMaterial.createSvnMaterialWithMock(repository);
-        svnMaterialRevs.addRevision(svnMaterial, svnMaterial.latestModification(null, new ServerSubprocessExecutionContext(goConfigService)));
+        svnMaterialRevs.addRevision(svnMaterial, svnMaterial.latestModification(null, new ServerSubprocessExecutionContext(goConfigService, new SystemEnvironment())));
 
         final MaterialRevisions materialRevisions = new MaterialRevisions();
         SvnMaterial anotherSvnMaterial = SvnMaterial.createSvnMaterialWithMock(repository);

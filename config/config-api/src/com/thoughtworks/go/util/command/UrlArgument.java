@@ -25,7 +25,7 @@ import static com.thoughtworks.go.util.ExceptionUtils.bombIfNull;
 
 @ConfigAttributeValue(fieldName = "url")
 public class UrlArgument extends CommandArgument {
-    private String url;
+    protected String url;
 
     public UrlArgument(String url) {
         bombIfNull(url, "null url");
@@ -58,7 +58,7 @@ public class UrlArgument extends CommandArgument {
         return url;
     }
 
-    public String hostInfoForDisplay() {
+    protected String hostInfoForDisplay() {
         try {
             URI uri = new URI(url);
             if (uri.getUserInfo()!=null) {
@@ -72,7 +72,7 @@ public class UrlArgument extends CommandArgument {
         }
     }
 
-    public String hostInfoForCommandline() {
+    protected String hostInfoForCommandline() {
         try {
             URI uri = new URI(url);
             if (uri.getUserInfo()!=null) {

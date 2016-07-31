@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config;
 
@@ -29,6 +29,13 @@ import com.thoughtworks.go.util.StringUtil;
 public class Tabs extends BaseCollection<Tab> implements Validatable, ParamsAttributeAware {
     private final ConfigErrors configErrors = new ConfigErrors();
 
+    public Tabs() {
+    }
+
+    public Tabs(Tab... items) {
+        super(items);
+    }
+
     public ConfigErrors errors() {
         return configErrors;
     }
@@ -37,8 +44,17 @@ public class Tabs extends BaseCollection<Tab> implements Validatable, ParamsAttr
         configErrors.add(fieldName, message);
     }
 
+    public boolean validateTree(PipelineConfigSaveValidationContext validationContext) {
+        validate(validationContext);
+        boolean isValid = errors().isEmpty();
+
+        for (Tab tab : this) {
+            isValid = tab.validateTree(validationContext) && isValid;
+        }
+        return isValid;
+    }
     public void validate(ValidationContext validationContext) {
-        ArrayList<Tab> visitedTabs = new ArrayList<Tab>();
+        ArrayList<Tab> visitedTabs = new ArrayList<>();
         for (Tab tab : this) {
             tab.validateTabNameUniqueness(visitedTabs);
         }

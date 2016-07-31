@@ -1,27 +1,20 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials;
-
-import java.io.File;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
@@ -29,21 +22,22 @@ import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.domain.MaterialInstance;
 import com.thoughtworks.go.domain.MaterialRevision;
-import com.thoughtworks.go.domain.materials.MatchedRevision;
-import com.thoughtworks.go.domain.materials.MaterialConfig;
-import com.thoughtworks.go.domain.materials.Modification;
-import com.thoughtworks.go.domain.materials.Modifications;
-import com.thoughtworks.go.domain.materials.NullRevision;
-import com.thoughtworks.go.domain.materials.Revision;
+import com.thoughtworks.go.domain.config.ConfigurationProperty;
+import com.thoughtworks.go.domain.materials.*;
 import com.thoughtworks.go.domain.materials.packagematerial.PackageMaterialInstance;
 import com.thoughtworks.go.domain.materials.packagematerial.PackageMaterialRevision;
-import com.thoughtworks.go.domain.config.ConfigurationProperty;
 import com.thoughtworks.go.domain.packagerepository.PackageDefinition;
 import com.thoughtworks.go.util.StringUtil;
 import com.thoughtworks.go.util.command.EnvironmentVariableContext;
 import com.thoughtworks.go.util.command.ProcessOutputStreamConsumer;
 import com.thoughtworks.go.util.json.JsonHelper;
-import com.thoughtworks.go.util.json.JsonMap;
+
+import java.io.File;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import static com.thoughtworks.go.util.command.EnvironmentVariableContext.escapeEnvironmentVariable;
 import static java.lang.String.format;
@@ -58,8 +52,6 @@ public class PackageMaterial extends AbstractMaterial {
     @Expose
     @SerializedName("package")
     private PackageDefinition packageDefinition;
-
-    private String fingerprint;
 
     public PackageMaterial() {
         super(TYPE);
@@ -125,12 +117,12 @@ public class PackageMaterial extends AbstractMaterial {
     }
 
     @Override
-    public void updateTo(ProcessOutputStreamConsumer outputStreamConsumer, Revision revision, File baseDir, SubprocessExecutionContext execCtx) {
+    public void updateTo(ProcessOutputStreamConsumer outputStreamConsumer, File baseDir, RevisionContext revisionContext, SubprocessExecutionContext execCtx) {
         //do nothing
     }
 
     @Override
-    public void toJson(JsonMap jsonMap, Revision revision) {
+    public void toJson(Map jsonMap, Revision revision) {
         jsonMap.put("scmType", getTypeForDisplay());
         jsonMap.put("action", "Modified");
         jsonMap.put("location", getUriForDisplay());
@@ -223,6 +215,18 @@ public class PackageMaterial extends AbstractMaterial {
     }
 
     @Override
+    public Map<String, Object> getAttributes(boolean addSecureFields) {
+        Map<String, Object> materialMap = new HashMap<>();
+        materialMap.put("type", "package");
+        materialMap.put("plugin-id", getPluginId());
+        Map<String, String> repositoryConfigurationMap = packageDefinition.getRepository().getConfiguration().getConfigurationAsMap(addSecureFields);
+        materialMap.put("repository-configuration", repositoryConfigurationMap);
+        Map<String, String> packageConfigurationMap = packageDefinition.getConfiguration().getConfigurationAsMap(addSecureFields);
+        materialMap.put("package-configuration", packageConfigurationMap);
+        return materialMap;
+    }
+
+    @Override
     public boolean isAutoUpdate() {
         return packageDefinition.isAutoUpdate();
     }
@@ -258,6 +262,13 @@ public class PackageMaterial extends AbstractMaterial {
 
     public void setPackageDefinition(PackageDefinition packageDefinition) {
         this.packageDefinition = packageDefinition;
+    }
+
+    @Override
+    public void updateFromConfig(MaterialConfig materialConfig) {
+        super.updateFromConfig(materialConfig);
+        this.getPackageDefinition().setConfiguration(((PackageMaterialConfig)materialConfig).getPackageDefinition().getConfiguration());
+        this.getPackageDefinition().getRepository().setConfiguration(((PackageMaterialConfig)materialConfig).getPackageDefinition().getRepository().getConfiguration());
     }
 
     @Override

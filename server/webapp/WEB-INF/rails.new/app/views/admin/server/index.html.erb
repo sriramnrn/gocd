@@ -55,7 +55,7 @@
 
                     <div class="form_item">
                         <label for="server_configuration_form_ldap_password"><%= required_label_text(l.string("LDAP_PASSWORD")) -%></label>
-                        <%= form.password_field :ldap_password, {:size => 30, :maxLength => 64, :disabled => true} %>
+                        <%= form.password_field :ldap_password, {:size => 30, :maxLength => 64, :disabled => true, :autocomplete => "off" } %>
                         <%= form.hidden_field :ldap_encrypted_password %>
                         <span class="checkbox_row">
                                 <%= form.check_box :ldap_password_changed, {}, "true", "false" %>
@@ -126,7 +126,7 @@
 
                     <div class="form_item">
                         <label for="server_configuration_form_password"><%= l.string("PASSWORD") -%></label>
-                        <%= form.password_field :password, :size => 30, :maxLength => 64, :disabled => true %>
+                        <%= form.password_field :password, :size => 30, :maxLength => 64, :disabled => true, :autocomplete => "off" %>
                         <span class="checkbox_row">
                                 <%= form.check_box :password_changed, {}, "true", "false" %>
                             <label for="server_configuration_form_password_changed"><%= l.string("CHANGE_PASSWORD") -%></label>
@@ -141,21 +141,24 @@
                         });
                     </script>
                     <div class="form_item checkbox_row">
-                        <%= form.check_box :tls, {}, "true", "false" %>
-                        <label class="inline" for="server_configuration_form_tls"><%= l.string("MAIL_HOST_USE_TLS") -%></label>
+                        <div class="checkbox_label_wrapper">
+                            <%= form.check_box :tls, {}, "true", "false" %>
+                            <label class="inline" for="server_configuration_form_tls"><%= l.string("MAIL_HOST_USE_SMTPS") -%></label>
+                        </div>
+                        <div class="contextual_help has_go_tip_right" title="<%= l.string("TOOLTIP_MAIL_HOST_SMTPS") -%>"></div>
                     </div>
 
                     <div class="form_item">
 
                         <label for="server_configuration_form_from"><%= required_label_text(l.string("MAIL_HOST_FROM")) -%></label>
-                        <%= form.text_field :from, :size => 30, :maxLength => 64, :onblur => "serverConfiguration.validateEmail('server_configuration_form_from', 'from_error_message')" %>
+                        <%= form.text_field :from, :size => 30, :maxLength => 254, :onblur => "serverConfiguration.validateEmail('server_configuration_form_from', 'from_error_message')" %>
                         <span id="from_error_message"></span>
                     </div>
 
                     <div class="form_item">
 
                         <label for="server_configuration_form_adminMail"><%= required_label_text(l.string("MAIL_HOST_ADMIN_MAIL")) -%></label>
-                        <%= form.text_field :adminMail, :size => 30, :maxLength => 64, :onblur => "serverConfiguration.validateEmail('server_configuration_form_adminMail', 'admin_mail_error_message')" %>
+                        <%= form.text_field :adminMail, :size => 30, :maxLength => 254, :onblur => "serverConfiguration.validateEmail('server_configuration_form_adminMail', 'admin_mail_error_message')" %>
                         <button type="button" class="submit tertiary" id="testNotification"
                                 onclick="serverConfiguration.sendTestEmail(this, '<%= send_test_email_path %>', '<%= form_authenticity_token %>')">
                             <span><%= l.string("MAIL_HOST_SEND_TEST_EMAIL") -%></span>

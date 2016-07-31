@@ -72,7 +72,6 @@ import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.*;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = {
@@ -89,7 +88,7 @@ public class StageSqlMapDaoIntegrationTest {
     @Autowired private DatabaseAccessHelper dbHelper;
     @Autowired private ScheduleService scheduleService;
     @Autowired private GoConfigService goConfigService;
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private InstanceFactory instanceFactory;
@@ -111,7 +110,7 @@ public class StageSqlMapDaoIntegrationTest {
         mingleConfig = twoBuildPlansWithResourcesAndMaterials(PIPELINE_NAME, STAGE_DEV);
         pipelineNames = asList(PIPELINE_NAME);
         origTemplate = stageDao.getSqlMapClientTemplate();
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         configHelper.onSetUp();
         scheduleUtil = new ScheduleTestUtil(transactionTemplate, materialRepository, dbHelper, configHelper);
     }
@@ -676,7 +675,7 @@ public class StageSqlMapDaoIntegrationTest {
         String stageName = CaseInsensitiveString.str(mingleConfig.get(0).name());
         String key = stageDao.cacheKeyForMostRecentId(pipelineName, stageName);
 
-        // should query and cache value 
+        // should query and cache value
         stageDao.mostRecentId(pipelineName, stageName);
         Long id = stageDao.mostRecentId(pipelineName, stageName);
         assertThat(id, is(20L));

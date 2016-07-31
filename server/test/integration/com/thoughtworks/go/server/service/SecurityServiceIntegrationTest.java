@@ -21,7 +21,7 @@ import java.util.List;
 
 import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.config.CachedGoConfig;
-import com.thoughtworks.go.config.GoConfigFileDao;
+import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.domain.ServerSiteUrlConfig;
 import com.thoughtworks.go.helper.ConfigFileFixture;
 import com.thoughtworks.go.server.dao.DatabaseAccessHelper;
@@ -55,7 +55,7 @@ public class SecurityServiceIntegrationTest {
     private static final String OPERATOR = "operator";
     private static final String HACKER = "hacker";
 
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private CachedGoConfig cachedGoConfig;
     @Autowired private SecurityService securityService;
     @Autowired private GoConfigService configService;
@@ -65,7 +65,7 @@ public class SecurityServiceIntegrationTest {
     @Before
     public void setUp() throws Exception {
         configHelper = new GoConfigFileHelper();
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         configHelper.onSetUp();
         configHelper.addPipelineWithGroup(GROUP_NAME, PIPELINE_NAME, STAGE_NAME, JOB_NAME);
         configHelper.addSecurityWithAdminConfig();
@@ -90,7 +90,7 @@ public class SecurityServiceIntegrationTest {
         assertThat(securityService.hasViewPermissionForGroup(PIPELINE_ADMIN, GROUP_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForGroup(new CaseInsensitiveString(PIPELINE_ADMIN), GROUP_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForPipeline(new CaseInsensitiveString(PIPELINE_ADMIN), PIPELINE_NAME), is(true));
-        assertThat(securityService.hasViewPermissionForPipeline(PIPELINE_ADMIN, PIPELINE_NAME), is(true));
+        assertThat(securityService.hasViewPermissionForPipeline(Username.valueOf(PIPELINE_ADMIN), PIPELINE_NAME), is(true));
         assertThat(securityService.hasViewPermissionForPipeline(new Username(new CaseInsensitiveString(PIPELINE_ADMIN)), PIPELINE_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForStage(PIPELINE_NAME, STAGE_NAME, PIPELINE_ADMIN), is(true));
     }
@@ -103,13 +103,13 @@ public class SecurityServiceIntegrationTest {
         assertThat(securityService.hasViewPermissionForGroup(viewOnly, GROUP_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForGroup(new CaseInsensitiveString(viewOnly), GROUP_NAME), is(false));
         assertThat(securityService.hasOperatePermissionForPipeline(new CaseInsensitiveString(viewOnly), PIPELINE_NAME), is(false));
-        assertThat(securityService.hasViewPermissionForPipeline(viewOnly, PIPELINE_NAME), is(true));
+        assertThat(securityService.hasViewPermissionForPipeline(Username.valueOf(viewOnly), PIPELINE_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForStage(PIPELINE_NAME, STAGE_NAME, viewOnly), is(false));
 
         assertThat(securityService.hasViewPermissionForGroup(viewOnly, GROUP_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForGroup(new CaseInsensitiveString(viewOnly), GROUP_NAME), is(false));
         assertThat(securityService.hasOperatePermissionForPipeline(new CaseInsensitiveString(viewOnly), PIPELINE_NAME), is(false));
-        assertThat(securityService.hasViewPermissionForPipeline(viewOnly, PIPELINE_NAME), is(true));
+        assertThat(securityService.hasViewPermissionForPipeline(Username.valueOf(viewOnly), PIPELINE_NAME), is(true));
         assertThat(securityService.hasOperatePermissionForStage(PIPELINE_NAME, STAGE_NAME, viewOnly), is(false));
     }
 
@@ -172,7 +172,7 @@ public class SecurityServiceIntegrationTest {
 
     @Test
     public void shouldNotCheckViewPermissionIfPipelineDoesNotExist() {
-        assertThat(securityService.hasViewPermissionForPipeline(VIEWER, "noSuchAPipeline"), is(true));
+        assertThat(securityService.hasViewPermissionForPipeline(Username.valueOf(VIEWER), "noSuchAPipeline"), is(true));
     }
 
     @Test
@@ -256,28 +256,6 @@ public class SecurityServiceIntegrationTest {
         assertThat(securityService.viewablePipelinesFor(new Username(new CaseInsensitiveString("admin"))), is(Arrays.asList(new CaseInsensitiveString("pipeline1"), new CaseInsensitiveString("pipeline2"))));
         assertThat(securityService.viewablePipelinesFor(new Username(new CaseInsensitiveString("pavan"))), is(Arrays.asList(new CaseInsensitiveString("pipeline3"))));
     }
-
-    @Test
-    public void shouldReturnPipelineConfigsForAGivenUser() throws Exception {
-        configHelper.onTearDown();
-        cachedGoConfig.save(CONFIG_WITH_2_GROUPS, true);
-        configHelper.setViewPermissionForGroup("first","foo");
-        configHelper.setViewPermissionForGroup("second","foo");
-        PipelineConfigs first = configService.getCurrentConfig().findGroup("first");
-        PipelineConfigs second = configService.getCurrentConfig().findGroup("second");
-        assertUserCanView("admin", first);
-        assertUserCanView("pavan", second);
-        assertUserCanView("foo", first, second);
-        assertUserCanView("bar");
-    }
-
-    private void assertUserCanView(String username, PipelineConfigs... expected) {
-        List<PipelineConfigs> groups;
-        groups = securityService.viewableGroupsFor(new Username(new CaseInsensitiveString(username)));
-        assertThat(groups.size(),is(expected.length));
-        assertThat(groups, hasItems(expected));
-    }
-
 
     @Test public void shouldReturnAllPipelinesWithNoSecurity() throws Exception {
         configHelper.onTearDown();

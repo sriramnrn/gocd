@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Admin::PackageRepositoriesController do
   include MockRegistryModule, ConfigSaveStubbing
@@ -85,7 +85,6 @@ describe Admin::PackageRepositoriesController do
       controller.stub(:go_config_service).and_return(@go_config_service)
       @go_config_service.should_receive(:checkConfigFileValid).and_return(config_validity)
       @go_config_service.stub(:registry)
-      controller.stub(:populate_health_messages)
 
       @cloner = double('cloner')
       controller.stub(:get_cloner_instance).and_return(@cloner)
@@ -94,7 +93,7 @@ describe Admin::PackageRepositoriesController do
     describe "new" do
       before(:each) do
         controller.stub(:package_repository_service).with().and_return(@package_repository_service= double('Package Repository Service'))
-        @cruise_config = CruiseConfig.new
+        @cruise_config = BasicCruiseConfig.new
         @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
         @cloner.should_receive(:deepClone).at_least(1).times.with(@cruise_config).and_return(@cruise_config)
         @user = current_user
@@ -117,7 +116,7 @@ describe Admin::PackageRepositoriesController do
     describe "list" do
       before(:each) do
         controller.stub(:package_repository_service).with().and_return(@package_repository_service= double('Package Repository Service'))
-        @cruise_config = CruiseConfig.new
+        @cruise_config = BasicCruiseConfig.new
         @cloner.should_receive(:deepClone).at_least(1).times.with(@cruise_config).and_return(@cruise_config)
         @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
         @user = current_user
@@ -139,7 +138,7 @@ describe Admin::PackageRepositoriesController do
 
     describe "config" do
       before(:each) do
-        @cruise_config = CruiseConfig.new
+        @cruise_config = BasicCruiseConfig.new
         @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
         @cloner.should_receive(:deepClone).at_least(1).times.with(@cruise_config).and_return(@cruise_config)
 
@@ -180,7 +179,7 @@ describe Admin::PackageRepositoriesController do
     describe "create" do
       before(:each) do
         controller.stub(:package_repository_service).with().and_return(@package_repository_service= double('Package Repository Service'))
-        @cruise_config = CruiseConfig.new
+        @cruise_config = BasicCruiseConfig.new
         @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
         @cloner.should_receive(:deepClone).at_least(1).times.with(@cruise_config).and_return(@cruise_config)
 
@@ -218,7 +217,7 @@ describe Admin::PackageRepositoriesController do
     describe "edit" do
       before(:each) do
         controller.stub(:package_repository_service).with().and_return(@package_repository_service= double('Package Repository Service'))
-        @cruise_config = CruiseConfig.new
+        @cruise_config = BasicCruiseConfig.new
         @cloner.should_receive(:deepClone).at_least(1).times.with(@cruise_config).and_return(@cruise_config)
 
         @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
@@ -271,7 +270,7 @@ describe Admin::PackageRepositoriesController do
     describe "update" do
       before(:each) do
         controller.stub(:package_repository_service).with().and_return(@package_repository_service= double('Package Repository Service'))
-        @cruise_config = CruiseConfig.new
+        @cruise_config = BasicCruiseConfig.new
         @cloner.should_receive(:deepClone).at_least(1).times.with(@cruise_config).and_return(@cruise_config)
         @go_config_service.should_receive(:getConfigForEditing).and_return(@cruise_config)
         @user = current_user
@@ -294,7 +293,7 @@ describe Admin::PackageRepositoriesController do
       it "should not add flash message when update fails" do
         package_repository = PackageRepository.new
         PackageRepository.stub(:new).and_return(package_repository)
-        fieldErrors = HashMap.new
+        fieldErrors = LinkedHashMap.new
         fieldErrors.put("field1", Arrays.asList(["error 1"].to_java(java.lang.String)))
         fieldErrors.put("field2", Arrays.asList(["error 2"].to_java(java.lang.String)))
         ajax_response = ConfigUpdateAjaxResponse::failure("id", 500, "failed", fieldErrors, Arrays.asList(["global1", "global2"].to_java(java.lang.String)))
@@ -304,7 +303,7 @@ describe Admin::PackageRepositoriesController do
         post :update, :config_md5 => "1234abcd", :id => "id", :package_repository => {:name => "name", :pluginConfiguration => {:id => "yum"}, :configuration => {"0" => {:configurationKey => {:name => "key"}, :configurationValue => {:value => "value"}}}}
 
         expect(flash[:notice]).to eq(nil)
-        expect(response.body).to eq("{\"fieldErrors\":{\"field2\":[\"error 2\"],\"field1\":[\"error 1\"]},\"globalErrors\":[\"global1\",\"global2\"],\"message\":\"failed\",\"isSuccessful\":false,\"subjectIdentifier\":\"id\"}")
+        expect(response.body).to eq("{\"fieldErrors\":{\"field1\":[\"error 1\"],\"field2\":[\"error 2\"]},\"globalErrors\":[\"global1\",\"global2\"],\"message\":\"failed\",\"isSuccessful\":false,\"subjectIdentifier\":\"id\"}")
         expect(flash[:success]).to eq(nil)
         expect(response.response_code).to eq(500)
         expect(response.headers["Go-Config-Error"]).to eq("failed")

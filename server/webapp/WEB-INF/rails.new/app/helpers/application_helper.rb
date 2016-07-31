@@ -24,8 +24,8 @@ module ApplicationHelper
   GO_MESSAGE_KEYS = [:error, :notice, :success]
 
   def url_for_path(java_path, options = {})
-    path = java_path.sub(/^\//, "")
-    url = ((options[:only_path] == false) ? main_app.root_url : main_app.root_path)
+    path        = java_path.sub(/^\//, "")
+    url         = ((options[:only_path] == false) ? main_app.root_url : main_app.root_path)
     url, params = url.split("?")
     url = "#{url.gsub(/\/$/, "")}/#{path}"
     if params
@@ -51,12 +51,16 @@ module ApplicationHelper
     url_for_job_identifier(job.getIdentifier())
   end
 
+  def url_for_pipeline(pipeline_name, options = {})
+    url_for_path("/tab/pipeline/history/#{pipeline_name}", options)
+  end
+
   def path_for_stage(stage_identifier)
     stage_identifier = stage_identifier.getIdentifier() if stage_identifier.respond_to? :getIdentifier
-    stage_detail_tab_path :pipeline_name => stage_identifier.getPipelineName(),
-                      :pipeline_counter => stage_identifier.getPipelineCounter(),
-                      :stage_name => stage_identifier.getStageName(),
-                      :stage_counter => stage_identifier.getStageCounter()
+    stage_detail_tab_path pipeline_name:    stage_identifier.getPipelineName(),
+                          pipeline_counter: stage_identifier.getPipelineCounter(),
+                          stage_name:       stage_identifier.getStageName(),
+                          stage_counter:    stage_identifier.getStageCounter()
   end
 
   def stage_identifier_for_locator(stage_locator_string)
@@ -70,10 +74,10 @@ module ApplicationHelper
   end
 
   def tab_with_display_name(name, display_name, options={})
-    options.reverse_merge!(:link => :enabled, :class => "", :anchor_class => "", :url => name)
+    options.reverse_merge!(link: :enabled, class: "", anchor_class: "", url: name)
     url = url_for_path(options[:url])
     css_class = "current" if ((@current_tab_name == name) || url.match(/#{url_for}$/))
-    link_body = options[:link] != :enabled ? "<span>#{display_name}</span>" : link_to(display_name, url, :target => options[:target], :class => options[:anchor_class])
+    link_body = options[:link] != :enabled ? "<span>#{display_name}</span>" : link_to(display_name, url, target: options[:target], class: options[:anchor_class])
     "<li id='cruise-header-tab-#{name.gsub(/\s+/, '-')}' class='#{css_class} #{options[:class]}'>\n" + link_body + "\n</li>"
   end
 
@@ -103,10 +107,14 @@ module ApplicationHelper
     prefix + java.util.UUID.randomUUID().to_s
   end
 
+  def sanitize_for_dom_id(value)
+    value.gsub(".", "_dot_").tr("^a-zA-Z0-9_-", "_")
+  end
+
   def onclick_lambda(options)
     on_click_lambda = ''
     if options.has_key? :onclick_lambda
-      options.reverse_merge!(:id => random_dom_id)
+      options.reverse_merge!(id: random_dom_id)
       on_click_lambda = "<script type='text/javascript'> Util.on_load(function() { Event.observe($('#{options[:id]}'), 'click', function(evt) { #{options.delete(:onclick_lambda)}(evt); }); }); </script>".html_safe
     end
     [on_click_lambda, options]
@@ -115,17 +123,18 @@ module ApplicationHelper
   def submit_button name, options={}
     # DESIGN TODO: this is used for action/submit buttons on environments, pipeline dashboard, etc.  Probably not 100% complete to match the features above
     options = HashWithIndifferentAccess.new(options)
-    options.reverse_merge!(:type => 'submit')
+    options.reverse_merge!(type: 'submit')
+    options.merge!(disabled: 'disabled') unless system_environment.isServerActive()
     options[:value] = name
     lambda_text, options_without_onclick = onclick_lambda(options)
-    if( options[:type] == "image" )
+    if (options[:type] == "image")
       button_body = image_button(name, options_without_onclick)
     else
       button_body = options[:type] == "select" ?
-          select_button(name, options_without_onclick) :
-          options[:type] == "header_select" ?
-              header_select_button(name, options_without_onclick) :
-              default_button(name, options_without_onclick)
+        select_button(name, options_without_onclick) :
+        options[:type] == "header_select" ?
+          header_select_button(name, options_without_onclick) :
+          default_button(name, options_without_onclick)
     end
     button_body + lambda_text
   end
@@ -136,25 +145,25 @@ module ApplicationHelper
 
   def select_button name, options
     options[:class] = add_class(options[:class], 'select')
-    options[:type] = "button"
-    image_url = 'g9/button_select_icon.png'
+    options[:type]  = "button"
+    image_url       = 'g9/button_select_icon.png'
     if options[:text_color] == 'dark'
       image_url = 'g9/button_select_icon_dark.png'
     end
-    content_tag(:button, button_content(name, tag(:img, :src => image_path(image_url))), button_options(options), false)
+    content_tag(:button, button_content(name, tag(:img, src: image_path(image_url))), button_options(options), false)
   end
 
   def header_select_button name, options
     options[:class] = add_class(options[:class], 'header_submit')
-    options[:type] = "button"
+    options[:type]  = "button"
     content_tag(:button, button_content(name), button_options(options), false)
   end
 
   def image_button name, options
     options[:class] = add_class(options[:class], 'image')
-    options[:type] = "submit"
+    options[:type]  = "submit"
     options[:title] = name
-    content_tag(:button, content_tag(:span, ' ', :title => name), button_options(options), false)
+    content_tag(:button, content_tag(:span, ' ', title: name), button_options(options), false)
   end
 
   def default_button name, options
@@ -221,7 +230,7 @@ module ApplicationHelper
   end
 
   def render_json(options={})
-    options = options.merge({:locals => {:scope => {}}}) unless options.has_key? :locals
+    options = options.merge({locals: {scope: {}}}) unless options.has_key? :locals
     render(options).to_json
   end
 
@@ -240,8 +249,15 @@ module ApplicationHelper
   end
 
   def version
-    version_file = Rails.root.join("..", "vm", "admin", "admin_version.txt.vm")
-    File.readlines(version_file)[0]
+    ApiV1::VersionRepresenter.version.full_version
+  end
+
+  def go_update
+    version_info_service.getGoUpdate
+  end
+
+  def check_go_updates?
+    version_info_service.isGOUpdateCheckEnabled
   end
 
   def json_escape data
@@ -312,7 +328,7 @@ module ApplicationHelper
         "new Ajax.Updater(#{update}, "
 
     url_options = options[:url]
-    url_options = url_options.merge(:escape => false) if url_options.is_a?(Hash)
+    url_options = url_options.merge(escape: false) if url_options.is_a?(Hash)
     function << "'#{escape_javascript(url_for(url_options))}'"
     function << ", #{javascript_options})"
 
@@ -353,17 +369,6 @@ module ApplicationHelper
     "</div></div>".html_safe
   end
 
-  def word_breaker(txt, break_at_length=15)
-    loop_count = txt.length / break_at_length;
-    new_txt = txt.clone
-    i = 0
-    while i < loop_count do
-      i+=1
-      new_txt.insert(i*break_at_length, "<wbr/>")
-    end
-    return new_txt.html_safe
-  end
-
   def selections
     Array(params[:selections]).map do |entry|
       TriStateSelection.new(*entry)
@@ -372,34 +377,14 @@ module ApplicationHelper
 
   def to_operation_result_json(localized_result, success_msg=localized_result.message(localizer))
     if localized_result.isSuccessful()
-      {:success => success_msg}.to_json
+      {success: success_msg}.to_json
     else
-      {:error => localized_result.message(localizer)}.to_json
+      {error: localized_result.message(localizer)}.to_json
     end
   end
 
   def number? s
     Integer(s) rescue false
-  end
-
-  def smart_word_breaker(txt)
-    splitTxt = txt.split(/-/)
-    i=0
-    while i < splitTxt.length do
-      segment = splitTxt[i]
-      break_at_length = 15
-      divisions = (segment.length/break_at_length)
-      if divisions >= 1
-        j = 1
-        while j <= divisions
-          segment.insert(break_at_length*j, "<wbr/>")
-          j += 1
-        end
-      end
-      splitTxt[i] = segment
-      i+=1
-    end
-    return splitTxt.join("-<wbr/>").html_safe
   end
 
   def make_https url
@@ -435,7 +420,7 @@ module ApplicationHelper
 
   def render_pluggable_template(task_view_model, options = {})
     # The view is self here since this method will be called only from views.
-    options.merge!(:view => self)
+    options.merge!(view: self)
     options.reject{|key, val| key.is_a?(String)}.map{|key, val| options[key.to_s] = val}
     view_rendering_service.render(task_view_model, options)
   end
@@ -458,7 +443,7 @@ module ApplicationHelper
   end
 
   def register_defaultable_list nested_name
-    "<input type=\"hidden\" name=\"default_as_empty_list[]\" value=\"#{nested_name}\"/>".html_safe
+    hidden_field_tag 'default_as_empty_list[]', nested_name, id: nil
   end
 
   def form_remote_tag_new(options = {})

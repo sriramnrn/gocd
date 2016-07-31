@@ -1,20 +1,35 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.agent.launcher;
+
+import com.googlecode.junit.ext.checkers.OSChecker;
+import com.thoughtworks.cruise.agent.common.launcher.AgentLaunchDescriptor;
+import com.thoughtworks.cruise.agent.common.launcher.AgentLauncher;
+import com.thoughtworks.go.agent.ServerUrlGenerator;
+import com.thoughtworks.go.agent.common.AgentBootstrapperArgs;
+import com.thoughtworks.go.agent.common.util.Downloader;
+import com.thoughtworks.go.agent.common.util.JarUtil;
+import com.thoughtworks.go.agent.testhelper.FakeBootstrapperServer;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -26,22 +41,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
-
-import com.googlecode.junit.ext.checkers.OSChecker;
-import com.thoughtworks.cruise.agent.launcher.AgentLauncherImpl;
-import com.thoughtworks.go.agent.ServerUrlGenerator;
-import com.thoughtworks.cruise.agent.common.launcher.AgentLaunchDescriptor;
-import com.thoughtworks.cruise.agent.common.launcher.AgentLaunchDescriptorKeys;
-import com.thoughtworks.cruise.agent.common.launcher.AgentLauncher;
-import com.thoughtworks.go.agent.common.util.Downloader;
-import com.thoughtworks.go.agent.common.util.JarUtil;
-import com.thoughtworks.go.agent.testhelper.FakeBootstrapperServer;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNot.not;
@@ -63,7 +62,9 @@ public class AgentLauncherImplTest {
 
     @After
     public void tearDown() {
-        new File("testdata/agent-launcher.jar").delete();
+        FileUtils.deleteQuietly(new File("testdata/agent-launcher.jar"));
+        FileUtils.deleteQuietly(new File(Downloader.AGENT_BINARY));
+        FileUtils.deleteQuietly(new File(Downloader.AGENT_LAUNCHER));
         new Lockfile(new File(AgentLauncherImpl.AGENT_BOOTSTRAPPER_LOCK_FILE)).delete();
     }
 
@@ -73,7 +74,7 @@ public class AgentLauncherImplTest {
         final String version = "12.3";
         final List<String> actualVersion = new ArrayList<String>();
         final AgentLauncher launcher = new AgentLauncherImpl(new AgentLauncherImpl.AgentProcessParentRunner() {
-            public int run(String launcherVersion, String launcherMd5, ServerUrlGenerator urlConstructor, Map<String, String> environmentVariables) {
+            public int run(String launcherVersion, String launcherMd5, ServerUrlGenerator urlConstructor, Map<String, String> environmentVariables, Map context) {
                 actualVersion.add(launcherVersion);
                 return 0;
             }
@@ -92,7 +93,7 @@ public class AgentLauncherImplTest {
     @Test
     public void shouldNotThrowException_insteedReturnAppropriateErrorCode_whenSomethingGoesWrongInLaunch() {
         AgentLaunchDescriptor launchDesc = mock(AgentLaunchDescriptor.class);
-        when((String) launchDesc.context().get(AgentLaunchDescriptorKeys.HOSTNAME)).thenThrow(new RuntimeException("Ouch!"));
+        when((String) launchDesc.context().get(AgentBootstrapperArgs.SERVER_URL)).thenThrow(new RuntimeException("Ouch!"));
         try {
             assertThat(new AgentLauncherImpl().launch(launchDesc), is(-273));
         } catch (Exception e) {
@@ -103,8 +104,8 @@ public class AgentLauncherImplTest {
     private AgentLaunchDescriptor launchDescriptor() {
         AgentLaunchDescriptor launchDescriptor = mock(AgentLaunchDescriptor.class);
         Map contextMap = new ConcurrentHashMap();
-        contextMap.put(AgentLaunchDescriptorKeys.HOSTNAME, "localhost");
-        contextMap.put(AgentLaunchDescriptorKeys.PORT, 9090);
+        contextMap.put(AgentBootstrapperArgs.SERVER_URL, "http://localhost:9090/go");
+        contextMap.put(AgentBootstrapperArgs.SSL_VERIFICATION_MODE, "NONE");
         when(launchDescriptor.context()).thenReturn(contextMap);
         return launchDescriptor;
     }

@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.server.service;
 
@@ -74,7 +74,7 @@ import static org.junit.matchers.JUnitMatchers.hasItem;
         "classpath:WEB-INF/applicationContext-acegi-security.xml"
 })
 public class JobInstanceServiceIntegrationTest {
-    @Autowired private GoConfigFileDao goConfigFileDao;
+    @Autowired private GoConfigDao goConfigDao;
     @Autowired private JobInstanceDao jobInstanceDao;
     @Autowired private JobStatusCache jobStatusCache;
     @Autowired private JobInstanceService jobInstanceService;
@@ -97,7 +97,7 @@ public class JobInstanceServiceIntegrationTest {
         dbHelper.onSetUp();
         pipelineFixture = new PipelineWithTwoStages(materialRepository, transactionTemplate);
         configHelper.onSetUp();
-        configHelper.usingCruiseConfigDao(goConfigFileDao);
+        configHelper.usingCruiseConfigDao(goConfigDao);
         pipelineFixture.usingConfigHelper(configHelper).usingDbHelper(dbHelper).onSetUp();
         schedulerFixture = new SchedulerFixture(dbHelper, stageDao, scheduleService);
     }
@@ -331,7 +331,7 @@ public class JobInstanceServiceIntegrationTest {
     @Test
     public void shouldSet_BelongsToKnownPipeline_FlagOnEachJob_pipelineForWhichIsStillPresentInConfig() {
         String agentUuid = "special_uuid";
-        
+
         configHelper.addPipeline("existingPipeline", "existingStage");
 
         Long existingStage = stageWithId("existingPipeline", "existingStage");
@@ -471,7 +471,7 @@ public class JobInstanceServiceIntegrationTest {
         jobConfig.setRunInstanceCount(2);
         jobConfig.addResource("blah");
         jobConfig.getProperties().add(new ArtifactPropertiesGenerator("prop1", "props.xml", "//somepath"));
-        jobConfig.artifactPlans().add(new ArtifactPlan(ArtifactType.file, "src1", "dest1"));
+        jobConfig.artifactPlans().add(new ArtifactPlan("src1", "dest1"));
         configHelper.addPipeline("go", "dev");
 
         scheduleHelper.schedule(pipelineConfig, BuildCause.createWithModifications(modifyOneFile(pipelineConfig), ""), DEFAULT_APPROVED_BY);
@@ -508,7 +508,7 @@ public class JobInstanceServiceIntegrationTest {
         jobConfig.setRunOnAllAgents(true);
         jobConfig.addResource("blah");
         jobConfig.getProperties().add(new ArtifactPropertiesGenerator("prop1", "props.xml", "//somepath"));
-        jobConfig.artifactPlans().add(new ArtifactPlan(ArtifactType.file, "src1", "dest1"));
+        jobConfig.artifactPlans().add(new ArtifactPlan("src1", "dest1"));
         configHelper.addPipeline("go", "dev");
 
         DefaultSchedulingContext schedulingContext = new DefaultSchedulingContext("anyone", new Agents(localAgentWithResources("blah"), localAgentWithResources("blah")));

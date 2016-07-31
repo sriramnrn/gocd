@@ -56,10 +56,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import static junit.framework.Assert.assertSame;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.core.IsNull.nullValue;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -97,7 +97,7 @@ public class MaterialDatabaseDependencyUpdaterTest {
         healthService = Mockito.mock(ServerHealthService.class);
         dependencyMaterialUpdater = new DependencyMaterialUpdater(goCache, transactionSynchronizationManager, dependencyMaterialSourceDao, materialRepository, materialService);
         scmMaterialUpdater = new ScmMaterialUpdater(materialRepository, legacyMaterialChecker, subprocessExecutionContext, materialService);
-        updater = new MaterialDatabaseUpdater(materialRepository, healthService, transactionTemplate, goCache, dependencyMaterialUpdater, scmMaterialUpdater, null, materialExpansionService);
+        updater = new MaterialDatabaseUpdater(materialRepository, healthService, transactionTemplate, goCache, dependencyMaterialUpdater, scmMaterialUpdater, null, null, materialExpansionService);
     }
 
     @After
@@ -314,7 +314,7 @@ public class MaterialDatabaseDependencyUpdaterTest {
         final boolean[] flag = new boolean[]{false};
 
         updater = new MaterialDatabaseUpdater(materialRepository, healthService, transactionTemplate, goCache,
-                dependencyMaterialUpdater, scmMaterialUpdater, null, materialExpansionService) {
+                dependencyMaterialUpdater, scmMaterialUpdater, null, null, materialExpansionService) {
             @Override
             void updateMaterialWithNewRevisions(Material material) {
                 try {

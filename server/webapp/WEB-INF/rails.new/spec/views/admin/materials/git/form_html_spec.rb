@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.join(File.dirname(__FILE__), "..", "..", "..", "..", "spec_helper")
+require 'spec_helper'
 
 describe "_form.html.erb" do
   include GoUtil, FormUI
@@ -27,7 +27,7 @@ describe "_form.html.erb" do
     @ignored_file = IgnoredFiles.new("/sugar")
     @material_config.setFilter(Filter.new([@ignored_file, IgnoredFiles.new("/jaggery")].to_java(IgnoredFiles)))
 
-    assign(:cruise_config, @cruise_config = CruiseConfig.new)
+    assign(:cruise_config, @cruise_config = BasicCruiseConfig.new)
     set(@cruise_config, "md5", "abc")
   end
 
@@ -54,7 +54,7 @@ describe "_form.html.erb" do
 
     expect(response.body).to have_selector(".url")
     expect(response.body).to have_selector(".popup_form button#check_connection_git", :text => "CHECK CONNECTION")
-    expect(response.body).to have_selector(".popup_form #vcsconnection-message_git", :text => "")
+    expect(response.body).to have_selector(".popup_form #vcsconnection-message_git", :text => "", visible: false)
   end
 
   it "should display new git material view with errors" do

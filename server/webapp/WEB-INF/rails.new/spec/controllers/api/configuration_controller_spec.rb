@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe Api::ConfigurationController do
   include APIModelMother
@@ -67,6 +67,7 @@ describe Api::ConfigurationController do
       get :config_diff, :from_revision => 'a', :to_revision => 'b', :no_layout => true
 
       expect(response.body).to eq('text')
+      expect(response.content_type).to eq('text/plain');
     end
 
     it "should render error correctly" do

@@ -22,9 +22,12 @@ import com.rits.cloning.Cloner;
 import com.thoughtworks.go.domain.BaseCollection;
 import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.helper.GoConfigMother;
+import com.thoughtworks.go.helper.JobConfigMother;
 import com.thoughtworks.go.helper.MaterialConfigsMother;
+import com.thoughtworks.go.helper.PipelineConfigMother;
 import org.junit.Test;
 
+import static java.util.Arrays.asList;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 
@@ -86,7 +89,7 @@ public class GoConfigParallelGraphWalkerTest {
 
         AValidatableObjectWithAField goodObjectWithNonNullField = new AValidatableObjectWithAField(new SomeOtherObject("1"));
 
-        CruiseConfig.copyErrors(badObjectWithNullField, goodObjectWithNonNullField);
+        BasicCruiseConfig.copyErrors(badObjectWithNullField, goodObjectWithNonNullField);
 
         assertThat(goodObjectWithNonNullField.errors().getAll().size(), is(1));
         assertThat(goodObjectWithNonNullField.errors().firstError(), is("Bad"));
@@ -105,11 +108,26 @@ public class GoConfigParallelGraphWalkerTest {
         AValidatableObjectWithAList goodObjectWith2ObjectsInList = new AValidatableObjectWithAList();
         goodObjectWith2ObjectsInList.add(new SomeOtherObject("2"));
 
-        CruiseConfig.copyErrors(badObjectWith2ObjectsInList, goodObjectWith2ObjectsInList);
+        BasicCruiseConfig.copyErrors(badObjectWith2ObjectsInList, goodObjectWith2ObjectsInList);
 
         assertThat(goodObjectWith2ObjectsInList.getSomeOtherObjectList().size(), is(1));
         assertThat(goodObjectWith2ObjectsInList.getSomeOtherObjectList().get(0).errors().getAll().size(), is(1));
         assertThat(goodObjectWith2ObjectsInList.getSomeOtherObjectList().get(0).errors().firstError(), is("y"));
+    }
+
+    @Test
+    public void shouldCopyErrorsForFieldsOnPipelineConfig(){
+        PipelineConfig pipelineConfig = PipelineConfigMother.pipelineConfig("pipeline", MaterialConfigsMother.defaultMaterialConfigs(), new JobConfigs(JobConfigMother.createJobConfigWithJobNameAndEmptyResources()));
+        pipelineConfig.setVariables(new EnvironmentVariablesConfig(asList(new EnvironmentVariableConfig("name", "value"))));
+
+        PipelineConfig pipelineWithErrors = new Cloner().deepClone(pipelineConfig);
+        pipelineWithErrors.getVariables().get(0).addError("name", "error on environment variable");
+        pipelineWithErrors.first().addError("name", "error on stage");
+        pipelineWithErrors.first().getJobs().first().addError("name", "error on job");
+        BasicCruiseConfig.copyErrors(pipelineWithErrors, pipelineConfig);
+        assertThat(pipelineConfig.getVariables().get(0).errors().on("name"), is("error on environment variable"));
+        assertThat(pipelineConfig.first().errors().on("name"), is("error on stage"));
+        assertThat(pipelineConfig.first().getJobs().first().errors().on("name"), is("error on job"));
     }
 
     private class AValidatableObjectWithAList implements Validatable {

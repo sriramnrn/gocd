@@ -1,5 +1,5 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2015 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,16 +12,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials.svn;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
 import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.ValidationContext;
+import com.thoughtworks.go.config.ConfigSaveValidationContext;
 import com.thoughtworks.go.config.materials.AbstractMaterialConfig;
 import com.thoughtworks.go.config.materials.Filter;
 import com.thoughtworks.go.config.materials.IgnoredFiles;
@@ -32,8 +28,13 @@ import org.hamcrest.core.Is;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsNull.nullValue;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 
 public class SvnMaterialConfigTest {
@@ -69,18 +70,18 @@ public class SvnMaterialConfigTest {
     @Test
     public void validate_shouldEnsureUrlIsNotBlank() {
         SvnMaterialConfig svnMaterialConfig = new SvnMaterialConfig("", "", "", false);
-        svnMaterialConfig.validate(new ValidationContext(null));
+        svnMaterialConfig.validate(new ConfigSaveValidationContext(null));
         assertThat(svnMaterialConfig.errors().on(SvnMaterialConfig.URL), is("URL cannot be blank"));
     }
 
     @Test
     public void validate_shouldEnsureMaterialNameIsValid() {
         SvnMaterialConfig svnMaterialConfig = new SvnMaterialConfig("/foo", "", "", false);
-        svnMaterialConfig.validate(new ValidationContext(null));
+        svnMaterialConfig.validate(new ConfigSaveValidationContext(null));
         assertThat(svnMaterialConfig.errors().on(SvnMaterialConfig.MATERIAL_NAME), is(nullValue()));
 
         svnMaterialConfig.setName(new CaseInsensitiveString(".bad-name-with-dot"));
-        svnMaterialConfig.validate(new ValidationContext(null));
+        svnMaterialConfig.validate(new ConfigSaveValidationContext(null));
         assertThat(svnMaterialConfig.errors().on(SvnMaterialConfig.MATERIAL_NAME),
                 is("Invalid material name '.bad-name-with-dot'. This must be alphanumeric and can contain underscores and periods (however, it cannot start with a period). The maximum allowed length is 255 characters."));
     }
@@ -89,7 +90,7 @@ public class SvnMaterialConfigTest {
     public void validate_shouldEnsureDestFilePathIsValid() {
         SvnMaterialConfig svnMaterialConfig = new SvnMaterialConfig("/foo", "", "", false);
         svnMaterialConfig.setConfigAttributes(Collections.singletonMap(ScmMaterialConfig.FOLDER, "../a"));
-        svnMaterialConfig.validate(new ValidationContext(null));
+        svnMaterialConfig.validate(new ConfigSaveValidationContext(null));
         assertThat(svnMaterialConfig.errors().on(SvnMaterialConfig.FOLDER), is("Dest folder '../a' is not valid. It must be a sub-directory of the working folder."));
     }
 
@@ -120,5 +121,30 @@ public class SvnMaterialConfigTest {
 
         assertThat(svnMaterial.getPassword(), is(nullValue()));
         assertThat(svnMaterial.getEncryptedPassword(), is(nullValue()));
+    }
+
+    @Test
+    public void shouldReturnTheUrl() {
+        String url = "git@github.com/my/repo";
+        SvnMaterialConfig config = new SvnMaterialConfig();
+        config.setUrl(url);
+
+        assertThat(config.getUrl(), is(url));
+    }
+
+    @Test
+    public void shouldReturnNullIfUrlForMaterialNotSpecified() {
+        SvnMaterialConfig config = new SvnMaterialConfig();
+
+        assertNull(config.getUrl());
+    }
+
+    @Test
+    public void shouldHandleNullWhenSettingUrlForAMaterial() {
+        SvnMaterialConfig config = new SvnMaterialConfig();
+
+        config.setUrl(null);
+
+        assertNull(config.getUrl());
     }
 }

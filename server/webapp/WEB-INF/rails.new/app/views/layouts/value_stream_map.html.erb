@@ -1,10 +1,5 @@
 <!DOCTYPE HTML>
-<!--[if lt IE 7]> <html xmlns="http://www.w3.org/1999/xhtml" lang="en" class="no-js ie6 oldie"> <![endif]-->
-<!--[if IE 7]> <html xmlns="http://www.w3.org/1999/xhtml" lang="en" class="no-js ie7 oldie"> <![endif]-->
-<!--[if IE 8]> <html xmlns="http://www.w3.org/1999/xhtml" lang="en" class="no-js ie8 oldie"> <![endif]-->
-<!--[if gt IE 8]><!-->
 <html xmlns="http://www.w3.org/1999/xhtml" lang='en'>
-<!--<![endif]-->
 
 
 <head>
@@ -13,7 +8,7 @@
 <body id="<%= page_name %>" class="<%= page_name %>">
     <div id="body_bg" class="vsm">
         <div id="header">
-            <%= render :partial => "shared/header", :locals => {:scope => {:admin_tab_url => '/tab/admin'}} %>
+            <%= render :partial => "shared/header" %>
         </div>
 
         <div id='body_content'>
@@ -27,9 +22,9 @@
             <canvas id='canvas'></canvas>
         </div>
 
-        <div id='footer'>
-            <%= render :partial => "shared/footer" %>
-        </div>
+      <div id='footer-new-foundation'>
+        <%= render :partial => 'navigation_elements/footer' %>
+      </div>
     </div>
 
     <div id='pre-loader-overlay'>

@@ -14,14 +14,13 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "layouts/pipelines.html.eb" do
   include GoUtil, StageModelMother
 
   before do
     @layout_name = 'layouts/pipelines'
-    stub_server_health_messages
     @user = Username.new(CaseInsensitiveString.new("blah-name"), "blah diaply name")
     assign(:user,@user)
     now = org.joda.time.DateTime.new

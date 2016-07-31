@@ -14,7 +14,7 @@
 # limitations under the License.
 ##########################GO-LICENSE-END##################################
 
-require File.expand_path(File.dirname(__FILE__) + '/../../spec_helper')
+require 'spec_helper'
 
 describe "/pipelines/show.html.erb" do
   before(:each)  do
@@ -43,15 +43,6 @@ describe "/pipelines/show.html.erb" do
 
     assign(:pipeline, @pim)
     assign(:variables, @variables = EnvironmentVariablesConfig.new)
-  end
-
-  it "should have the same contents as the jsunit fixture" do
-    @variables.add("foo","foo_value")
-    @variables.add("bar","bar_value")
-
-    render :partial => "pipelines/pipeline_material_revisions.html", :locals => {:scope => {:show_on_pipelines => false}}
-
-    assert_fixture_equal("pipeline_deploy_test_rails_new.html", response.body)
   end
 
   it "should display revision number, time and material name/url" do

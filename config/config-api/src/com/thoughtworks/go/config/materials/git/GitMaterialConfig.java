@@ -1,40 +1,43 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.config.materials.git;
-
-import java.util.Map;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.ConfigAttribute;
 import com.thoughtworks.go.config.ConfigTag;
-import com.thoughtworks.go.config.ValidationContext;
 import com.thoughtworks.go.config.materials.Filter;
 import com.thoughtworks.go.config.materials.ScmMaterialConfig;
 import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.util.StringUtil;
 import com.thoughtworks.go.util.command.UrlArgument;
 
+import java.util.Map;
+
 @ConfigTag("git")
 public class GitMaterialConfig extends ScmMaterialConfig {
+
     @ConfigAttribute(value = "url")
     private UrlArgument url;
 
     @ConfigAttribute(value = "branch")
     private String branch = DEFAULT_BRANCH;
+
+    @ConfigAttribute(value = "shallowClone")
+    private boolean shallowClone;
 
     private String submoduleFolder;
 
@@ -42,28 +45,37 @@ public class GitMaterialConfig extends ScmMaterialConfig {
     public static final String URL = "url";
     public static final String BRANCH = "branch";
     public static final String DEFAULT_BRANCH = "master";
+    public static final String SHALLOW_CLONE = "shallowClone";
 
-    private GitMaterialConfig() {
+    public GitMaterialConfig() {
         super(TYPE);
     }
 
     public GitMaterialConfig(String url) {
         super(TYPE);
-        this.url = new UrlArgument(url);
+        setUrl(url);
     }
 
     public GitMaterialConfig(String url, String branch) {
         this(url);
-        if (branch != null) {
+        if(branch != null) {
             this.branch = branch;
         }
     }
 
-    public GitMaterialConfig(UrlArgument url, String branch, String submoduleFolder, boolean autoUpdate, Filter filter, String folder, CaseInsensitiveString name) {
-        super(name, filter, folder, autoUpdate, TYPE, new ConfigErrors());
+    public GitMaterialConfig(String url, String branch, Boolean shallowClone) {
+        this(url, branch);
+        setShallowClone(shallowClone);
+    }
+
+    public GitMaterialConfig(UrlArgument url, String branch, String submoduleFolder, boolean autoUpdate, Filter filter, boolean invertFilter, String folder, CaseInsensitiveString name, Boolean shallowClone) {
+        super(name, filter, invertFilter, folder, autoUpdate, TYPE, new ConfigErrors());
         this.url = url;
-        this.branch = branch;
+        if(branch != null) {
+            this.branch = branch;
+        }
         this.submoduleFolder = submoduleFolder;
+        this.shallowClone = shallowClone;
     }
 
     @Override
@@ -76,11 +88,19 @@ public class GitMaterialConfig extends ScmMaterialConfig {
     protected void appendAttributes(Map<String, Object> parameters) {
         parameters.put("url", url);
         parameters.put("branch", branch);
+        parameters.put("shallowClone", shallowClone);
     }
 
     @Override
     public String getUrl() {
-        return url.forCommandline();
+        return url != null ? url.forCommandline() : null;
+    }
+
+    @Override
+    public void setUrl(String url) {
+        if (url != null) {
+            this.url = new UrlArgument(url);
+        }
     }
 
     @Override
@@ -89,7 +109,7 @@ public class GitMaterialConfig extends ScmMaterialConfig {
     }
 
     @Override
-    public String getLongDescription(){
+    public String getLongDescription() {
         return String.format("URL: %s, Branch: %s", url.forDisplay(), branch);
     }
 
@@ -117,7 +137,7 @@ public class GitMaterialConfig extends ScmMaterialConfig {
             return false;
         }
 
-        return true;
+        return super.equals(that);
     }
 
     @Override
@@ -130,8 +150,8 @@ public class GitMaterialConfig extends ScmMaterialConfig {
     }
 
     @Override
-    protected void validateConcreteScmMaterial(ValidationContext validationContext) {
-        if (StringUtil.isBlank(url.forDisplay())) {
+    public void validateConcreteScmMaterial() {
+        if (url == null || StringUtil.isBlank(url.forDisplay())) {
             errors().add(URL, "URL cannot be blank");
         }
     }
@@ -148,6 +168,10 @@ public class GitMaterialConfig extends ScmMaterialConfig {
 
     public String getBranch() {
         return this.branch;
+    }
+
+    public void setBranch(String branch) {
+        this.branch = branch;
     }
 
     public String getSubmoduleFolder() {
@@ -181,8 +205,8 @@ public class GitMaterialConfig extends ScmMaterialConfig {
     @Override
     public String getShortRevision(String revision) {
         if (revision == null) return null;
-        if (revision.length()<7) return revision;
-        return revision.substring(0,7);
+        if (revision.length() < 7) return revision;
+        return revision.substring(0, 7);
     }
 
     @Override
@@ -191,6 +215,7 @@ public class GitMaterialConfig extends ScmMaterialConfig {
                 "url=" + url +
                 ", branch='" + branch + '\'' +
                 ", submoduleFolder='" + submoduleFolder + '\'' +
+                ", shallowClone=" + shallowClone +
                 '}';
     }
 
@@ -202,10 +227,23 @@ public class GitMaterialConfig extends ScmMaterialConfig {
         super.setConfigAttributes(attributes);
         Map map = (Map) attributes;
         if (map.containsKey(BRANCH)) {
-            this.branch = (String) map.get(BRANCH);
+            String branchName = (String) map.get(BRANCH);
+            this.branch = StringUtil.isBlank(branchName)? DEFAULT_BRANCH: branchName;
         }
         if (map.containsKey(URL)) {
             this.url = new UrlArgument((String) map.get(URL));
+        }
+
+        this.shallowClone = "true".equals(map.get(SHALLOW_CLONE));
+    }
+
+    public boolean isShallowClone() {
+        return shallowClone;
+    }
+
+    public void setShallowClone(Boolean shallowClone) {
+        if (shallowClone != null) {
+            this.shallowClone = shallowClone;
         }
     }
 }
