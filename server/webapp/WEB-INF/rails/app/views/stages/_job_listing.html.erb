@@ -1,0 +1,40 @@
+<% scope[:jobs].each do |job| %>
+    <tr class="job <%= job.isRerun() ? "is_rerun" : "not_rerun" -%>"
+        <%- job.getTransitions().each do |transition| %>
+            data-<%= transition.getCurrentState().getStatus() %>="<%= transition.getStateChangeTime().getTime() %>"
+        <%- end %>>
+    <td class="selector">
+            <% if scope[:has_operate_permissions] && scope[:stage_state].completed() %>
+                <%= check_box_tag("jobs[]", job.getName(), false, :class => "job_selector") -%>
+            <% end %>
+        </td>
+        <td class="job_name">
+            <a href="<%= url_for_job(job) %>" class="wrapped_word">
+                <%= job.getName() -%></a>
+        </td>
+        <td class="job_result">
+            <div class="color_code_small <%= job.getStatus() -%>">
+            </div>
+            <%- if job.isRerun() -%>
+                <img class="rerun_job_icon" src="<%=image_path('g9/icons/icon_rerun_flag.png')%>">
+            <%- end -%>
+            <%= job.getStatus() -%>
+        </td>
+        <td class="job_state"><%= job.getState() -%></td>
+        <td class="duration">
+            <%= render :partial => "elapsed_time.html", :locals=> {:scope => {:job => job , :show_elapsed => false}} %>
+        </td>
+        <td class="agent">
+            <%- if job.hasAgentInfo() -%>
+                <% agent_that_job_ran_on = "#{job.getHostname()} (#{job.getIpAddress()})".html_safe %>
+                <%- if job.hasLiveAgent() -%>
+                    <%=link_to(agent_that_job_ran_on, agent_detail_path(:uuid => job.getUuid()), :class => 'wrapped_word') %>
+                  <%- else -%>
+                    <%=agent_that_job_ran_on%>
+                  <%- end -%>
+            <%- else -%>
+                Not yet assigned
+            <%- end -%>
+        </td>
+    </tr>
+<% end %>

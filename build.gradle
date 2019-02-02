@@ -1,7 +1,5 @@
-import java.security.SecureRandom
-
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2018 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +14,39 @@ import java.security.SecureRandom
  * limitations under the License.
  */
 
+
+import com.github.jk1.license.ReportTask
+import com.github.jk1.license.filter.LicenseBundleNormalizer
+import com.github.jk1.license.render.JsonReportRenderer
+import groovy.io.FileType
+import nl.javadude.gradle.plugins.license.License
+
+import java.security.SecureRandom
+
+buildscript {
+  repositories {
+    maven {
+      url "https://plugins.gradle.org/m2/"
+    }
+  }
+
+  dependencies {
+    classpath 'org.owasp:dependency-check-gradle:4.0.0'
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
+    classpath "gradle.plugin.nl.javadude.gradle.plugins:license-gradle-plugin:0.14.0"
+    classpath 'gradle.plugin.com.github.jk1:gradle-license-report:1.3'
+  }
+}
+
+apply plugin: 'base'
+apply plugin: "com.github.hierynomus.license"
+apply plugin: 'com.github.jk1.dependency-license-report'
+apply plugin: 'org.owasp.dependencycheck'
+
+if (file('build-ext.gradle').exists()) {
+  apply from: 'build-ext.gradle'
+}
+
 def script = this
 
 def gitRevision = { ->
@@ -23,7 +54,7 @@ def gitRevision = { ->
   exec {
     commandLine "git", "log", "-n", "1", "--format=%H"
     standardOutput = hashStdOut
-    workingDir = script.buildscript.sourceFile.parent
+    workingDir = script.buildscript.sourceFile.canonicalFile.parent
   }
 
   return hashStdOut.toString().trim()
@@ -34,107 +65,311 @@ def releaseRevision = { ->
   exec {
     commandLine "git", "log", "--pretty=format:"
     standardOutput = hashStdOut
-    workingDir = script.buildscript.sourceFile.parent
+    workingDir = script.buildscript.sourceFile.canonicalFile.parent
   }
 
   return hashStdOut.size().toString()
 }
 
-ext.partitionFiles = { Collection originalFiles ->
-  // no partitioning needed!
-  if (!(System.getenv().containsKey('GO_JOB_RUN_COUNT') && System.getenv().containsKey('GO_JOB_RUN_INDEX'))) {
-    project.logger.log(LogLevel.WARN, "You're attempting to partition files without specifying both GO_JOB_RUN_COUNT and GO_JOB_RUN_INDEX.")
-    return originalFiles
+def getVersion = { ... args ->
+  ByteArrayOutputStream stdout = new ByteArrayOutputStream()
+
+  try {
+    project.exec {
+      commandLine = args
+      standardOutput = stdout
+      errorOutput = stdout
+      ignoreExitValue = true
+    }
+  } catch (Exception ignored) {
+    return "could not determine version!"
   }
 
-  Integer totalWorkers = System.getenv('GO_JOB_RUN_COUNT').toInteger()
-  Integer currentWorkerIndex = System.getenv('GO_JOB_RUN_INDEX').toInteger()
-  def files = new LinkedHashSet(originalFiles).sort()
+  return stdout.toString().trim()
+}
+
+List<String> partitionFiles(Collection originalFiles) {
+  def files = originalFiles.unique().sort()
+  def seed = System.getenv('GO_PIPELINE_COUNTER')?.toInteger() ?: System.getenv('PARTITION_SEED')?.toInteger() ?: new SecureRandom().nextInt().abs()
+  def totalWorkers = System.getenv('GO_JOB_RUN_COUNT')?.toInteger() ?: 1
+  def currentWorkerIndex = System.getenv('GO_JOB_RUN_INDEX')?.toInteger() ?: 1
 
   Integer testsPerBucket = Math.ceil((double) files.size() / totalWorkers)
 
-  rootProject.logger.quiet("Partitioning ${files.size()} files into ${totalWorkers} buckets with approx ${testsPerBucket} files per bucket.")
+  rootProject.logger.quiet("Partitioning ${files.size()} files into ${totalWorkers} buckets with approx ${testsPerBucket} files per bucket. Using seed ${seed}.")
+  rootProject.logger.quiet("To reproduce the test failure, run with:")
+  rootProject.logger.quiet("PARTITION_SEED=${seed} GO_JOB_RUN_COUNT=${totalWorkers} GO_JOB_RUN_INDEX=${currentWorkerIndex} ./gradlew YOUR_TARGET")
 
   // random shuffle, every agent uses the same seed, so shuffling is predictable
-  Collections.shuffle(files, new Random(System.getenv('GO_PIPELINE_COUNTER').toInteger()))
+  Collections.shuffle(files, new Random(seed))
 
   def allPartitions = files.collate(testsPerBucket)
-  allPartitions[currentWorkerIndex - 1]
+  def currentPartition = allPartitions[currentWorkerIndex - 1]
+  return currentPartition ?: []
 }
 
-def GO_VERSION = '16.8.0'
-def GO_VERSION_PREVIOUS = '16.7.0'
+def COPYRIGHT_YEAR = '2019'
+def GO_VERSION_SEGMENTS = [
+  year         : 19,
+  releaseInYear: 2,
+  patch        : 0
+]
+def GO_VERSION = [GO_VERSION_SEGMENTS.year, GO_VERSION_SEGMENTS.releaseInYear, GO_VERSION_SEGMENTS.patch].join('.')
+def GO_VERSION_PREVIOUS = '19.1.0'
 def DIST_VERSION = releaseRevision()
 def GIT_REVISION = gitRevision()
 
 if (System.getenv().containsKey("GO_SERVER_URL")) {
-  println "========================================================="
+  def separator = "=".multiply(72)
+
+  println separator
   println "Gradle version:  ${gradle.gradleVersion}"
   println "JVM:             ${System.getProperty('java.version')} (${System.getProperty('java.vm.vendor')} ${System.getProperty('java.vm.version')})"
   println "OS:              ${System.getProperty('os.name')} ${System.getProperty('os.version')} ${System.getProperty('os.arch')}"
-  println "========================================================="
+  println separator
+  println("")
+
+  def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
+
+  println("Tool Versions")
+  println(separator)
+  println("node: ${getVersion("node", "--version")}")
+  println(" npm: ${getVersion((isWindows ? "npm.cmd" : 'npm'), "--version")}")
+  println("yarn: ${getVersion((isWindows ? "yarn.cmd" : 'yarn'), "--version")}")
+  println(" git: ${getVersion("git", "--version")}")
+  println("  hg: ${getVersion("hg", "--quiet", "--version")}")
+  println(" svn: ${getVersion("svn", "--quiet", "--version")}")
+  println("  p4: ${getVersion("p4", "-V").readLines().grep(~/Rev.*/).join("")}")
+  println(" p4d: ${getVersion("p4d", "-V").readLines().grep(~/Rev.*/).join("")}")
+  println(" gcc: ${getVersion("gcc", "-dumpversion")}")
+  println(" g++: ${getVersion("g++", "-dumpversion")}")
+  println(separator)
+  println("")
+}
+
+rootProject.ext.previousVersion = GO_VERSION_PREVIOUS
+rootProject.ext.goVersionSegments = GO_VERSION_SEGMENTS
+rootProject.ext.goVersion = GO_VERSION
+rootProject.ext.distVersion = DIST_VERSION
+rootProject.ext.fullVersion = DIST_VERSION ? "${GO_VERSION}-${DIST_VERSION}" : GO_VERSION
+rootProject.ext.gitRevision = GIT_REVISION
+rootProject.ext.copyrightYear = COPYRIGHT_YEAR
+rootProject.ext.commandRepoUrl = System.getenv('COMMAND_REPO_URL') ? System.getenv('COMMAND_REPO_URL') : "git://github.com/gocd/go-command-repo"
+
+project.ext.defaultJvmArgs = []
+
+rootProject.ext.versions = [
+  apacheHttpComponents: '4.5.6',
+  assertJ             : '3.11.1',
+  bouncyCastle        : '1.59', // bouncycastle version has to be compatible with the jruby version
+  cloning             : '1.9.11',
+  commonsCodec        : '1.11',
+  commonsCollections  : '3.2.2',
+  commonsCollections4 : '4.2',
+  commonsConfiguration: '2.4',
+  commonsDbcp         : '2.5.0',
+  commonsDigester     : '2.1',
+  commonsDigester3    : '3.2',
+  commonsFileUpload   : '1.4',
+  commonsIO           : '2.6',
+  commonsLang         : '2.6',
+  commonsLang3        : '3.8.1',
+  commonsPool         : '2.6.0',
+  dbunit              : '2.6.0',
+  ehcache             : '2.10.6',
+  felix               : '5.6.10',
+  gson                : '2.8.5',
+  guava               : '20.0',
+  h2db                : '1.3.168',
+  hamcrest            : '2.1',
+  hibernate           : '3.6.10.Final',
+  javaxAnnotation     : '1.3.2',
+  javaAssist          : '3.12.1.GA',
+  jcommander          : '1.72',
+  jdom                : '2.0.6',
+  jetty               : '9.4.14.v20181114',
+  jgit                : '5.1.3.201810200350-r',
+  jodaTime            : '2.9.9', // joda-time version has to be compatible with the jruby version
+  jolt                : '0.1.1',
+  jruby               : '9.2.0.0',
+  jsonUnit            : '2.3.0',
+  jsoup               : '1.11.3',
+  junit               : '4.12',
+  junit5              : '5.3.2',
+  logback             : '1.2.3',
+  mail                : '1.6.1',
+  mockito             : '2.23.4',
+  mybatis             : '3.4.6',
+  mybatisSpring       : '1.3.2',
+  nanohttpd           : '2.3.1',
+  objenesis           : '2.6',
+  oro                 : '2.0.8',
+  quartz              : '2.3.0',
+  rack                : '1.1.21',
+  servletApi          : '3.1.0',
+  slf4j               : '1.7.25',
+  spark               : '2.7.2',
+  spring              : '4.3.22.RELEASE',
+  springSecurity      : '4.2.11.RELEASE',
+  systemRules         : '1.19.0',
+  tinybundles         : '3.0.0',
+  tokenBucket         : '1.7',
+  velocityToolsView   : '1.4',
+  xmlUnitMatchers     : '2.6.2',
+  seleniumDrivers     : [
+    chromedriver  : '2.41',
+    geckodriver   : '0.21.0',
+    iedriverserver: '3.14.0'
+  ]
+]
+
+
+dependencyCheck {
+  cve {
+    def baseUrl
+
+    if (System.getenv().containsKey("GO_SERVER_URL")) {
+      baseUrl = "https://nexus.gocd.io/repository/nvd-nist"
+    } else {
+      baseUrl = "https://nvd.nist.gov/feeds"
+    }
+
+    url20Modified = "${baseUrl}/xml/cve/2.0/nvdcve-2.0-modified.xml.gz"
+    url20Base = "${baseUrl}/xml/cve/2.0/nvdcve-2.0-%d.xml.gz"
+    url12Modified = "${baseUrl}/xml/cve/1.2/nvdcve-modified.xml.gz"
+    url12Base = "${baseUrl}/xml/cve/1.2/nvdcve-%d.xml.gz"
+  }
 }
 
 allprojects {
-  apply plugin: 'java'
   apply plugin: 'idea'
-
-  rootProject.ext.previousVersion = GO_VERSION_PREVIOUS
-  rootProject.ext.goVersion       = GO_VERSION
-  rootProject.ext.distVersion     = DIST_VERSION
-  rootProject.ext.fullVersion     = DIST_VERSION ? "${GO_VERSION}-${DIST_VERSION}" : GO_VERSION
-  rootProject.ext.gitRevision     = GIT_REVISION
-
-  rootProject.ext.commandRepoUrl = System.getenv('COMMAND_REPO_URL') ? System.getenv('COMMAND_REPO_URL') : "git://github.com/gocd/go-command-repo"
-
+  apply plugin: 'jacoco'
   group = 'com.thoughtworks.go'
   version = project.fullVersion
   buildDir = "${projectDir}/target"
 
-  sourceCompatibility = 1.7
-  targetCompatibility = 1.7
-
   repositories {
-    mavenLocal()
     jcenter()
 
-    if (System.getenv().containsKey("GO_SERVER_URL")) {
-      maven { url "file://${rootProject.rootDir}/maven-output-dir" }
-    }
-    maven { url "${script.buildscript.sourceFile.parent}/local-maven-repo" }
-    maven { url "https://dl.bintray.com/gocd-google-code-mirror/generic/oauth" }
-    maven { url "https://dl.bintray.com/gocd-google-code-mirror/generic/google-caja" }
+    maven { url "https://dl.bintray.com/gocd-maven-repo/generic/gocd" }
   }
 
+  jacoco {
+    toolVersion = "0.8.2"
+  }
+}
+
+idea {
+  project {
+    jdkName = '1.8'
+    languageLevel = '1.8'
+  }
+}
+
+subprojects {
+  if (!project.childProjects.isEmpty()) {
+    return
+  }
+  apply plugin: 'base'
+  apply plugin: "com.github.hierynomus.license"
+  apply plugin: 'com.github.jk1.dependency-license-report'
+
+  license {
+    skipExistingHeaders = true
+    ext.year = Calendar.getInstance().get(Calendar.YEAR)
+    exclude '**/*.jar'
+    exclude '**/*.json'
+    exclude '**/*.html'
+    header rootProject.file('buildSrc/Apache-2.0.txt')
+    headerDefinitions {
+      intellijStyleXML {
+        firstLine = "<!--"
+        beforeEachLine = '  ~ '
+        endLine = "  -->"
+        afterEachLine = ''
+        skipLinePattern = "^<\\?xml.*>\$"
+        firstLineDetectionPattern = "(\\s|\\t)*<!--.*\$"
+        lastLineDetectionPattern = ".*-->(\\s|\\t)*\$"
+        allowBlankLines = true
+        isMultiline = false
+        padLines = false
+      }
+    }
+    mapping {
+      xml = 'intellijStyleXML'
+    }
+  }
+
+  apply plugin: 'java'
+  apply plugin: 'maven'
+  apply plugin: 'com.github.ben-manes.versions'
+
+  dependencyUpdates.resolutionStrategy {
+    componentSelection { rules ->
+      rules.all { ComponentSelection selection ->
+        boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'preview'].any { qualifier ->
+          selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/
+        }
+        if (rejected) {
+          selection.reject('Release candidate')
+        }
+      }
+    }
+  }
+
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
+  buildDir = "${projectDir}/target"
+
   configurations {
-    packagingOnly { transitive false }
-    extractedAtTopLevel { transitive false }
+    packagingOnly { transitive = false }
+    extractedAtTopLevel { transitive = false }
     fatJarConfig
 
     testOutput {
       extendsFrom testRuntime
-      transitive true
+      transitive = true
     }
   }
 
   sourceSets {
     main {
       java {
-        srcDirs = ['src']
         compileClasspath += configurations.compileOnly
-      }
-      resources {
-        srcDirs = ['resources']
       }
     }
     test {
       java {
-        srcDirs = ['test']
         compileClasspath += configurations.compileOnly
         runtimeClasspath += configurations.compileOnly
       }
-      resources {
-        srcDirs = ['test-resources']
+    }
+  }
+
+  task cleanLogs(type: Delete) {
+    delete 'logs'
+  }
+
+  task cleanApiOut(type: Delete) {
+    delete 'out'
+  }
+
+  licenseReport {
+    renderers = [new JsonReportRenderer("index.json", false)]
+    excludeGroups = ["com.thoughtworks.go"]
+    filters = [new LicenseBundleNormalizer()]
+    outputDir = file("${project.buildDir}/reports/dependency-license")
+    configurations = ['compile', 'compileOnly', 'packagingInLibDir']
+  }
+
+  clean.dependsOn cleanLogs, cleanApiOut
+  check.dependsOn 'license'
+
+  tasks.withType(ReportTask) { ReportTask reportTask ->
+    reportTask.outputs.cacheIf { true }
+    project.configurations.each { config ->
+      if (config.name in project.licenseReport.configurations) {
+        reportTask.inputs.files(config)
       }
     }
   }
@@ -142,18 +377,18 @@ allprojects {
   tasks.withType(Jar) { jarTask ->
     manifest {
       attributes(
-          'Go-Version': project.version,
-          'ImplementationVersion': project.version,
-          'Go-Revision': project.gitRevision,
-          'Implementation-Title': project.name,
-          'Implementation-Version': project.version,
-          'Source-Compatibility': project.sourceCompatibility,
-          'Target-Compatibility': project.targetCompatibility
+        'Go-Version': project.version,
+        'ImplementationVersion': project.version,
+        'Go-Revision': project.gitRevision,
+        'Implementation-Title': project.name,
+        'Implementation-Version': project.version,
+        'Source-Compatibility': project.sourceCompatibility,
+        'Target-Compatibility': project.targetCompatibility
       )
     }
 
     includeEmptyDirs false
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy DuplicatesStrategy.EXCLUDE
 
     if (jarTask.name == 'testJar') {
       project.artifacts.add 'testOutput', jarTask
@@ -162,9 +397,12 @@ allprojects {
     }
   }
 
-  tasks.withType(Zip) {
+  tasks.withType(AbstractArchiveTask) {
     includeEmptyDirs false
-    duplicatesStrategy 'exclude'
+    duplicatesStrategy DuplicatesStrategy.EXCLUDE
+
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
   }
 
   tasks.withType(Exec) {
@@ -178,22 +416,55 @@ allprojects {
   }
 
   tasks.withType(JavaCompile) { compileTask ->
+    options.warnings = false
     options.encoding = "UTF-8"
+    options.compilerArgs += '-Xlint:-deprecation'
   }
 
-  task testJar(type: Jar, dependsOn: 'jar', description: "Assembles a jar archive containing the test classes.") {
+  tasks.withType(License) {
+    outputs.upToDateWhen { false }
+  }
+
+  project.afterEvaluate {
+    tasks.withType(License) { thisTask ->
+      thisTask.outputs.upToDateWhen { false }
+      def sourceSetName = thisTask.name.replaceFirst('licenseFormat', '').replaceFirst('license', '')
+      def mappedSourceSet = sourceSets.find { sourceSet -> sourceSet.name.toLowerCase().equals(sourceSetName.toLowerCase()) }
+
+      if (thisTask.name.toLowerCase().contains('test')) {
+        thisTask.source -= mappedSourceSet.resources
+      }
+
+      if (project.path == ':test:test-utils') {
+        thisTask.source -= mappedSourceSet.resources
+      }
+    }
+  }
+
+  task testJar(type: Jar, description: "Assembles a jar archive containing the test classes.") {
     classifier = 'tests'
     from sourceSets.test.output
   }
 
-  tasks.withType(Test) { testTask ->
+  tasks.withType(Test) { Test testTask ->
     dependsOn 'jar'
     // run tests even when inputs have not changed
     outputs.upToDateWhen { false }
 
+    testTask.useJUnitPlatform()
+
+    maxParallelForks = project.hasProperty('maxParallelForks') ? project.maxParallelForks as int : 1
+
     // fixup a tempdir that is predictable and we can clean it up later
     def tmpDir = project.file("${System.getProperty('java.io.tmpdir')}/gocd-tests/${new BigInteger(32, new SecureRandom()).toString(32)}")
     systemProperty 'java.io.tmpdir', tmpDir
+    jvmArgs += project.defaultJvmArgs
+
+    doFirst {
+      // workaround for https://github.com/unbroken-dome/gradle-testsets-plugin/issues/40
+      classpath += rootProject.findProject(':test:test-utils').files("resource-include-in-all-projects")
+    }
+
     defaultCharacterEncoding = "UTF-8"
 
     filter {
@@ -205,16 +476,26 @@ allprojects {
       project.delete(tmpDir)
       tmpDir.mkdirs()
 
-      def files = []
-      testTask.testClassesDir.eachFileRecurse(groovy.io.FileType.FILES) { f ->
-        def relPath = new File(testTask.testClassesDir.toURI().relativize(f.toURI()).toString()).toString().replaceAll(/\$.*/, '.*').replaceAll(/\.class/, '.*')
-        files << relPath
+      List<String> files = []
+      testTask.testClassesDirs.files.each { File classDir ->
+        if (classDir.exists()) {
+          classDir.eachFileRecurse(FileType.FILES) { f ->
+            def relPath = new File(classDir.toURI().relativize(f.toURI()).toString()).toString().replaceAll(/\$.*/, '.*').replaceAll(/\.class/, '.*')
+            files << relPath
+          }
+        }
       }
 
-      List myPartition = project.partitionFiles(files)
+      files = files.unique()
 
-      myPartition.each { f ->
-        include f
+      List testsToRun = partitionFiles(files)
+      List testsToIgnore = files - testsToRun
+
+      testsToIgnore.each { f ->
+        testTask.exclude f
+      }
+      testsToRun.each { f ->
+        testTask.include f
       }
     }
 
@@ -224,7 +505,7 @@ allprojects {
     }
 
     testLogging {
-      showStandardStreams = true
+      showStandardStreams = project.path != ':server'
 
       exceptionFormat 'full'
 
@@ -246,29 +527,605 @@ allprojects {
       }
     }
   }
-}
 
-subprojects {
-  sourceCompatibility = 1.7
-  targetCompatibility = 1.7
-
-  apply plugin: 'maven'
-
-  buildDir = "${projectDir}/target"
-
-  uploadArchives {
-    repositories {
-      mavenDeployer {
-        repository(url: "file://${rootProject.rootDir}/maven-output-dir")
+  tasks.withType(Delete) { Delete deleteTask ->
+    project.afterEvaluate {
+      idea {
+        module {
+          excludeDirs += deleteTask.targetFiles
+        }
       }
     }
   }
-}
 
-task all(dependsOn: [':server-launcher:fatJar', ':server:prepareDb'])
+  configurations.all { configuration ->
+    configuration.resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+      // replace log4j and commons-logging implementations with the slf4j apis that redirect logs to slf4j
+      // see https://www.slf4j.org/legacy.html
+      if (details.requested.name == 'log4j' && details.requested.group == 'log4j') {
+        details.useTarget group: 'org.slf4j', name: 'log4j-over-slf4j', version: project.versions.slf4j
+      }
+      if (details.requested.name == 'commons-logging' && details.requested.group == 'commons-logging') {
+        details.useTarget group: 'org.slf4j', name: 'jcl-over-slf4j', version: project.versions.slf4j
+      }
+    }
+  }
+
+  if (project.path.startsWith(':api:') || project.path.startsWith(':spark:')) {
+    project.afterEvaluate {
+      project.configurations*.exclude(group: 'org.junit.vintage')
+      project.configurations*.exclude(group: 'junit')
+    }
+  }
+
+  project.configurations*.exclude(group: 'xalan')
+  project.configurations*.exclude(group: 'xml-apis')
+
+}
 
 task allDependencies {
   dependsOn allprojects.collect { "$it.path:dependencies" }
 
   description = "Print dependency tree of all projects"
+}
+
+task compileAll { compileAllTask ->
+  group LifecycleBasePlugin.BUILD_GROUP
+  allprojects.collect { Project prj ->
+    compileAll.dependsOn(prj.getTasks().withType(JavaCompile))
+    compileAll.dependsOn(prj.getTasks().withType(GroovyCompile))
+  }
+}
+
+task prepare(dependsOn: compileAll)
+
+task sparkTest { thisTask ->
+  group LifecycleBasePlugin.VERIFICATION_GROUP
+  description = "Run all api tests"
+  (project(':api').subprojects + project(':spark').subprojects).each { Project subPrj ->
+    thisTask.dependsOn subPrj.tasks.withType(Test)
+    thisTask.dependsOn subPrj.tasks.withType(JacocoReport)
+  }
+  finalizedBy 'sparkTestJunitHtmlReport'
+}
+
+task sparkTestJunitHtmlReport(type: TestReport) {
+  dependsOn sparkTest
+
+  reportOn project(':api').subprojects*.test
+  reportOn project(':spark').subprojects*.test
+  destinationDir = file("${project.buildDir}/reports/tests/sparkTest")
+}
+
+task sparkTestJacocoMerge(type: JacocoMerge) { thisTask ->
+  dependsOn sparkTest
+  group LifecycleBasePlugin.VERIFICATION_GROUP
+  description = "Combine coverage reports for api modules"
+
+  // add a no-op execution data file
+  executionData file("${project.buildDir}/no-op.exec")
+
+  doFirst {
+    (project(':api').subprojects + project(':spark').subprojects).each { subproject ->
+      TaskCollection<JacocoReport> jacocoReportTasks = subproject.tasks.withType(JacocoReport)
+      jacocoReportTasks.all { eachReportTask ->
+        thisTask.executionData(eachReportTask.executionData)
+      }
+    }
+
+    executionData = files(executionData.findAll { it.exists() })
+  }
+}
+
+task sparkTestJacocoReport(type: JacocoReport, group: 'Coverage reports') { JacocoReport thisTask ->
+  description = 'Generates an aggregate report from api subprojects'
+
+  dependsOn sparkTestJacocoMerge
+
+  executionData sparkTestJacocoMerge.destinationFile
+  sourceDirectories = files([])
+  classDirectories = files([])
+
+  (project(':api').subprojects + project(':spark').subprojects).each { subproject ->
+    TaskCollection<JacocoReport> jacocoReportTasks = subproject.tasks.withType(JacocoReport)
+    jacocoReportTasks.all { eachReportTask ->
+      thisTask.sourceDirectories += files(subproject.sourceSets.main.allSource.srcDirs)
+      thisTask.classDirectories += files(subproject.sourceSets.main.output)
+    }
+  }
+
+  reports {
+    html.enabled = true
+    xml.enabled = true
+  }
+}
+
+private void forAllTask(Closure<Task> closure) {
+  allprojects.each { Project subPrj ->
+
+    // afterEvaluate, because the testsset plugin defines tasks much later
+    subPrj.afterEvaluate {
+      subPrj.tasks.withType(Test).each { eachTestTask ->
+        if (!(eachTestTask.path in [':server:integrationTest'])) {
+          closure.call(eachTestTask)
+        }
+      }
+    }
+  }
+}
+
+task allTests { thisTask ->
+  group LifecycleBasePlugin.VERIFICATION_GROUP
+  description = "Run all tests"
+  dependsOn ':server:lint'
+
+  forAllTask { Test eachTestTask ->
+    thisTask.dependsOn eachTestTask
+  }
+
+  finalizedBy 'allTestsJunitHtmlReport'
+}
+
+task allTestsJunitHtmlReport(type: TestReport) { TestReport thisTask ->
+  group LifecycleBasePlugin.VERIFICATION_GROUP
+  description = "Run all api tests"
+
+  forAllTask { Test eachTestTask ->
+    thisTask.reportOn eachTestTask.binResultsDir
+    eachTestTask.finalizedBy(thisTask)
+  }
+  destinationDir = file("${project.buildDir}/reports/tests/allTests")
+}
+
+static def toCamelCase(String input) {
+  return input.split("[^a-zA-Z0-9]").collect { it.capitalize() }.join("")
+}
+
+task newSPA {
+  description = "Helper to create a new SPA. Pass `-PspaName=maintenance_mode"
+
+  doFirst {
+    String spaName = project.spaName
+    String entityName = toCamelCase(spaName)
+    String modelsBase = "server/webapp/WEB-INF/rails/webpack/models/${spaName}"
+    String pagesBase = "server/webapp/WEB-INF/rails/webpack/views/pages"
+    String widgetBase = "${pagesBase}/${spaName}"
+    String vmBase = "spark/spark-spa/src/main/resources/velocity/${spaName}"
+    String mountPoint = "server/webapp/WEB-INF/rails/webpack/single_page_apps"
+
+    project.delete(modelsBase, widgetBase, vmBase)
+    project.mkdir(modelsBase)
+    project.mkdir(widgetBase)
+    project.mkdir(vmBase)
+
+    String licenseHeader =
+      """
+      * Copyright ${Calendar.getInstance().get(Calendar.YEAR)} ThoughtWorks, Inc.
+      *
+      * Licensed under the Apache License, Version 2.0 (the "License");
+      * you may not use this file except in compliance with the License.
+      * You may obtain a copy of the License at
+      *
+      *     http://www.apache.org/licenses/LICENSE-2.0
+      *
+      * Unless required by applicable law or agreed to in writing, software
+      * distributed under the License is distributed on an "AS IS" BASIS,
+      * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      * See the License for the specific language governing permissions and
+      * limitations under the License.
+      """.stripIndent().trim()
+
+    String javaOrJavaScriptLicencseHeader = "/*\n${licenseHeader}\n*/\n\n"
+
+
+    file("${mountPoint}/${spaName}.tsx").withWriter { out ->
+      def contents =
+        """
+          import Page from "helpers/spa_base";
+          import {${entityName}Page} from "views/pages/${spaName}";
+          
+          export class ${entityName}SPA extends Page {
+            constructor() {
+              super(${entityName}Page);
+            }
+          }
+          
+          //tslint:disable-next-line
+          new ${entityName}SPA();
+        """
+      out.println(javaOrJavaScriptLicencseHeader + contents.stripIndent().trim())
+    }
+
+    file("${pagesBase}/${spaName}.tsx").withWriter { out ->
+      def contents =
+        """
+          import * as m from "mithril";
+          import {${entityName}} from "models/${spaName}/${spaName}";
+          import {${entityName}Widget} from "views/pages/${spaName}/${spaName}_widget";
+          import {Page} from "views/pages/page";
+          
+          interface State {
+            dummy?: ${entityName};
+          }
+          
+          export class ${entityName}Page extends Page<null, State> {
+            componentToDisplay(vnode: m.Vnode<null, State>): m.Children {
+              return <${entityName}Widget/>;
+            }
+          
+            pageName(): string {
+              return "SPA Name goes here!";
+            }
+          
+            fetchData(vnode: m.Vnode<null, State>): Promise<any> {
+              // to be implemented
+              return Promise.resolve();
+            }
+          }
+        """
+      out.println(javaOrJavaScriptLicencseHeader + contents.stripIndent().trim())
+    }
+
+    file("${widgetBase}/${spaName}_widget.tsx").withWriter { out ->
+      def contents =
+        """
+          import {MithrilViewComponent} from "jsx/mithril-component";
+          import * as m from "mithril";
+          import {${entityName}} from "models/${spaName}/${spaName}";
+
+          interface Attrs {
+            dummy?: ${entityName};
+          }
+
+          export class ${entityName}Widget extends MithrilViewComponent<Attrs> {
+            view(vnode: m.Vnode<Attrs>) {
+              return <div> This is widget</div>;
+            }
+          }
+        """
+      out.println(javaOrJavaScriptLicencseHeader + contents.stripIndent().trim())
+    }
+
+    file("${modelsBase}/${spaName}.ts").withWriter { out ->
+      def contents =
+        """
+          interface EmbeddedJSON {
+            dummy?: boolean;
+            // to be implemented
+          }
+          
+          interface ${entityName}JSON {
+            _embedded: EmbeddedJSON;
+          }
+          
+          export class ${entityName} {
+            // to be implemented
+            static fromJSON(data: ${entityName}JSON) {
+              // to be implemented
+            }
+          }
+        """
+      out.println(javaOrJavaScriptLicencseHeader + contents.stripIndent().trim())
+    }
+
+    file("spark/spark-spa/src/main/java/com/thoughtworks/go/spark/spa/${entityName}Controller.java").withWriter { out ->
+      def contents =
+        """
+          package com.thoughtworks.go.spark.spa;
+          import com.thoughtworks.go.spark.Routes;
+          import com.thoughtworks.go.spark.SparkController;
+          import com.thoughtworks.go.spark.spring.SPAAuthenticationHelper;
+          import spark.ModelAndView;
+          import spark.Request;
+          import spark.Response;
+          import spark.TemplateEngine;
+          import java.util.HashMap;
+          import java.util.Map;
+          import static spark.Spark.*;
+
+          public class ${entityName}Controller implements SparkController {
+            private final SPAAuthenticationHelper authenticationHelper;
+            private final TemplateEngine engine;
+            public ${entityName}Controller(SPAAuthenticationHelper authenticationHelper, TemplateEngine engine) {
+              this.authenticationHelper = authenticationHelper;
+              this.engine = engine;
+            }
+             
+            @Override
+            public String controllerBasePath() {
+                  return Routes.${entityName}.SPA_BASE;
+            }
+              
+            @Override
+            public void setupRoutes() {
+               path(controllerBasePath(), () -> {
+                  before("", authenticationHelper::checkAdminUserAnd403);
+                  get("", this::index, engine);
+              });
+            }
+            public ModelAndView index(Request request, Response response) {
+                Map<Object, Object> object = new HashMap<Object, Object>() {{
+                    put("viewTitle", "${entityName}");
+                }};
+                return new ModelAndView(object, null);
+            }
+          }
+        """
+      out.println(javaOrJavaScriptLicencseHeader + contents.stripIndent().trim())
+    }
+
+    String rule =
+      """
+        <rule>
+          <name>${spaName} UI</name>
+          <from>^/admin/${spaName}(/?)\$</from>
+          <to last="true">/spark/admin/${spaName}</to>
+        </rule>
+      """
+
+    List<String> lines = file('server/webapp/WEB-INF/urlrewrite.xml').readLines()
+    int insertionIdx = lines.findIndexOf { l -> (l =~ /^\s*<urlrewrite/).find() }
+    lines.add(insertionIdx + 1, rule.stripIndent().trim())
+
+    file('server/webapp/WEB-INF/urlrewrite.xml').withWriter { out ->
+      out.println(lines.join("\n").trim())
+    }
+
+    lines = file('spark/spark-spa/src/main/java/com/thoughtworks/go/spark/spa/spring/SpaControllers.java').readLines()
+    insertionIdx = lines.findIndexOf { l -> (l =~ /^\s*sparkControllers.add/).find() }
+    lines.add(insertionIdx, "\t\tsparkControllers.add(new ${entityName}Controller(authenticationHelper, templateEngineFactory.create(${entityName}Controller.class, () -> COMPONENT_LAYOUT_PATH)));")
+
+    file('spark/spark-spa/src/main/java/com/thoughtworks/go/spark/spa/spring/SpaControllers.java').withWriter { out ->
+      out.println(lines.join("\n").trim())
+    }
+
+    lines = file('spark/spark-base/src/main/java/com/thoughtworks/go/spark/Routes.java').readLines()
+    lines.add(lines.size() - 1, "\tpublic class ${entityName} {public static final String SPA_BASE = \"/admin/${spaName}\";}")
+
+    file('spark/spark-base/src/main/java/com/thoughtworks/go/spark/Routes.java').withWriter { out ->
+      out.println(lines.join("\n").trim())
+    }
+  }
+}
+
+task newApi {
+  description = "Helper to create a new api module. Pass `-PapiName=roles-config -PapiVersion=v1`"
+
+  doFirst {
+    String apiName = project.apiName
+    String newProjectName = "api-${apiName}-${project.apiVersion}"
+    String moduleDir = file("api/${newProjectName}")
+    String basePackage = "${moduleDir}/src/main/java/com/thoughtworks/go/api${project.apiVersion}/${apiName.replaceAll(~/[^a-zA-Z]/, '')}"
+    String testPackage = "${moduleDir}/src/test/groovy/com/thoughtworks/go/api${project.apiVersion}/${apiName.replaceAll(~/[^a-zA-Z]/, '')}"
+    String packageName = "com.thoughtworks.go.api${project.apiVersion}.${apiName.replaceAll(~/[^a-zA-Z]/, '')}"
+    String entityClassName = toCamelCase(apiName)
+    String controllerClassName = "${entityClassName}Controller${project.apiVersion.capitalize()}"
+    String[] ignoredFiles = ["${newProjectName}/out/", "${newProjectName}/target/", "${newProjectName}/logs/"]
+
+    project.delete(moduleDir)
+    project.mkdir(moduleDir)
+    project.mkdir(basePackage)
+    project.mkdir(testPackage)
+
+
+    file("${moduleDir}/build.gradle").withWriter { out ->
+      def contents =
+        """
+          /*
+           * Copyright ${Calendar.getInstance().get(Calendar.YEAR)} ThoughtWorks, Inc.
+           *
+           * Licensed under the Apache License, Version 2.0 (the "License");
+           * you may not use this file except in compliance with the License.
+           * You may obtain a copy of the License at
+           *
+           *     http://www.apache.org/licenses/LICENSE-2.0
+           *
+           * Unless required by applicable law or agreed to in writing, software
+           * distributed under the License is distributed on an "AS IS" BASIS,
+           * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+           * See the License for the specific language governing permissions and
+           * limitations under the License.
+           */
+
+          apply plugin: 'jacoco'
+          apply plugin: 'groovy'
+
+          dependencies {
+            compile project(':api:api-base')
+
+            testCompile project(path: ':api:api-base', configuration: 'testOutput')
+
+            testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: project.versions.junit5
+            testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: project.versions.junit5
+          }
+        """
+      out.println(contents.stripIndent().trim())
+    }
+
+    file("${basePackage}/${controllerClassName}.java").withWriter { out ->
+      def contents =
+        """
+          /*
+           * Copyright ${Calendar.getInstance().get(Calendar.YEAR)} ThoughtWorks, Inc.
+           *
+           * Licensed under the Apache License, Version 2.0 (the "License");
+           * you may not use this file except in compliance with the License.
+           * You may obtain a copy of the License at
+           *
+           *     http://www.apache.org/licenses/LICENSE-2.0
+           *
+           * Unless required by applicable law or agreed to in writing, software
+           * distributed under the License is distributed on an "AS IS" BASIS,
+           * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+           * See the License for the specific language governing permissions and
+           * limitations under the License.
+           */
+
+          package ${packageName};
+
+          import com.fasterxml.jackson.databind.JsonNode;
+          import com.thoughtworks.go.api.ApiController;
+          import com.thoughtworks.go.api.ApiVersion;
+          import com.thoughtworks.go.api.CrudController;
+          import com.thoughtworks.go.spark.spring.SparkSpringController;
+          import org.springframework.beans.factory.annotation.Autowired;
+          import org.springframework.stereotype.Component;
+          import com.thoughtworks.go.api.spring.ApiAuthenticationHelper;
+          import spark.Request;
+
+          import java.io.IOException;
+
+          import static spark.Spark.*;
+
+          @Component
+          public class ${controllerClassName} extends ApiController implements SparkSpringController, CrudController<${
+          entityClassName
+        }> {
+
+              private final ApiAuthenticationHelper apiAuthenticationHelper;
+              
+              @Autowired
+              public ${controllerClassName}(ApiAuthenticationHelper apiAuthenticationHelper) {
+                  super(ApiVersion.${project.apiVersion});
+                  this.apiAuthenticationHelper = apiAuthenticationHelper;
+              }
+
+              @Override
+              public String controllerBasePath() {
+                  return null; // to be implemented
+              }
+
+              @Override
+              public void setupRoutes() {
+                  path(controllerBasePath(), () -> {
+                      // uncomment the line below to set the content type on the base path
+                      // before("", mimeType, this::setContentType);
+                      // uncomment the line below to set the content type on nested routes
+                      // before("/*", mimeType, this::setContentType);
+                      
+                      // change the line below to enable appropriate security
+                      before("", this.mimeType, this.apiAuthenticationHelper::checkAdminUserAnd403);
+                      // to be implemented
+                  });
+              }
+
+              @Override
+              public String etagFor(${entityClassName} entityFromServer) {
+                  return null; // to be implemented
+              }
+
+              @Override
+              public ${entityClassName} doGetEntityFromConfig(String name) {
+                  return null; // to be implemented
+              }
+
+              @Override
+              public ${entityClassName} getEntityFromRequestBody(Request req) {
+                  return null; // to be implemented
+              }
+
+              @Override
+              public String jsonize(Request req, ${entityClassName} o) {
+                  return null; // to be implemented
+              }
+
+              @Override
+              public JsonNode jsonNode(Request req, ${entityClassName} o) throws IOException {
+                  return null; // to be implemented
+              }
+          }
+        """
+      out.println(contents.stripIndent().trim())
+    }
+
+    file("${testPackage}/${controllerClassName}Test.groovy").withWriter { out ->
+      def contents =
+        """
+          /*
+           * Copyright ${Calendar.getInstance().get(Calendar.YEAR)} ThoughtWorks, Inc.
+           *
+           * Licensed under the Apache License, Version 2.0 (the "License");
+           * you may not use this file except in compliance with the License.
+           * You may obtain a copy of the License at
+           *
+           *     http://www.apache.org/licenses/LICENSE-2.0
+           *
+           * Unless required by applicable law or agreed to in writing, software
+           * distributed under the License is distributed on an "AS IS" BASIS,
+           * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+           * See the License for the specific language governing permissions and
+           * limitations under the License.
+           */
+
+          package ${packageName}
+
+          import com.thoughtworks.go.spark.ControllerTrait
+          import com.thoughtworks.go.spark.SecurityServiceTrait
+          import org.junit.jupiter.api.Nested
+          import org.junit.jupiter.api.Test
+
+          class ${controllerClassName}Test implements SecurityServiceTrait, ControllerTrait<${controllerClassName}> {
+
+            @Override
+            ${controllerClassName} createControllerInstance() {
+              new ${controllerClassName}()
+            }
+
+            @Nested
+            class Index {
+
+              @Test
+              void 'test a request'() {
+              }
+
+            }
+          }
+        """
+      out.println(contents.stripIndent().trim())
+    }
+
+    List<String> lines = file('server/webapp/WEB-INF/applicationContext-global.xml').readLines()
+    int insertionIdx = lines.findIndexOf { l -> (l =~ /^\s*<context:component-scan /).find() }
+    lines.add(insertionIdx, "  <context:component-scan base-package=\"${packageName}\"/>")
+
+    file('server/webapp/WEB-INF/applicationContext-global.xml').withWriter { out ->
+      out.println(lines.join("\n").trim())
+    }
+
+    file('settings.gradle').withWriter { out ->
+
+      def contents =
+        """
+          /*
+           * Copyright ${Calendar.getInstance().get(Calendar.YEAR)} ThoughtWorks, Inc.
+           *
+           * Licensed under the Apache License, Version 2.0 (the "License");
+           * you may not use this file except in compliance with the License.
+           * You may obtain a copy of the License at
+           *
+           *     http://www.apache.org/licenses/LICENSE-2.0
+           *
+           * Unless required by applicable law or agreed to in writing, software
+           * distributed under the License is distributed on an "AS IS" BASIS,
+           * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+           * See the License for the specific language governing permissions and
+           * limitations under the License.
+           */
+        """
+
+      out.println(contents.stripIndent().trim())
+      out.println("")
+      out.println("rootProject.name = 'gocd'")
+      out.println("")
+      def existingProjects = rootProject.allprojects.findAll { prj -> prj.childProjects.isEmpty() }.collect { it.path }
+      def newProjects = existingProjects + [":api:${newProjectName}"]
+      newProjects.sort().unique().each { out.println "include '${it}'" }
+    }
+
+    file('.gitignore').withWriterAppend {out ->
+      ignoredFiles.each {line ->
+        out.println(line)
+      }
+    }
+  }
 }

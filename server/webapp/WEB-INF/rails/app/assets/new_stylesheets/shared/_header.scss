@@ -1,0 +1,168 @@
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+$menu-hover: #3e3d3d;
+
+.app-header {
+  position:      fixed;
+  background:    $header-bg;
+  border-bottom: 1px solid #333;
+  height:        $main-nav-height;
+  width:         100%;
+  top:           0;
+  z-index:       $app-header-z-index;
+}
+
+.logo {
+  display:    inline-block;
+  background: image-url('go_logo.svg') no-repeat 0 0;
+  height:     calc(#{$main-nav-height} / 2);
+  width:      60px;
+
+}
+
+//override for top-bar.scss, menu.scss , drop-down.scss
+
+.top-bar {
+  background: $top-bar-bg;
+  padding:    0;
+  position:   relative;
+  z-index:    $main-navigation;
+  .menu {
+    background: $top-bar-bg;
+    border:     0;
+    a {
+      text-transform: uppercase;
+      font-size:      rem-calc(12px);
+      padding:        0 1rem;
+      line-height:    $main-nav-height;
+      font-weight:    600;
+    }
+  }
+  .is-dropdown-submenu {
+    background: $drop-down-menu-bg;
+    box-shadow: 1px 2px 2px 0 rgba(0, 0, 0, 0.2);
+    li {
+      a {
+        white-space:    nowrap;
+        font-size:      rem-calc(13px);
+        font-weight:    400;
+        line-height:    normal;
+        text-transform: none;
+        padding:        10px 17px;
+        color:          $txt-color;
+      }
+    }
+  }
+  .is-dropdown-submenu-parent > a {
+    margin-right: 3px;
+    &::after {
+      content:             '';
+      display:             block;
+      width:               0;
+      height:              0;
+      border:              inset 4px;
+      border-color:        $dropdown-arrow-icon-color transparent transparent;
+      border-top-style:    solid;
+      border-bottom-width: 0;
+      right:               5px;
+      margin-top:          -1px;
+    }
+  }
+  .first-sub .is-dropdown-submenu-parent > a {
+    &::after {
+      transform: rotate(0.75turn);
+    }
+  }
+}
+
+.menu {
+  li {
+    a {
+      color: $menu-link;
+    }
+    &.menu-text {
+      padding: 0 1rem 0 0;
+      a {
+        padding: 0;
+      }
+      &:hover {
+        background: transparent;
+      }
+    }
+    &:hover {
+      background: $main-nav-link-bg-hover;
+    }
+    &.is-active {
+      background: $menu-hover-bg;
+      a {
+        color: $txt-color;
+        &:after {
+          border-color: $dropdown-arrow-icon-color-hover-bg transparent transparent;
+        }
+      }
+    }
+
+    &.server-health-summary a {
+      @include icon-before($failed-icon, $margin: 0);
+      background-color: darken($failed, 20%);
+      border-radius:    3px;
+      line-height:      25px;
+      margin-top:       1px;
+      padding-left:     30px;
+      padding-right:    11px;
+      position:         relative;
+
+      &:before {
+        position:  absolute;
+        left:      11px;
+        top:       4px;
+        font-size: 16px;
+      }
+    }
+
+    &.current-user {
+      @include icon-before($type: user);
+      padding-left: 10px;
+      position:     relative;
+      &:before {
+        position:  absolute;
+        left:      7px;
+        color:     #cacaca;
+        top:       7px;
+        font-size: 16px;
+      }
+      a {
+        text-transform: none;
+      }
+      .is-dropdown-submenu {
+        min-width: 120px;
+      }
+    }
+    &.current {
+      background: $go-primary;
+    }
+  }
+  &.current-user {
+    a {
+      text-transform: none;
+    }
+  }
+}
+
+.nav-right {
+  float: right;
+}

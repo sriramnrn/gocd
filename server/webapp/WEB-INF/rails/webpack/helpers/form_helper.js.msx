@@ -1,0 +1,480 @@
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m     = require('mithril');
+const $     = require('jquery');
+const _     = require('lodash');
+const uuid4 = require('uuid/v4');
+const s     = require('string-plus');
+require('foundation-sites');
+const Stream            = require('mithril/stream');
+
+function deleteKeyAndReturnValue(object, key, defaultValue) {
+  if (_.isNil(object)) {
+    return defaultValue;
+  }
+  const value = object[key];
+  delete object[key];
+  return _.isNil(value) ? defaultValue : value;
+}
+
+function compactClasses(args) {
+  const initialClasses = [].slice.call(arguments, 1);
+  return _([initialClasses, deleteKeyAndReturnValue(args, 'class')]).flatten().compact().uniq().join(' ');
+}
+
+function unwrapStream(maybeStream) {
+  if ("function" === typeof maybeStream) { // heuristic is good enough; no need to test with `instanceof`
+    return maybeStream();
+  }
+
+  return maybeStream;
+}
+
+function teardownFoundation(el) {
+  if ($(el).data('zfPlugin')) {
+    $(el).foundation('destroy');
+  }
+}
+// ensures the input is either an array or is wrapped in an array.
+// also removes blank members (empty strings, null, etc) and optionally
+// applies a transform on each item.
+function coerceArray(maybeArray, transform) {
+  const normalized = _.isArray(maybeArray) ? maybeArray : [maybeArray];
+
+  if ("function" === typeof transform) {
+    const result = [];
+    _.each(normalized, (el) => {
+      if (!s.isBlank(el)) {
+        result.push(transform(el));
+      }
+    });
+
+    return result;
+  }
+
+  return _.reject(normalized, (el) => s.isBlank(el));
+}
+
+function wrapTextInSpan(thing) {
+  if ("string" === typeof thing) {
+    thing = <span>{thing}</span>;
+  }
+  return thing;
+}
+
+function wireUpModel(attrs, property = "value", listener = "onchange") {
+  const model = deleteKeyAndReturnValue(attrs, "model");
+
+  if (model) {
+    let attrName;
+    attrs["data-model-type"] = deleteKeyAndReturnValue(attrs, "modelType", (model.constructor ? model.constructor.modelType : null));
+    attrs["data-prop-name"]  = attrName = deleteKeyAndReturnValue(attrs, "attrName");
+    attrs[property] = deleteKeyAndReturnValue(attrs, property, model[attrName]());
+
+    const chainedCallback = deleteKeyAndReturnValue(attrs, "onModelUpdate"),
+          onUpdate        = deleteKeyAndReturnValue(attrs, listener, m.withAttr(property, model[attrName]));
+
+    attrs[listener] = ("function" === typeof chainedCallback) ? function chained(e) { onUpdate(e); chainedCallback(e); } : onUpdate;
+  }
+
+  return model;
+}
+
+function validateModel(model, attrs) {
+  if (!model) { return; }
+
+  const performValidations = deleteKeyAndReturnValue(attrs, 'validate', false),
+        attrName           = attrs["attrName"] || attrs["data-prop-name"];
+
+  let validationErrors;
+
+  if (performValidations) {
+    attrs["onblur"] = model.validate.bind(model, performValidations !== "all" ? attrName : undefined);
+
+    if (model.errors().hasErrors(attrName)) {
+      validationErrors = <span class='form-error is-visible'>{model.errors().errorsForDisplay(attrName)}</span>;
+    }
+  }
+
+  return validationErrors;
+}
+
+const f = {
+  row: {
+    view(vnode) {
+      const args     = vnode.attrs;
+      const children = vnode.children;
+
+      const collapse = deleteKeyAndReturnValue(args, 'collapse') ? 'collapse' : 'expanded';
+      return (
+        <div
+          class={compactClasses(args, 'row', collapse)}
+          {...args}>
+          {children}
+        </div>
+      );
+    }
+  },
+
+  column: {
+    view(vnode) {
+      const args     = vnode.attrs;
+      const children = vnode.children;
+
+      const end       = deleteKeyAndReturnValue(args, 'end') ? 'end' : null,
+            size      = deleteKeyAndReturnValue(args, 'size', 6),
+            largeSize = deleteKeyAndReturnValue(args, 'largeSize', size);
+
+      return (
+        <div class={compactClasses(args, 'columns', `medium-${size}`, `large-${largeSize}`, end)}
+             {...args}>
+          {children}
+        </div>
+      );
+    }
+  },
+
+  input: {
+    view(vnode) {
+      const defaultAttrs = {
+        autocomplete:   "off",
+        autocapitalize: "off",
+        autocorrect:    "off",
+        spellcheck:     false,
+        type:           "text",
+        listen:         "oninput",
+        prop:           "value"
+      };
+
+      const args = _.assign({}, defaultAttrs, vnode.attrs); // copy attrs instead of modifying in-place
+      const prop = deleteKeyAndReturnValue(args, "prop");
+      const listen = deleteKeyAndReturnValue(args, "listen");
+
+      const model            = wireUpModel(args, prop, listen),
+            validationErrors = validateModel(model, args),
+            label            = coerceArray(deleteKeyAndReturnValue(args, "label", []), wrapTextInSpan), // label can be a string or an array
+            contentAfter     = coerceArray(deleteKeyAndReturnValue(args, "contentAfter", []), wrapTextInSpan);
+
+      args["class"]    = compactClasses(args, validationErrors ? "is-invalid-input" : null);
+      const labelAttrs = {};
+
+      if (validationErrors) {
+        labelAttrs["class"] = "is-invalid-label";
+        contentAfter.push(validationErrors);
+      }
+
+      const element = <input {...args} />;
+      return _.isEmpty(label) ? [element, contentAfter] : <label {...labelAttrs}>
+        {label}
+        {element}
+        {contentAfter}
+      </label>;
+    }
+  },
+
+  checkbox: {
+    view(vnode) {
+      const args   = _.assign({}, vnode.attrs); // copy attrs instead of modifying in-place
+      const prop   = deleteKeyAndReturnValue(args, "prop", "checked");
+      const listen = deleteKeyAndReturnValue(args, "listen", "onchange");
+
+      wireUpModel(args, prop, listen);
+
+      const label        = coerceArray(deleteKeyAndReturnValue(args, "label", []), wrapTextInSpan), // label can be a string or an array
+            labelClass   = deleteKeyAndReturnValue(args, "labelClass", ""),
+            inputElement = <input type="checkbox" {...args} />;
+
+      return _.isEmpty(label) ? inputElement : <label class={labelClass}>
+        {inputElement}
+        {label}
+      </label>;
+    }
+  },
+
+  select: {
+    view(vnode) {
+      const args = _.assign({}, vnode.attrs); // copy attrs instead of modifying in-place
+
+      const model            = wireUpModel(args), // alters args, should be called first
+            validationErrors = validateModel(model, args),
+            items            = coerceArray(unwrapStream(deleteKeyAndReturnValue(args, "items", []))),
+            label            = coerceArray(deleteKeyAndReturnValue(args, "label", []), wrapTextInSpan), // label can be a string or an array
+            contentAfter     = coerceArray(deleteKeyAndReturnValue(args, "contentAfter", []), wrapTextInSpan),
+            selected         = unwrapStream(args.value);
+
+      args["class"]    = compactClasses(args, validationErrors ? "is-invalid-input" : null);
+      const labelAttrs = {};
+
+      if (validationErrors) {
+        labelAttrs["class"] = "is-invalid-label";
+        contentAfter.push(validationErrors);
+      }
+
+      const element = <select {...args}>{
+        _.map(items, (item) => {
+          // item may be a string or an object
+          const text = item.text || item;
+          const id   = item.id || text;
+          return <option value={id} selected={selected === id}>{text}</option>;
+        })
+      }</select>;
+
+      return _.isEmpty(label) ? [element, contentAfter] : <label {...labelAttrs}>
+        {label}
+        {element}
+        {contentAfter}
+      </label>;
+    }
+  },
+
+  buttonWithTooltip: {
+    oninit() {
+      this.tooltipId           = uuid4();
+      this.hasFocus            = Stream(false);
+      this.tooltipDisplayStyle = function () {
+        return this.hasFocus() === true ? 'display:block' : 'display:none';
+      };
+    },
+
+    view(vnode) {
+      const ctrl        = vnode.state;
+      const args        = vnode.attrs;
+      const tooltipText = deleteKeyAndReturnValue(args, "tooltipText");
+      return (
+        <div style="position: relative">
+          <button type="button" onmouseover={ctrl.hasFocus.bind(ctrl, true)}
+                  onmouseout={ctrl.hasFocus.bind(ctrl, false)}
+                  class={compactClasses(args, vnode.attrs.buttonType, 'has-tip')}
+                  {...args}
+                  data-hover-delay={100} data-tooltip-id={this.tooltipId}>
+            {vnode.children}
+          </button>
+          <div id={this.tooltipId} class="tooltip" role="tooltip" style={ctrl.tooltipDisplayStyle()}>{tooltipText}</div>
+        </div>);
+    }
+  },
+
+  button: {
+    view(vnode) {
+      const args        = vnode.attrs;
+      const tooltipText = deleteKeyAndReturnValue(args, "tooltipText");
+      const buttonType  = deleteKeyAndReturnValue(args, "type", "button");
+
+      if (!_.isEmpty(tooltipText)) {
+        return <f.buttonWithTooltip tooltipText={tooltipText} buttonType={buttonType} {...args}>
+          {vnode.children}
+        </f.buttonWithTooltip>;
+      }
+      return (
+        <button type="button"
+                class={compactClasses(args, buttonType)}
+                {...args}>
+          {vnode.children}
+        </button>
+      );
+    }
+  },
+
+  linkWithTooltip: {
+    oninit() {
+      this.tooltipId           = uuid4();
+      this.hasFocus            = Stream(false);
+      this.tooltipDisplayStyle = function () {
+        return this.hasFocus() === true ? 'display:block' : 'display:none';
+      };
+    },
+
+    view (vnode) {
+      const ctrl        = vnode.state;
+      const args        = vnode.attrs;
+      const tooltipText = deleteKeyAndReturnValue(args, "tooltipText");
+      return (
+        <div style="position: relative; display: inline">
+          <a href="javascript:void(0)" onmouseover={ctrl.hasFocus.bind(ctrl, true)} onmouseout={ctrl.hasFocus.bind(ctrl, false)}
+             class={compactClasses(vnode.attrs, 'has-tip')} {...vnode.attrs}
+             data-hover-delay={100} data-tooltip-id={this.tooltipId}>
+            {vnode.children}
+          </a>
+          <div id={this.tooltipId} class="tooltip"  role="tooltip" style={ctrl.tooltipDisplayStyle()}>{tooltipText}</div>
+        </div>);
+    }
+  },
+
+  link: {
+    view(vnode) {
+      const disabled = vnode.attrs.disabled;
+      const args = _.assign(vnode.attrs);
+
+      if (args.hasOwnProperty("disabled")) { delete args.disabled; }
+
+      const tooltipText = args.tooltipText;
+
+      if (disabled) {
+        args.class = _.compact([args.class, "disabled"]).join(" ");
+        delete args.href;
+      }
+
+      if (!_.isEmpty(tooltipText)) {
+        return <f.linkWithTooltip class={compactClasses(args)} {...args}>{vnode.children}</f.linkWithTooltip>;
+      }
+
+      if (args.target === '_blank') {
+        if (s.isBlank(args.rel)) {
+          args.rel = 'noopener noreferrer';
+        } else {
+          args.rel += " noopener noreferrer";
+        }
+      }
+      return (<a href="javascript:void(0)"
+                 class={compactClasses(args)} {...args}>{vnode.children}
+      </a>);
+    }
+  },
+
+  tooltip: {
+    view(vnode) {
+      const args     = vnode.attrs;
+      const children = vnode.children;
+
+      if (!args.tooltip && _.isEmpty(children)) {
+        return <noscript/>;
+      }
+
+      const direction = deleteKeyAndReturnValue(args.tooltip, 'direction', 'bottom'),
+            size      = deleteKeyAndReturnValue(args.tooltip, 'size', 'medium'),
+            content   = deleteKeyAndReturnValue(args.tooltip, 'content', children),
+            clazz     = deleteKeyAndReturnValue(args.tooltip, 'class', null),
+            type      = deleteKeyAndReturnValue(args.tooltip, 'type', 'question-mark');
+
+      let tooltipId = 'tooltip-';
+
+      if (args.model && args.model.uuid) {
+        tooltipId += (`${args.model.uuid()}-${args.attrName}`);
+      } else {
+        tooltipId += uuid4();
+      }
+
+      return (
+        <span class={_.compact(['tooltip-wrapper', clazz]).join(' ')}>
+          <a href='javascript:void(0)'
+             data-toggle={tooltipId}
+             class={`tooltip-${type}`}/>
+          <f.dropdown id={tooltipId}
+                      class={_.compact(['f-dropdown', 'dropdown-pane', 'content', 'tooltip-content', size, direction]).join(' ')}
+                      data-dropdown
+                      data-hover='true'
+                      data-hover-pane='true'>
+            {content}
+          </f.dropdown>
+        </span>
+      );
+    }
+  },
+
+  dropdown: {
+    oncreate: (vnode) => {
+      new window.Foundation.Dropdown($(vnode.dom));
+    },
+
+    onupdate: (vnode) => {
+      new window.Foundation.Dropdown($(vnode.dom));
+    },
+
+    onbeforeremove: (vnode) => {
+      teardownFoundation(vnode.dom);
+    },
+
+    view(vnode) {
+      const args     = vnode.attrs;
+      const children = vnode.children;
+
+      return (
+        <div {...args}>
+          {children}
+        </div>
+      );
+    }
+  },
+
+  callout: {
+    view(vnode) {
+      const children = vnode.children;
+      const type     = deleteKeyAndReturnValue(vnode.attrs, 'type');
+      return (<div class={`callout ${type}`} {...vnode.attrs}>{children}</div>);
+    }
+  },
+
+  dismissableCallout: {
+    oninit(vnode) {
+      vnode.state.message = vnode.attrs.message;
+      vnode.state.dismiss = () => {
+        this.message({});
+      };
+    },
+
+    view(vnode) {
+      const message = vnode.attrs.message;
+      let callout;
+      if (message && message().message) {
+        callout = (
+          <f.row>
+            <f.callout type={message().type}>
+              {message().message}
+              <button class="close-button" aria-label="Dismiss alert" type="button"
+                      onclick={vnode.state.dismiss.bind(vnode.state)}>
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </f.callout>
+          </f.row>
+        );
+      }
+      return callout;
+    }
+  },
+
+  alert: {
+    view(vnode) {
+      return (<f.callout type="alert" {...vnode.attrs}>{vnode.children}</f.callout>);
+    }
+  },
+
+  warning: {
+    view(vnode) {
+      return (<f.callout type="warning" {...vnode.attrs}>{vnode.children}</f.callout>);
+    }
+  },
+
+  info: {
+    view(vnode) {
+      return (<f.callout type="info" {...vnode.attrs}>{vnode.children}</f.callout>);
+    }
+  },
+
+  infoRow: {
+    view(vnode) {
+      return (
+        <f.row>
+          <f.callout type="info">
+            {vnode.attrs.message}
+          </f.callout>
+        </f.row>
+      );
+    }
+  }
+};
+
+module.exports = f;

@@ -1,0 +1,86 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import "../../global/common";
+@import "../../global/measures";
+
+.server-health-statuses {
+  list-style-type: none;
+  margin:          0;
+  padding:         0;
+}
+
+.server-health-status {
+  margin:         10px;
+  padding-bottom: 10px;
+  border-bottom:  1px dotted $border-color;
+  font-size:      14px;
+
+  &.warning .detail {
+    border-left: $building 3px solid;
+  }
+
+  &.error .detail {
+    border-left: $failed 3px solid;
+  }
+
+  .message {
+    display:     inline-block;
+    font-weight: 600;
+  }
+
+  .timestamp {
+    display:      inline-block;
+    font-size:    13px;
+    font-weight:  600;
+    padding-left: 5px;
+  }
+
+  .detail {
+    margin-top:    5px;
+    padding-left:  10px;
+    margin-bottom: 0;
+    white-space:   pre-wrap;
+  }
+
+  .timestamp:before {
+    content: '[';
+  }
+  .timestamp:after {
+    content: ']';
+  }
+}
+
+.server-health-messages-container {
+  @include hover-effect-for-top-menu;
+  @include icon-before($fa-var-exclamation-circle, $margin: 0);
+  background-color: darken($failed, 20%);
+  display:          flex;
+  padding:          5px 10px;
+  border-radius:    $global-border-radius;
+  margin:           0 0 20px 0;
+  align-items:      center;
+  color:            $white;
+  cursor:           pointer;
+  &:before {
+    margin: 1px 10px 0 0;
+  }
+  @media(min-width: $screen-md) {
+    margin: 0 17px 0 0;
+  }
+  @media(min-width: $screen-lg) {
+    margin: 0 20px 0 0;
+  }
+}

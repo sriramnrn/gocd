@@ -1,0 +1,88 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m      = require('mithril');
+const _      = require('lodash');
+const $      = require('jquery');
+const Stream = require('mithril/stream');
+
+function selectionChange(model, attrName, state, event) {
+  model[attrName]($(event.target).attr('data-id'));
+  toggleDropdown(state);
+  event.preventDefault();
+}
+
+function toggleDropdown(state) {
+  state.dropdownOpen(!state.dropdownOpen());
+}
+
+function hideOnBlur(elem, state, event) {
+  if (!elem.contains(event.target)) {
+    state.dropdownOpen(false);
+  }
+}
+
+function isOpen(state) {
+  return state.dropdownOpen() ? "open" : "";
+}
+
+function getSelectedText(options, model, attrName) {
+  return _.find(options, (item) => item.id === model[attrName]()).text;
+}
+
+class Dropdown {
+
+  oncreate(vnode) {
+    window.addEventListener('click', hideOnBlur.bind(this, vnode.dom, vnode.state));
+  }
+
+  onremove(vnode) {
+    window.removeEventListener('click', hideOnBlur.bind(this, vnode.dom, vnode.state));
+  }
+
+  oninit(vnode) {
+    vnode.state.dropdownOpen = Stream(false);
+  }
+
+  view(vnode) {
+    const label    = vnode.attrs.label;
+    const options  = vnode.attrs.items;
+    const model    = vnode.attrs.model;
+    const attrName = vnode.attrs.attrName;
+
+    const dropdownHtml = _.map(options, (option) => {
+      return <a tabindex="0" class="c-dropdown_item" onclick={selectionChange.bind(this, model, attrName, vnode.state)}
+                aria-label={`Group by ${option.text}`} data-id={option.id}>{option.text}</a>;
+
+    });
+
+    const selectedText = getSelectedText(options, model, attrName);
+
+    return <div class="groupby">
+      <label class="grouping_label">{label}</label>
+      <div class={`c-dropdown ${isOpen(vnode.state)}`}>
+        <a aria-label={`Group by ${selectedText}`} tabindex="0" class="c-dropdown_head"
+           onclick={toggleDropdown.bind(this, vnode.state)}>{selectedText}</a>
+        <i role="presentation" class="c-down-arrow" onclick={toggleDropdown.bind(this, vnode.state)}/>
+        <div className="c-dropdown_body">
+          {dropdownHtml}
+        </div>
+      </div>
+    </div>;
+  }
+}
+
+module.exports = Dropdown;

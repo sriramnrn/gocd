@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,29 +17,28 @@
 description = 'API to configure/access cruise-config.xml'
 
 dependencies {
-  compile project(':config-api')
+  compile project(':config:config-api')
   compile project(':common')
-  compile(group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.1.0.201509280440-r') {
+  compile(group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: project.versions.jgit) {
     exclude(group: 'org.apache.httpcomponents')
+    exclude(module: 'jsch')
+    exclude(module: 'jzlib')
   }
-  compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.12'
-  compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.12'
-  compile group: 'xerces', name: 'xercesImpl', version: '2.9.1'
+  compile group: 'org.slf4j', name: 'slf4j-api', version: project.versions.slf4j
   compile group: 'cglib', name: 'cglib', version: '2.1_3'
-  testCompile project(path: ':config-api', configuration: 'testOutput')
-  testCompile project(':test-utils')
-  testCompile(group: 'jaxen', name: 'jaxen', version: '1.1') {
-    exclude(module: 'xom')
-    exclude(module: 'xercesImpl')
-    exclude(module: 'jdom')
-  }
-  compileOnly(group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.47')
+  testCompile project(path: ':config:config-api', configuration: 'testOutput')
+  testCompile project(':test:test-utils')
+  compileOnly(group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: project.versions.bouncyCastle)
+  testCompileOnly group: 'junit', name: 'junit', version: project.versions.junit
+  testRuntimeOnly group: 'org.junit.vintage', name: 'junit-vintage-engine', version: project.versions.junit5
+  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: project.versions.junit5
+  testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: project.versions.junit5
 }
 
 test {
-  systemProperty('go.enforce.serverId.immutability', 'N')
+  systemProperty('go.enforce.server.immutability', 'N')
 }
 
-clean.doFirst {
+clean {
   delete 'config'
 }

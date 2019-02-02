@@ -1,0 +1,88 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m             = require('mithril');
+const _             = require('lodash');
+const TimeFormatter = require('helpers/time_formatter');
+
+const CommentWidget = require('views/dashboard/comment_render_widget');
+
+const PipelineModificationWidget = (modification) => {
+  const modifiedAtLocalTime  = TimeFormatter.format(modification.modifiedTime);
+  const modifiedAtServerTime = TimeFormatter.formatInServerTime(modification.modifiedTime);
+  const pipelineName         = modification.revision.split('/')[0];
+  const pipelineCounter      = modification.revision.split('/')[1];
+
+  return (<div class="modifications">
+      <div class="item modified_by">
+        <a href={modification.stageDetailsUrl}>{modification.revision}</a>
+      </div>
+      <span class="item comment">
+        VSM: <a href={`/go/pipelines/value_stream_map/${pipelineName}/${pipelineCounter}`}>{modification.pipelineLabel}</a>
+      </span>
+      <div class="item modified-time" title={modifiedAtServerTime}>{modifiedAtLocalTime}</div>
+    </div>
+  );
+};
+
+const SCMModificationWidget = (modification, trackingTool) => {
+
+  const modifiedAtLocalTime  = TimeFormatter.format(modification.modifiedTime);
+  const modifiedAtServerTime = TimeFormatter.formatInServerTime(modification.modifiedTime);
+
+  return (<div class="modifications">
+    <div class="item modified_by">
+      <span>{modification.username}</span>
+      <span title={modifiedAtServerTime}>{modifiedAtLocalTime}</span>
+    </div>
+    <CommentWidget text={modification.comment} trackingTool={trackingTool}/>
+    <div class="item revision">
+      <span class="revision_id wrapped_word">{modification.revision}</span>
+      {' '}-{' '}
+      <span><a href={modification.vsmPath} title="Value Stream Map">VSM</a></span>
+    </div>
+  </div>);
+};
+
+const MaterialRevisionWidget = {
+  oninit(_vnode) {
+    const self = this;
+
+    self.renderAppropriateChanges = (revision, trackingTool) => {
+      const modificationWidget = revision.isDependencyMaterial() ? PipelineModificationWidget : SCMModificationWidget;
+
+      return _.map(revision.modifications, (modification) => {
+        return modificationWidget(modification, trackingTool);
+      });
+    };
+  },
+
+  view(vnode) {
+    const revision     = vnode.attrs.revision;
+    const trackingTool = vnode.attrs.trackingTool;
+    const revisionView = vnode.state.renderAppropriateChanges(revision, trackingTool);
+    const changed      = revision.changed ? "changed" : "";
+
+    return (<div class={`revisions ${changed}`}>
+      <div class="rev-head">
+        {revision.materialType} - {revision.materialName}
+      </div>
+      {revisionView}
+    </div>);
+  }
+};
+
+module.exports = MaterialRevisionWidget;

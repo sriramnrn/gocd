@@ -1,0 +1,38 @@
+<div class="vsm-analytics-panel" id="vsm-analytics-panel">
+  <h3 class="vsm-analytics-title">
+      VSM Analytics:
+  </h3>
+
+  <div id="select-pipelines-template" class="vsm-analytics-selection">
+    <div class="source_container">
+        <span class="analytics-source analytics-current">
+          <%= scope[:current] %>
+        </span>
+    </div>
+    <div class="destination_container">
+        <span class="analytics-destination vsm-analytics-help">
+          <%= scope[:message] %>
+        </span>
+    </div>
+  </div>
+
+  <div id="selected-pipelines" class="vsm-analytics-selection hide">
+    <div class="source_container">
+      <span class="analytics-source"></span>
+    </div>
+    <div class="destination_container">
+      <span class="analytics-destination"></span>
+    </div>
+  </div>
+
+  <div class="vsm-analytics-actions">
+    <button title="View Analytics" class="view-vsm-analytics btn-primary disabled">
+      View Analytics
+    </button>
+    <button title="View Analytics" class="reset-vsm-analytics btn-primary hide">
+      Reset Selection
+    </button>
+    <button class="analytics-close"></button>
+  </div>
+  <div id="analytics-overlay" class="analytics-overlay hide"></div>
+</div>

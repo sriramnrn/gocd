@@ -1,3 +1,5 @@
+import groovy.xml.XmlUtil
+
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
@@ -42,11 +44,12 @@ task releaseNotes {
 
     ByteArrayOutputStream gitContributorsOut = new ByteArrayOutputStream()
     exec {
-      commandLine "git", "log", "--no-merges", "--format=%cN", "${project.previousVersion}..${rootProject.gitRevision}"
+
+      commandLine "git", 'shortlog', "-s", "--no-merges", "${project.previousVersion}..${rootProject.gitRevision}"
       standardOutput = gitContributorsOut
     }
 
-    def collaborators = gitContributorsOut.toString().readLines().unique()
+    def collaborators = gitContributorsOut.toString().readLines().collect { line -> line.trim().split(/\s+/, 2).last() }
 
     releaseNotesMarkdownFile.withWriter { md ->
       md.println "## Issues and Bug fixes\n"
@@ -78,6 +81,8 @@ task releaseNotes {
       gitLogOut.toString().eachLine { line ->
         def (String shortSha, String sha, String message) = line.split(/ /, 3)
 
+        message = XmlUtil.escapeXml(message)
+
         bugfixes.write("<p>")
         bugfixes.write("""<a href="https://www.github.com/gocd/gocd/commit/${sha}"><code>${shortSha}</code></a>""")
         bugfixes.write(" ")
@@ -94,6 +99,7 @@ task releaseNotes {
       html.println("""<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
   <title>GoCD Release Notes v${rootProject.goVersion}</title>
   <style>
     .release-notes p {

@@ -1,0 +1,219 @@
+const m = require("mithril");
+const $ = require("jquery");
+const f = require("helpers/form_helper");
+const _ = require("lodash");
+
+let _root;
+let _uid = 0;
+const MODALS = [];
+
+const BUTTON_DEFAULTS = { class: "button", text: "OK", onclick: close };
+
+const DEFAULT = {
+  title:   "This is the title",
+  body:    () => <small>This is the body</small>,
+  size:    "tiny",
+  buttons: [BUTTON_DEFAULTS],
+};
+
+const Header = {
+  view(vnode) {
+    return <header class="overlay-header">
+      <h3>{vnode.attrs.title}</h3>
+      <button class="overlay-close"><i class="close-icon"/></button>
+    </header>;
+  }
+};
+
+const Footer = {
+  view(vnode) {
+    const buttons = $.map(vnode.attrs.buttons, (opts) => {
+      const c = $.extend({}, BUTTON_DEFAULTS, opts);
+
+      _.each(["text", "title", "disabled", "tooltipText"], (attr) => {
+        if (c.hasOwnProperty(attr)) { c[attr] = val(c[attr]); }
+      });
+
+      const text = c.text;
+      delete c.text;
+
+      return m(f.button, c, text);
+    });
+
+    return <footer class="overlay-footer">{buttons}</footer>;
+  }
+};
+
+const Dialog = {
+  oncreate(vnode) {
+    function removeAnimation() {
+        vnode.dom.classList.remove("adding");
+    }
+    vnode.dom.classList.add("adding");
+    setTimeout(removeAnimation, 500);
+  },
+
+  onbeforeremove(vnode) {
+    return new Promise((resolve) => {
+      if (null === vnode.dom.offsetParent) { // short-circuit for hidden modals
+        resolve();
+        return;
+      }
+
+      vnode.dom.classList.add("removing");
+      setTimeout(resolve, 250); // backup in case animation end doesn't fire, which seems to happen sometimes
+    });
+  },
+
+  view(vnode) {
+    const buttons = val(vnode.attrs.buttons) || [];
+    const children = [
+      <Header title={vnode.attrs.title} />,
+      <div class="overlay-content">{val(vnode.attrs.body)}</div>
+    ];
+
+    if (buttons.length > 0) {
+      children.push(<Footer buttons={buttons}/>);
+    }
+
+    const classes = _.uniq(_.compact(["overlay", vnode.attrs.size]));
+
+    return <div class={classes.join(" ")}>{children}</div>;
+  }
+};
+
+const ModalSet = {
+  view() {
+    return m("[", _.map(MODALS, (d) => m(Dialog, _.assign(d, { key: d.id }))));
+  }
+};
+
+function Modal(options) {
+  showBg();
+
+  let config = _.assign({ id: uid() }, DEFAULT, options);
+
+  push(config);
+
+  this.replace = (updated) => {
+    MODALS.splice(MODALS.indexOf(config), 1, updated);
+    config = updated;
+  };
+
+  this.close = close;
+}
+
+function close(e) {
+  if (e) {
+    if ("click" !== e.type && !("keydown" === e.type && "Escape" === e.key)) { return; }
+    e.stopPropagation();
+  }
+
+  const opts = pop();
+
+  if (opts) {
+    if ("function" === typeof opts.afterClose) { opts.afterClose(); }
+    // Make the m.redraw() async to allow mithril to clear any prior redraw
+    // queue. If done synchronously, this could result DOM errors when the
+    // modal closes before another event finished modifying the vnode tree,
+    // such as validations triggered by onblur events on form inputs.
+    setTimeout(m.redraw, 0);
+  }
+
+  if (MODALS.length === 0) { hideBg(); }
+}
+
+function closeAll() {
+  MODALS.forEach((opts) => {
+    if ("function" === typeof opts.afterClose) { opts.afterClose(); }
+  });
+  MODALS.splice(0, MODALS.length);
+  setTimeout(m.redraw, 0);
+  hideBg();
+}
+
+function hideBg() {
+  function onremove() {
+    _root.removeEventListener("animationend", onremove);
+
+    if (!_root.classList.contains("overlay-bg-in")) {
+      _root.classList.remove("overlay-bg-out");
+      $(_root).hide();
+    }
+  }
+
+  _root.addEventListener("animationend", onremove);
+  _root.classList.add("overlay-bg-out");
+  document.body.classList.remove("fixed");
+}
+
+function showBg() {
+  function onremove() {
+    _root.removeEventListener("animationend", onremove);
+    _root.classList.remove("overlay-bg-in");
+  }
+
+  /**
+   * Only animation perform if the background is hidden.
+   *
+   * Alternatively, we can keep track of a flag, but
+   * getComputedStyle() is safer, albeit slower.
+   */
+  if (window.getComputedStyle(_root).display === "none") {
+    _root.addEventListener("animationend", onremove);
+    _root.classList.add("overlay-bg-in");
+  }
+
+  $(_root).show();
+  document.body.classList.add("fixed");
+}
+
+function uid() { return _uid++; }
+
+function val(thing) {
+  return "function" === typeof thing ? thing() : thing;
+}
+
+function pop() {
+  return MODALS.shift();
+}
+
+function push(config) {
+  MODALS.unshift(config);
+}
+
+function init() {
+  _root = document.getElementById("overlay-modal-mount");
+
+  if (!_root) {
+    _root = $(`<div id="overlay-modal-mount" class="overlay-bg"/>`)[0];
+    document.body.appendChild(_root);
+  }
+
+  $(_root).on("click", ".overlay-close", close);
+  $(_root).on("click", (e) => {
+    e.stopPropagation();
+
+    if (!$(e.target).closest(".overlay").length) { close(); }
+
+    MODALS.forEach((c) => { if ("function" === typeof c.globalClick) { c.globalClick(); } });
+  });
+
+  $(document.body).on("keydown", close);
+  m.mount(_root, ModalSet);
+}
+
+function teardown() {
+  MODALS.splice(0, MODALS.length);
+  m.mount(_root, null);
+  _root.remove();
+  _root = null;
+  $(document.body).off("keydown", close);
+}
+
+// Attach API
+$.extend(Modal, { init, teardown, close, closeAll });
+
+$(Modal.init);
+
+module.exports = Modal;

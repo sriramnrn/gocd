@@ -1,0 +1,60 @@
+<% @view_title = "Value Stream Map for #{@material_display_name}" -%>
+
+<div class="page_header">
+  <span class="page_name">Value Stream Map</span>
+  <ul class="entity_title">
+    <li class="name">
+      <span class="label">Material</span>
+      <%= @material_display_name %></li>
+    <li class="last">
+      <span class="label">Revision</span>
+      <h1><%= params[:revision] %> </h1></li>
+  </ul>
+  <% if (supports_vsm_analytics?) %>
+    <button class="btn-primary enable-analytics"><i class="icon_vsm_analytics"></i>Analytics</button>
+  <% end %>
+</div>
+
+<div class="content">
+  <% if supports_vsm_analytics? %>
+    <%= render :partial => "analytics_panel.html", :locals => {:scope =>
+                                                                 {:current => @material_display_name,
+                                                                  :title => vsm_analytics_chart_info["title"],
+                                                                  :message => "Select a downstream pipeline"}} -%>
+  <% end %>
+  <div id="vsm-container">
+  </div>
+  <div id="vsm-overlay">
+    <div class="popup vsm-entity"></div>
+  </div>
+</div>
+
+<script type="text/javascript">
+    Util.on_load(function() {
+
+        resizeMapContainer();
+        function resizeMapContainer() {
+            $j( "#vsm-container").height($j(window).height() - 160);
+        }
+        $j(window).resize(function() {
+            resizeMapContainer();
+        });
+
+        $j('#pre-loader-overlay').show();
+
+        jQuery.ajax({
+            url: "<%= vsm_show_material_path(:material_fingerprint => params[:material_fingerprint], :revision => params[:revision], :format => 'json')%>"
+        }).done(function (data) {
+          graphRenderer = new Graph_Renderer("#vsm-container");
+
+          if (data.error == null && <%= supports_vsm_analytics? %>) {
+            vsmAnalyticsPipelinePanel = new VSMAnalyticsPipelinePanel(".vsm-analytics-panel");
+            vsm_analytics             = new VSMAnalytics(data, graphRenderer, <%= vsm_analytics_chart_info.to_json.html_safe %>, vsmAnalyticsPipelinePanel, ".enable-analytics");
+            vsm_analytics.init();
+          }
+
+          vsm = new VSM(data, "#vsm-container", graphRenderer, "#pre-loader-overlay").render();
+        })
+
+    })
+</script>

@@ -1,0 +1,88 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m = require('mithril');
+const $ = require('jquery');
+const f = require('helpers/form_helper');
+
+const PipelineOperationsWidget = require('views/dashboard/pipeline_operations_widget');
+const PipelineAnalyticsWidget  = require('views/dashboard/pipeline_analytics_widget');
+
+const PipelineHeaderWidget = {
+  oninit(vnode) {
+    const self              = vnode.state;
+    const operationMessages = vnode.attrs.operationMessages;
+
+    self.unlock = (pipeline) => {
+      vnode.attrs.doCancelPolling();
+      pipeline.unlock().then((res) => {
+        operationMessages.success(pipeline.name, res.message);
+      }, (res) => {
+        operationMessages.failure(pipeline.name, res.responseJSON.message);
+      }).always(vnode.attrs.doRefreshImmediately);
+    };
+  },
+
+  view: (vnode) => {
+    const pipeline                   = vnode.attrs.pipeline;
+    const pluginsSupportingAnalytics = vnode.attrs.pluginsSupportingAnalytics;
+    const shouldShowAnalyticsIcon    = vnode.attrs.shouldShowAnalyticsIcon;
+
+    let settingsButton;
+    const analyticsIcons = [];
+    if (pipeline.canAdminister && !pipeline.isDefinedInConfigRepo()) {
+      const settingsPath = pipeline.settingsPath;
+      settingsButton     = (<a class={`edit_config`} aria-label={`Edit Configuration for Pipeline ${pipeline.name}`} title={'Edit Pipeline Configuration'} href={settingsPath}/>);
+    } else {
+      settingsButton = (<f.link class="edit_config disabled" aria-label={pipeline.getSettingsDisabledTooltipText()} title={'Edit Configuration Disabled'}
+                                tooltipText={pipeline.getSettingsDisabledTooltipText()}/>);
+    }
+
+    if (shouldShowAnalyticsIcon) {
+      $.each(pluginsSupportingAnalytics, (pluginId, metricId) => {
+        analyticsIcons.push(<PipelineAnalyticsWidget pipeline={pipeline} pluginId={pluginId} metricId={metricId}/>);
+      });
+    }
+
+    let pipelineLockButton;
+    if (pipeline.isLocked) {
+      pipelineLockButton = pipeline.canUnlock
+        ? (<button onclick={vnode.state.unlock.bind(vnode.state, pipeline)} aria-label="Pipeline Locked" title="Pipeline Locked" className="pipeline_locked"/>)
+        : (<f.button className="pipeline_locked disabled"
+                     tooltipText={pipeline.getLockDisabledTooltipText()}/>);
+    }
+
+    return (
+      <div class="pipeline_header">
+        <div class="pipeline_sub_header">
+          <h3 className="pipeline_name">{pipeline.name}</h3>
+          <div className="pipeline_actions">
+            {analyticsIcons}
+            {settingsButton}
+            {pipelineLockButton}
+          </div>
+        </div>
+        <PipelineOperationsWidget pipeline={vnode.attrs.pipeline}
+                                  invalidateEtag={vnode.attrs.invalidateEtag}
+                                  doCancelPolling={vnode.attrs.doCancelPolling}
+                                  doRefreshImmediately={vnode.attrs.doRefreshImmediately}
+                                  operationMessages={vnode.attrs.operationMessages}/>
+      </div>
+    );
+  }
+};
+
+module.exports = PipelineHeaderWidget;

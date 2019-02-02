@@ -1,0 +1,78 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+description = 'GoCD Test Utilities'
+
+configurations {
+  copyOnly {
+    transitive = false
+  }
+}
+
+dependencies {
+  compile project(':util')
+  compile group: 'com.sdicons.jsontools', name: 'jsontools-core', version: '1.7'
+  compile group: 'org.springframework', name: 'spring-test', version: project.versions.spring
+  compile group: 'org.eclipse.jetty', name: 'jetty-server', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-plus', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-jmx', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-util', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-servlet', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-webapp', version: versions.jetty
+  compile group: 'com.sun.mail', name: 'mailapi', version: versions.mail
+  compile group: 'com.github.stefanbirkner', name: 'system-rules', version: project.versions.systemRules
+
+  compile group: 'org.assertj', name: 'assertj-core', version: project.versions.assertJ
+  compileOnly group: 'junit', name: 'junit', version: project.versions.junit
+  runtimeOnly group: 'org.junit.vintage', name: 'junit-vintage-engine', version: project.versions.junit5
+  implementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: project.versions.junit5
+  runtimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: project.versions.junit5
+
+  compile group: 'com.googlecode', name: 'junit-ext', version: '1.0'
+  compile group: 'org.hamcrest', name: 'hamcrest-core', version: project.versions.hamcrest
+  compile group: 'org.hamcrest', name: 'hamcrest-library', version: project.versions.hamcrest
+
+  copyOnly project(path: ':agent-launcher', configuration: 'fatJarConfig')
+  copyOnly project(path: ':test:test-agent')
+  copyOnly project(path: ':tfs-impl:tfs-impl-14', configuration: 'fatJarConfig')
+}
+
+def generatedResourcesOutput = file("resources-generated")
+
+sourceSets {
+  main {
+    resources {
+      output.dir generatedResourcesOutput, builtBy: 'generateResources'
+      srcDirs += generatedResourcesOutput
+    }
+  }
+}
+
+clean {
+  delete(generatedResourcesOutput)
+}
+
+task generateResources(type: Copy) {
+  into "$generatedResourcesOutput/testdata/gen"
+  from(project.configurations.copyOnly) {
+    rename "(.*)-${project.version}.(jar|zip)", '$1.$2'
+  }
+}
+
+task prepare {
+  dependsOn generateResources
+}
+

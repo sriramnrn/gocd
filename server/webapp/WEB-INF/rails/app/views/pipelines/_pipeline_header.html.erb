@@ -1,0 +1,42 @@
+<% if @lockedPipeline
+     scope[:entity_wrapper_class] = "locked"
+   end %>
+
+<div class="entity_status_wrapper page_header <%= scope[:entity_wrapper_class] %>">
+  <div class="row">
+    <span class="page_name">Stage Details</span>
+    <%= render :partial => "shared/pipeline_breadcrumb.html", :locals => {:scope => {:pipeline => @pipeline, :third => {:link => url_for_pipeline_value_stream_map(@pipeline), :text => @pipeline.getLabel()}, :fourth => @stage.getName()}} %>
+
+    <% if @can_user_view_settings %>
+        <div class="stage_detail_setting">
+          <%= link_to '', pipeline_edit_path(pipeline_name: @pipeline.getName(), current_tab: 'general'), class: 'icon16 setting' %>
+        </div>
+    <% end %>
+    <% if @lockedPipeline %>
+        <% if @pipeline.hasStage(@lockedPipeline) %>
+            <% if @pipeline.canUnlock() %>
+                <div class="locked_instance" id='unlock'>
+                  <%== blocking_link_to_remote_new :name => "Click to unlock", :method => :post, :url => "/go/api/pipelines/#{@pipeline.getName()}/unlock",
+                                                   :update => {:failure => "message_pane", :success => 'function(){}'}, :html => {}, :headers => {'X-GoCD-Confirm' => 'true', 'Accept' => 'application/vnd.go.cd.v1+json', 'Content-Type' => 'application/json'}, :before => "spinny('unlock');" %>
+                </div>
+            <% else %>
+                <div class="locked_instance">
+                  <span>LOCKED</span>
+                </div>
+            <% end %>
+        <% else %>
+            <div class="locked_instance">
+              (<%= link_to("Locked by #{@lockedPipeline.getPipelineLabel()}" , stage_detail_path_for_identifier(@lockedPipeline)) %>
+              )
+            </div>
+        <% end %>
+    <% elsif @pipeline.isLockable() %>
+        <div class="locked_instance">
+          <span>UNLOCKED</span>
+        </div>
+    <% end %>
+    <a href="<%= api_pipeline_stage_feed_path(:name => @pipeline.getName()) -%>">
+      <div class="feed">&nbsp;</div>
+    </a>
+  </div>
+</div>

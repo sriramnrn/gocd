@@ -1,0 +1,165 @@
+/*
+ * Copyright 2016 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+$transition: all 0.3s ease-in-out;
+
+//colors
+
+$go-primary: #943a9e;
+$go-secondary: #d1c4e9;
+$go-tertiary: #ffd54f;
+$go-white: #fff;
+$light-grey: #e2e2e2;
+$grey: #535353;
+$dark-grey: #1e1e1e;
+$txt-color: #333;
+$general-bg: #e7eef0;
+$border-color: #ccc;
+$go-links: #0277bd;
+$page-body-background: #f4f8f9;
+$global-border-radius: 3px;
+$general-panel-header-bg: $go-secondary;
+$panel-header-bg: $general-bg;
+$border-grey: #ececec;
+$section-bg: #e7eef0;
+$light-border: #d6e0e2;
+
+//icon size
+
+$icon-color: #647984;
+$component-icon-size: 30px;
+$icon-text-padding: 20px;
+$go-icon-color: #555;
+$go-icon-hover-color: #000;
+
+//table
+
+$table-header-bg: #b9f6ca;
+$table-header-border: #a5d6a7;
+
+//header
+
+$header-bg: #33364e;
+$page-header-bg: $go-white;
+$input-btn-bg: #ccc;
+$input-btn-bg-hover: #666;
+$page-header-title: $txt-color;
+$personalize-header-bg: #ccc;
+$agent-filter-button: #ccc;
+
+//pipeline
+
+$pipeline-header-bg: transparent;
+$unpause-btn-bg: #f16c6c;
+$operate-btn-bg: #f5f5f5;
+$operate-with-optn-btn-bg: #f5f5f5;
+$pause-btn-bg: #f5f5f5;
+$passed: #00c853;
+$failed: #fa2d2d;
+$btn-hover: #666;
+$building: #ffc11b;
+$passed-icon: check;
+$failed-icon: exclamation-circle;
+$cancelled-icon: ban;
+$artifact-plugin-form-background: #fafafa;
+$artifact-plugin-message-background: #f6f6f6;
+
+// agents
+
+$agent-header-button-bg: $go-primary;
+$agents-btn-hover: darken($go-primary, 4%);
+
+//modal
+
+$modal-header-bg: #eeeee9;
+
+//tabs
+
+$tab-header-bg: $go-secondary;
+$tab-header-bg-hover: lighten($tab-header-bg, 8%);
+$tab-bg: lighten($tab-header-bg, 5%);
+$current-tab-bg: #fff;
+
+//main navigation
+
+$top-bar-bg: transparent;
+$menu-link: $go-white;
+$menu-hover-bg: $go-white;
+
+$main-nav-height: 40px;
+$main-nav-link-bg-hover: rgba(0, 0, 0, 0.20);
+$main-nav-link-color: $go-white;
+$drop-down-link-color: #333;
+$drop-down-menu-bg: $go-white;
+$dropdown-arrow-icon-color: rgba(255, 255, 255, 0.43);
+$dropdown-arrow-icon-color-hover-bg: rgba(0, 0, 0, 0.20);
+$dropdown-arrow-icon-color-active: rgba(0, 0, 0, 1);
+
+$current-link: $go-primary;
+$current-page-sel-bg: $go-primary;
+$current-page-sel-border: $go-primary;
+$current-page-sel-txt: $go-white;
+
+$dropdown-menu-hover-bg: #efefef;
+$user-dropdown-bg: $go-white;
+$user-link-bg: $go-white;
+
+//primary button
+
+$primary-btn-bg: $go-primary;
+$primary-btn-bg-hover: darken($go-primary, 10%);
+
+//small  buttons
+
+$btn-bg: #666;
+$btn-txt: #fff;
+
+$btn-bg-hover: darken($btn-bg, 10%);
+
+//light button
+
+$btn-light-bg: #ccc;
+$btn-light-bg-hover: #666;
+
+//config ui
+
+$pipeline-page-header-bg: $go-white;
+
+//z-index
+
+$agents-filters: 2;
+$build-details-dropdown-arrow-z-index: 2;
+$header-panel-z-index: 3;
+$agent-header-panel-z-index: 3;
+$main-navigation: 10;
+$page-header: 10;
+$app-header-top-line: 11;
+$label-filter-group: 11;
+$app-header-z-index: 21;
+
+//stage history table
+
+$stage-history-head-bg: $go-secondary;
+$stage-history-pagination-bg: #dcdcdc;
+
+$icon-color: #039be5;
+$icon-hover-color: #666;
+$icon-txt: #333;
+$icon-txt-hover: #333;
+
+$icon--secondary-color: #666;
+$add-color: #00bfa5;
+$disabled-icon-color: #ccc;

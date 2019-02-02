@@ -16,12 +16,12 @@
 
 package com.thoughtworks.go.build
 
-import org.gradle.api.tasks.ParallelizableTask
+import org.gradle.api.tasks.OutputFile
 
-@ParallelizableTask
 class DebPackagingTask extends LinuxPackagingTask {
 
-  public File getOutputFile() {
+  @OutputFile
+  File getOutputFile() {
     project.file("${project.convention.plugins.get("base").distsDir}/deb/${packageName}_${version}-${distVersion}_all.deb")
   }
 
@@ -33,7 +33,7 @@ class DebPackagingTask extends LinuxPackagingTask {
   protected List fpmOpts() {
     def cmd = super.fpmOpts()
     cmd += ['-t', packageType()]
-    cmd += ['--depends', 'java7-runtime-headless']
+    cmd += ['--depends', 'java8-runtime-headless']
     cmd += ['--deb-no-default-config-files']
 
     // HACK: for debian packages :(, since manifests cannot contain fine grained ownership

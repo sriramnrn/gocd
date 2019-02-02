@@ -34,6 +34,7 @@ FunctionEnd
 
 Var ARGS
 Var SERVER_URL
+Var START_AGENT
 
 Function CustomUseInput
     ReadINIStr $SERVER_URL "$PLUGINSDIR\ServerURL.ini" "Field 2" "State"
@@ -44,11 +45,12 @@ Function SilentCustomUseInput
     ${GetParameters} $ARGS
     ${GetOptions} $ARGS /SERVERURL= $SERVER_URL
     ${GetOptions} $ARGS /GO_AGENT_JAVA_HOME= $GO_AGENT_JAVA_HOME
+    ${GetOptions} $ARGS /START_AGENT= $START_AGENT
     Call CustomInstallBits
 FunctionEnd
 
 Function CustomInstallBits
-    Call CleanUpUnnecessaryStuffOfOldInstallations
+    Call CleanUpTempFilesFromOlderInstallations
     StrCmp $GO_AGENT_JAVA_HOME "" 0 +2
         StrCpy $GO_AGENT_JAVA_HOME "$INSTDIR\jre"
 
@@ -67,23 +69,26 @@ Function CustomInstallBits
     ; Install and start
     ExecWait '"$INSTDIR\cruisewrapper.exe" --install "$INSTDIR\config\wrapper-agent.conf"'
     ClearErrors
-    ExecWait 'net start "Go Agent"'
-    IfErrors 0 +3
-        ${LogText} "Error starting Go Agent Windows Service. Check if service is disabled."
-        Goto DONE
-    ${LogText} "Successfully started Go Agent"
+    StrCmp $START_AGENT "NO" +5 0
+        ExecWait 'net start "Go Agent"'
+        IfErrors 0 +3
+            ${LogText} "Error starting Go Agent Windows Service. Check if service is disabled."
+            Goto DONE
+        ${LogText} "Successfully started Go Agent"
     DONE:
 FunctionEnd
 
-Function CleanUpUnnecessaryStuffOfOldInstallations
+Function CleanUpTempFilesFromOlderInstallations
     StrCmp $IsUpgrading $UPGRADING upgrade done
-
     upgrade:
-        IfFileExists $INSTDIR\jdk 0 done
-        RMDir /r $INSTDIR\jdk
-
+        DELETE $INSTDIR\*agent-launcher.jar
+        IfFileExists $INSTDIR\agent.jar 0 +2
+        DELETE $INSTDIR\agent.jar
+        IfFileExists $INSTDIR\tfs-impl.jar 0 +2
+        DELETE $INSTDIR\tfs-impl.jar
+        IfFileExists $INSTDIR\agent-plugins.zip 0 +2
+        DELETE $INSTDIR\agent-plugins.zip
     done:
-
 FunctionEnd
 
 ; Silent Installer Service Creation Section

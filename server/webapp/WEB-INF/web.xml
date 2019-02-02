@@ -1,5 +1,5 @@
 <!--
-  ~ Copyright 2016 ThoughtWorks, Inc.
+  ~ Copyright 2018 ThoughtWorks, Inc.
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -36,22 +36,21 @@
   </filter>
 
   <filter>
-    <filter-name>Spring security Filter Chain Proxy</filter-name>
+    <filter-name>mainFilterChain</filter-name>
     <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
     <init-param>
       <param-name>targetBeanName</param-name>
-      <!-- This bean name 'filterChainProxy' is defined in applicationContext-acegi-security.xml -->
-      <param-value>filterChainProxy</param-value>
-    </init-param>
-    <init-param>
-      <param-name>targetFilterLifecycle</param-name>
-      <param-value>true</param-value>
+      <param-value>mainFilterChain</param-value>
     </init-param>
   </filter>
 
   <filter>
-    <filter-name>Locale resolver</filter-name>
-    <filter-class>com.thoughtworks.go.server.web.i18n.LocaleResolver</filter-class>
+    <filter-name>urlRewriteFilter</filter-name>
+    <filter-class>org.tuckey.web.filters.urlrewrite.UrlRewriteFilter</filter-class>
+    <init-param>
+      <param-name>logLevel</param-name>
+      <param-value>slf4j</param-value>
+    </init-param>
   </filter>
 
   <filter-mapping>
@@ -65,13 +64,20 @@
   </filter-mapping>
 
   <filter-mapping>
-    <filter-name>Spring security Filter Chain Proxy</filter-name>
+    <filter-name>mainFilterChain</filter-name>
     <url-pattern>/*</url-pattern>
   </filter-mapping>
 
   <filter-mapping>
-    <filter-name>Locale resolver</filter-name>
+    <filter-name>ConfigGitRepositoryFilter</filter-name>
+    <url-pattern>/api/config-repository.git/*</url-pattern>
+  </filter-mapping>
+
+  <filter-mapping>
+    <filter-name>urlRewriteFilter</filter-name>
     <url-pattern>/*</url-pattern>
+    <!--<dispatcher>FORWARD</dispatcher>-->
+    <!--<dispatcher>REQUEST</dispatcher>-->
   </filter-mapping>
 
   <context-param>
@@ -86,22 +92,22 @@
 
   <context-param>
     <param-name>rails.root</param-name>
-    <param-value>/WEB-INF/rails.new</param-value>
+    <param-value>/WEB-INF/rails</param-value>
   </context-param>
 
   <context-param>
     <param-name>public.root</param-name>
-    <param-value>/WEB-INF/rails.new/public</param-value>
+    <param-value>/WEB-INF/rails/public</param-value>
   </context-param>
 
   <context-param>
     <param-name>gem.home</param-name>
-    <param-value>/WEB-INF/rails.new/vendor/bundle/jruby/1.9</param-value>
+    <param-value>/WEB-INF/rails/gems/jruby/2.5.0</param-value>
   </context-param>
 
   <context-param>
     <param-name>gem.path</param-name>
-    <param-value>/WEB-INF/rails.new/vendor/bundle/jruby/1.9</param-value>
+    <param-value>/WEB-INF/rails/gems/jruby/2.5.0</param-value>
   </context-param>
 
   <context-param>
@@ -141,10 +147,6 @@
     <listener-class>com.thoughtworks.go.rackhack.DelegatingListener</listener-class>
   </listener>
 
-  <listener>
-    <listener-class>org.springframework.web.util.Log4jConfigListener</listener-class>
-  </listener>
-
   <servlet>
     <servlet-name>rails</servlet-name>
     <servlet-class>com.thoughtworks.go.rackhack.DelegatingServlet</servlet-class>
@@ -164,46 +166,16 @@
     <async-supported>true</async-supported>
   </servlet>
 
-
   <servlet>
-    <servlet-name>spring-repository</servlet-name>
-    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    <servlet-name>console-websocket</servlet-name>
+    <servlet-class>com.thoughtworks.go.server.websocket.ConsoleLogSocketServlet</servlet-class>
     <load-on-startup>1</load-on-startup>
+    <async-supported>true</async-supported>
   </servlet>
 
   <servlet>
-    <servlet-name>spring-pages</servlet-name>
+    <servlet-name>spring-all</servlet-name>
     <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
-    <load-on-startup>1</load-on-startup>
-  </servlet>
-
-  <servlet>
-    <servlet-name>spring-rest</servlet-name>
-    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
-    <load-on-startup>1</load-on-startup>
-  </servlet>
-
-  <servlet>
-    <servlet-name>spring-add-on</servlet-name>
-    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
-    <load-on-startup>1</load-on-startup>
-  </servlet>
-
-  <servlet>
-    <servlet-name>spring-plugin</servlet-name>
-    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
-    <load-on-startup>1</load-on-startup>
-  </servlet>
-
-  <servlet>
-    <servlet-name>spring-tabs</servlet-name>
-    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
-    <load-on-startup>1</load-on-startup>
-  </servlet>
-
-  <servlet>
-    <servlet-name>echo-attr-servlet</servlet-name>
-    <servlet-class>com.thoughtworks.go.server.web.EchoAttributeServlet</servlet-class>
     <load-on-startup>1</load-on-startup>
   </servlet>
 
@@ -212,65 +184,21 @@
     <filter-class>com.thoughtworks.go.server.web.ConfigGitRepoFilter</filter-class>
   </filter>
 
-  <servlet-mapping>
-    <servlet-name>echo-attr-servlet</servlet-name>
-    <url-pattern>/echo-attribute/*</url-pattern>
-  </servlet-mapping>
+  <filter>
+    <filter-name>SparkPreFilter</filter-name>
+    <filter-class>com.thoughtworks.go.spark.SparkPreFilter</filter-class>
+  </filter>
 
   <servlet-mapping>
     <servlet-name>rails</servlet-name>
     <url-pattern>/rails/*</url-pattern>
   </servlet-mapping>
 
-  <servlet-mapping>
-    <servlet-name>spring-rest</servlet-name>
-    <url-pattern>/properties/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-tabs</servlet-name>
-    <url-pattern>/tab/*</url-pattern>
-  </servlet-mapping>
-
   <filter-mapping>
-    <filter-name>ConfigGitRepositoryFilter</filter-name>
-    <url-pattern>/api/config-repository.git/*</url-pattern>
+    <filter-name>SparkPreFilter</filter-name>
+    <url-pattern>/spark/*</url-pattern>
+    <dispatcher>FORWARD</dispatcher>
   </filter-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-tabs</servlet-name>
-    <url-pattern>/api/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-pages</servlet-name>
-    <url-pattern>/admin/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-pages</servlet-name>
-    <url-pattern>/auth/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-rest</servlet-name>
-    <url-pattern>*.json</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-rest</servlet-name>
-    <url-pattern>/rss.xml</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-rest</servlet-name>
-    <url-pattern>/files/*</url-pattern>
-  </servlet-mapping>
-
-  <servlet-mapping>
-    <servlet-name>spring-rest</servlet-name>
-    <url-pattern>/run/*</url-pattern>
-  </servlet-mapping>
 
   <servlet-mapping>
     <servlet-name>spring-cruise-remoting</servlet-name>
@@ -283,25 +211,13 @@
   </servlet-mapping>
 
   <servlet-mapping>
-    <servlet-name>spring-repository</servlet-name>
-    <url-pattern>/repository/*</url-pattern>
-  </servlet-mapping>
-
-  <!-- START new UI -->
-  <servlet-mapping>
-    <servlet-name>spring-pages</servlet-name>
-    <url-pattern>/atom/*</url-pattern>
-  </servlet-mapping>
-  <!-- END new UI -->
-
-  <servlet-mapping>
-    <servlet-name>spring-add-on</servlet-name>
-    <url-pattern>/add-on/*</url-pattern>
+    <servlet-name>console-websocket</servlet-name>
+    <url-pattern>/console-websocket/*</url-pattern>
   </servlet-mapping>
 
   <servlet-mapping>
-    <servlet-name>spring-plugin</servlet-name>
-    <url-pattern>/plugin/interact/*</url-pattern>
+    <servlet-name>spring-all</servlet-name>
+    <url-pattern>/*</url-pattern>
   </servlet-mapping>
 
   <servlet-mapping>
@@ -329,9 +245,7 @@
     <mime-type>image/svg+xml</mime-type>
   </mime-mapping>
 
-  <!-- Do not timeout idle/stale sessions for 14 days: 60 * 24 * 14 minutes. -->
   <session-config>
-    <session-timeout>20160</session-timeout>
     <tracking-mode>COOKIE</tracking-mode>
   </session-config>
 </web-app>

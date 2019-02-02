@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2018 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,24 @@
 
 description = 'APIs to allow GoCD to communicate with GoCD Plugins'
 
+apply plugin: 'groovy'
+
 dependencies {
-  compile project(':go-plugin-infra')
-  compile group: 'com.bazaarvoice.jolt', name: 'jolt-core', version: '0.0.20'
-  compile group: 'com.bazaarvoice.jolt', name: 'json-utils', version: '0.0.20'
-  testCompile group: 'org.skyscreamer', name: 'jsonassert', version: '1.2.3'
-  testCompile project(':test-utils')
+  compile project(':plugin-infra:go-plugin-config-repo')
+  compile project(':plugin-infra:go-plugin-infra')
+  compile project(':domain')
+  compile project(':plugin-infra:plugin-metadata-store')
+  compile group: 'com.bazaarvoice.jolt', name: 'jolt-core', version: project.versions.jolt
+  compile group: 'com.bazaarvoice.jolt', name: 'json-utils', version: project.versions.jolt
+
+  compileOnly(group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: project.versions.bouncyCastle)
+
+  testCompile localGroovy()
+  testCompile group: 'net.javacrumbs.json-unit', name: 'json-unit-fluent', version: project.versions.jsonUnit
+  testCompile project(':test:test-utils')
+  testCompile project(path: ':domain', configuration: 'testOutput')
+  testCompileOnly group: 'junit', name: 'junit', version: project.versions.junit
+  testRuntimeOnly group: 'org.junit.vintage', name: 'junit-vintage-engine', version: project.versions.junit5
+  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: project.versions.junit5
+  testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: project.versions.junit5
 }

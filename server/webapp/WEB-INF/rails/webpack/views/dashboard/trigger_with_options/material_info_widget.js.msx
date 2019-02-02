@@ -1,0 +1,121 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const $ = require('jquery');
+const m = require('mithril');
+
+const TimeFormatter               = require('helpers/time_formatter');
+const MaterialSearchResultsWidget = require('views/dashboard/trigger_with_options/material_search_results_widget');
+
+const MaterialInfoWidget = {
+  oninit(vnode) {
+    vnode.attrs.material.performSearch();
+  },
+
+  onupdate(vnode) {
+    const commits   = $(vnode.dom).find('.commits');
+    const html      = document.documentElement;
+    const winHeight = Math.round(Math.max(window.innerHeight, html.clientHeight));
+
+    if (commits.length) {
+      const searchInput = $(vnode.dom).find('.material-revision-search');
+      if (searchInput.length) {
+        const inputCoordinates = searchInput.get(0).getBoundingClientRect();
+        commits.css({
+          top:          Math.round(inputCoordinates.top + inputCoordinates.height),
+          left:         inputCoordinates.left,
+          'max-height': `${winHeight - (inputCoordinates.top + searchInput.outerHeight() + 20)}px`
+        });
+      }
+    }
+  },
+
+  view(vnode) {
+    const material = vnode.attrs.material;
+
+    let comment = <em>never ran</em>;
+    let date    = <em>never ran</em>;
+    let lastRun = <em>never ran</em>;
+    let user    = <em>never ran</em>;
+
+    if (material.revision.revision) {
+      comment = material.revision.comment ? material.revision.comment : <em>not specified</em>;
+      date    = material.revision.date ? TimeFormatter.format(material.revision.date) : <em>not specified</em>;
+      lastRun = material.revision.revision ? material.revision.revision : <em>not specified</em>;
+      user    = material.revision.user ? material.revision.user : <em>not specified</em>;
+    }
+
+    const destination = material.destination ? <code>{material.destination}</code> : <em>not specified</em>;
+
+    return (
+      <div class={`v-tab_content material-for-trigger`}>
+
+        <ul class="name-value">
+          <li class="name-value_pair meta">
+            <label>{material.type}</label>
+            <span class="value">{material.name}</span>
+          </li>
+
+          <li class="name-value_pair destination">
+            <label>Destination</label>
+            <span class="value">{destination}</span>
+          </li>
+
+          <li class="name-value_pair date">
+            <label>Date</label>
+            <span class="value">{date}</span>
+          </li>
+
+          <li class="name-value_pair user">
+            <label>User</label>
+            <span class="value">{user}</span>
+          </li>
+
+          <li class="name-value_pair comment">
+            <label>Comment</label>
+            <span class="value">{comment}</span>
+          </li>
+
+          <li class="name-value_pair last-run-revision">
+            <label>Last run with</label>
+            <span class="value">{lastRun}</span>
+          </li>
+
+          <li class="name-value_pair">
+            <label>Revision to trigger with</label>
+            <span class="commit_search value">
+              <span class="search-icon">
+                <input type="text"
+                       class="material-revision-search"
+                       placeholder="Search by revision/SHA or comment or committer name"
+                       value={material.searchText()}
+                       oninput={(e) => {
+                         material.updateSearchText(e.target.value);
+                       }}/>
+              </span>
+              {material.searchInProgress() ? <span class="search-in-progress"/> : null}
+              <MaterialSearchResultsWidget material={material}/>
+            </span>
+
+          </li>
+        </ul>
+      </div>
+    );
+  }
+};
+
+
+module.exports = MaterialInfoWidget;

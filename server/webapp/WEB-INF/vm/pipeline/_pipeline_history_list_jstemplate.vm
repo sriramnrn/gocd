@@ -23,9 +23,13 @@
 <div id="new-pipeline-history" class="container-in-body">
 <div class="content_wrapper_outer" id="content_wrapper_outer_pipeline_history"><div class="content_wrapper_inner" id="content_wrapper_inner_pipeline_history">
     <div class='page_header'>
-        <div class="entity_title" style="margin-bottom: 0;" id="pipeline_activity_header">
+      <div class="row">
+        <div class="entity_title" id="pipeline_activity_header">
+          <span class="page_name">Pipeline Activity</span>
             <ul class="entity_title">
-                <li class="last"><h1 id="page-title" class="entity_title" style="float: left;">$_page_title</h1></li>
+                <li class="last">
+                  <span class="label">Pipeline</span>
+                  <h1 id="page-title" class="entity_title">$_page_title</h1></li>
             </ul>
             <span class="pipeline-buttons" style="float:left;">
                 {if pipelineHistoryPage.canPause(data)}
@@ -35,6 +39,7 @@
                            class="link_as_button" title="Resume scheduling">
                             <span>Unpause</span>
                         </a>
+                            <span class="pause-message">${%pipelineHistoryPage.pauseStatusText(data)%}</span>
                     {else}
                         <a href="javascript:void(0)" id="pause-${%data.pipelineName%}"
                            onclick="pipelineActions.pausePipeline('${%data.pipelineName%}', this);"
@@ -45,16 +50,20 @@
                     {/if}
                 {/if}
             </span>
+            #if($isEditableViaUI && ($userHasAdministratorRights || $userHasGroupAdministratorRights))
+              <div class="pipeline_settings"><a href="$req.getContextPath()/admin/pipelines/$pipelineName/general" class="icon16 setting"></a></div>
+            #end
         </div>
-
+        </div>
     </div>
+  <div class="row pipeline_history_table_container">
 {if data.groups}
 
     {for group in data.groups}
     <table class="pipeline-history-group" cellpadding="0" cellspacing="0" style="${%pipelineHistoryPage.fixIEZIndexBugs()%}">
         <thead>
             <tr>
-                <th class="" scope="col" style="visibility: hidden;">Pipeline label</th>
+                <th class="pipeline-instance-header" scope="col">Instance</th>
                 {for stage in group.config.stages}
                 <th class="column-header{if stage_index == group.config.stages.length - 1} last-stage{/if}" scope="col">
                     <span>${% stage.name %}</span>
@@ -96,9 +105,12 @@
             <tr id="pipeline-${% pipeline.pipelineId %}">
                 <th class="pipeline-name" scope="row" style="${%pipelineHistoryPage.fixIEZIndexBugs()%}">
                     <div class="wrapper" style="${%pipelineHistoryPage.fixIEZIndexBugs()%}">
-                        <span id="pipeline-${% pipeline.pipelineId %}-label" class="pipeline-label"> <a href="$req.getContextPath()/pipelines/value_stream_map/${% data.pipelineName %}/${% pipeline.counterOrLabel %}" title="${% pipeline.label %}">${% pipeline.label.truncate(17) %}</a></span><br/>
-                        <span class="pipeline-info revision" id="pipeline-${% pipeline.pipelineId %}-revision" title="${% pipeline.revision %}">revision: ${% pipeline.revision %}</span><br/>
-                        <span id="pipeline-${% pipeline.pipelineId %}-modificationDate" class="pipeline-info">${% pipeline.modification_date %}</span><br/>
+                      <div class="pipeline-run">
+                        <span id="pipeline-${% pipeline.pipelineId %}-label" title="${% pipeline.label %}" class="pipeline-label">${% pipeline.label.truncate(17) %} </span>
+                        <a href="$req.getContextPath()/pipelines/value_stream_map/${% data.pipelineName %}/${% pipeline.counterOrLabel %}" title="${% pipeline.label %}">VSM</a>
+                      </div>
+                        <span class="pipeline-info revision" id="pipeline-${% pipeline.pipelineId %}-revision" title="${% pipeline.revision %}">revision: ${% pipeline.revision %}</span>
+                        <span id="pipeline-${% pipeline.pipelineId %}-modificationDate" class="pipeline-info scheduled-date" data="${% pipeline.scheduled_timestamp %}" title="Server Time: ${% pipeline.scheduled_date %}">${% pipeline.scheduled_date %}</span>
                         <span id="pipeline-${% pipeline.pipelineId %}-buildCause"
                               class="pipeline-info popup-${% pipelineHistoryPage.buildCauseActor.getBuildCauseClass(pipeline.pipelineId) %}" style="${%pipelineHistoryPage.fixIEZIndexBugs()%}">
                             {if pipeline.buildCauseBy ==  ''} No modifications
@@ -133,9 +145,6 @@
                         {/if}
                         {if stage.scheduled == 'true'}
                             <div id="stage-detail-${% pipeline.counterOrLabel %}-${% stage.stageName %}" class="${% pipelineHistoryPage.getState(stage.stageStatus) %}-stage">
-                             {if stage.stageStatus == 'Cancelled'}
-                                <img alt="" src="$req.getContextPath()/$concatenatedStageBarCancelledIconFilePath">
-                             {/if}
                                 {if stage.getCanRun == 'true'}
                                 <a id="rerun-${% data.pipelineName %}-${% pipeline.counterOrLabel %}-${% stage.stageName %}" class="rerun" title="rerun this stage"
                                         href="javascript:stageActions.runStage('${% data.pipelineName %}', '${% pipeline.counterOrLabel %}', '${% stage.stageName %}');">Re-run</a>
@@ -147,6 +156,7 @@
                                 <a id="stage-detail-${% pipeline.pipelineId %}-${% stage.stageName %}-link" class="detail" title="see the details of this stage"
                                         href="$req.getContextPath()/pipelines/${% stage.stageLocator %}{if 'failed' == stage.stageStatus}#tab-failures{/if}{if 'passed' == stage.stageStatus}#tab-artifacts{/if}">
                                         Details</a>
+                              <span><span></span></span>
                             </div>
                         {else}
                             <a class="empty-stage" href="javascript:void(0);"></a>
@@ -186,7 +196,7 @@
     {/for}
 
   {/if}
-
+</div>
   <div class="clear"></div>
 </div></div>
 </div>

@@ -1,11 +1,18 @@
-<div class="console-area">
+<div class="console-area" data-console-url="${presenter.consoleoutLocator}" >
 <div class="console-action-bar">
     <div>
         <a class="auto-scroll" title="Scroll to bottom">Scroll to end of logs</a>
         <a href="$req.getContextPath()/files/${presenter.consoleoutLocator}">Raw output</a>
+        <a class='toggle-timestamps' href="#"><i class="fa fa-clock-o"></i> Timestamps</a>
+        <a class='toggle-folding' href="#" data-collapsed="true"></a>
+        <a id="full-screen">
+          <span class="expand">Fullscreen</span>
+          <span class="compress">Exit</span>
+        </a>
         <a class='change-theme' href="javascript:void(0);">Change theme</a>
     </div>
 </div>
+<div class="console-log-loading">Waiting for console logs&hellip;</div>
 <pre class="buildoutput_pre"></pre>
 <div class="console-footer-action-bar">
     <div>

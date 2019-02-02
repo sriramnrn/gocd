@@ -1,0 +1,90 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+(function () {
+  "use strict";
+
+  const m = require("mithril");
+
+  const AnalyticsiFrameWidget = function () {
+    let currentUrl = null;
+
+    function loadFrameContent(vnode) {
+      const iframe = vnode.dom.querySelector("iframe"),
+         container = vnode.dom;
+
+      function beforeLoad() {
+        container.classList.add("loading-analytics");
+      }
+
+      function afterLoad() {
+        container.classList.remove("loading-analytics");
+        m.redraw();
+      }
+
+      iframe.onload = function initContent() {
+        vnode.attrs.init(iframe.contentWindow, {
+          uid:         vnode.attrs.uid,
+          pluginId:    vnode.attrs.pluginId,
+          initialData: vnode.attrs.model.data()
+        });
+      };
+
+      currentUrl = vnode.attrs.model.url();
+
+      vnode.attrs.model.load(beforeLoad, afterLoad);
+    }
+
+    function oncreate(vnode) {
+      loadFrameContent.apply(this, [vnode]);
+    }
+
+    function onupdate(vnode) {
+      if (vnode.attrs && vnode.attrs.model && currentUrl !== vnode.attrs.model.url()) {
+        loadFrameContent.apply(this, [vnode]);
+      }
+    }
+
+    function view(vnode) {
+      const model    = vnode.attrs.model;
+      const attrs    = {src: model.view(), scrolling: "no"};
+      const errorXHR = model.errors();
+
+      if (errorXHR && errorXHR.getResponseHeader("content-type").indexOf("text/html") !== -1) {
+        return (<div class="frame-container">
+          <iframe src={`data:text/html;charset=utf-8,${errorXHR.responseText}`}/>
+        </div>);
+      }
+
+      const errorAttrs = errorXHR ? {"data-error-text": errorXHR.responseText} : {};
+      return <div class="frame-container" {...errorAttrs}>
+        <div class="loading-overlay">
+          <span class="page-spinner"></span>
+          <span class="loading-message">
+            <span class="loading-sub">Loading Analytics</span>
+            <span class="analytics-title">{vnode.attrs.title}</span>
+          </span>
+        </div>
+        <iframe sandbox="allow-scripts" {...attrs}/>
+      </div>;
+    }
+
+    return {oncreate, view, onupdate};
+  };
+
+  module.exports = AnalyticsiFrameWidget;
+
+})();

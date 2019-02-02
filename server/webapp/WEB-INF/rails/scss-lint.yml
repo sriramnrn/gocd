@@ -1,0 +1,37 @@
+# this file is purely used by rails. see `.webpack-sass-lintrc.json` for the css processed by webpack
+severity: warning
+linters:
+  Comment:
+    enabled: false
+    style: silent
+  Shorthand:
+    enabled: false
+  SpaceAfterComment:
+    enabled: false
+  SingleLinePerSelector:
+    enabled: false
+  SpaceAfterPropertyColon:
+    enabled: true
+    style: aligned
+  LeadingZero:
+    enabled: true
+    style: include_zero
+  ColorVariable:
+    enabled: false
+  PropertySortOrder:
+    enabled: false
+  NestingDepth:
+    enabled: false
+  EmptyLineBetweenBlocks:
+    enabled: false
+  StringQuotes:
+    enabled: false # we don't care about the type of quotes used
+  SelectorDepth:
+    enabled: true
+    max_depth: 4
+  SelectorFormat:
+    enabled: false
+  PseudoElement:
+    enabled: false # we don't support IE8, so ::after, or :after are both OK.
+  NameFormat:
+    enabled: false #variable names may contain both hyphens and underscores (e.g. `$c-dropdown_border-color`)

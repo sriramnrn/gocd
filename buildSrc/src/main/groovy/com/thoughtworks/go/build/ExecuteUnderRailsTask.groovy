@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2018 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,81 +16,112 @@
 
 package com.thoughtworks.go.build
 
-import org.apache.tools.ant.types.Commandline
-import org.gradle.api.tasks.Exec
+import org.gradle.api.Project
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.TaskAction
 import org.gradle.internal.os.OperatingSystem
+import org.gradle.process.JavaExecSpec
 
-public class ExecuteUnderRailsTask extends Exec {
+class ExecuteUnderRailsTask extends JavaExec {
+  private static final OperatingSystem CURRENT_OS = OperatingSystem.current()
+  private Map<String, Object> originalEnv
 
   @Input
-  def railsCommand
+  boolean disableJRubyOptimization = false
 
-  public ExecuteUnderRailsTask() {
-    dependsOn ':server:prepare'
-    dependsOn ':server:cleanRails'
-    dependsOn ':server:jar'
+  ExecuteUnderRailsTask() {
+    super()
+    dependsOn(project.railsTasksDefaultDependsOn)
+    dependsOn(':server:pathingJar')
 
-    if (isWindows()) {
-      dependsOn ':server:pathingJar'
+    originalEnv = new LinkedHashMap<String, Object>(environment)
+    workingDir = project.railsRoot
+
+    systemProperties += project.railsSystemProperties
+
+    classpath(project.tasks.getByName('pathingJar').archivePath)
+
+    if (CURRENT_OS.isWindows()) {
+      environment['CLASSPATH'] += "${File.pathSeparatorChar}${project.tasks.getByName('pathingJar').archivePath}"
+    }
+    setup(project, this, disableJRubyOptimization)
+  }
+
+  static void setup(Project project, JavaExecSpec execSpec, boolean disableJRubyOptimization) {
+    execSpec.with {
+      if(CURRENT_OS.isWindows()) {
+        // because windows PATH variable is case-insensitive, so we force it to be `PATH` instead of `Path` or whatever else
+        def pathVariableName = environment.keySet().find { eachKey -> eachKey.toUpperCase().equals("PATH")}
+        environment['PATH'] = environment.remove(pathVariableName)
+      }
+      environment['PATH'] = (project.additionalJRubyPaths + [environment['PATH']]).join(File.pathSeparator)
+
+      classpath(project.jrubyJar())
+      standardOutput = new PrintStream(System.out, true)
+      errorOutput = new PrintStream(System.err, true)
+
+      environment += project.defaultJRubyEnvironment
+
+      if (CURRENT_OS.isWindows()) {
+        environment += [CLASSPATH: project.jrubyJar().toString()]
+      }
+
+      jvmArgs += project.defaultJvmArgs
+
+      // flags to optimize jruby startup performance
+      if (!disableJRubyOptimization) {
+        jvmArgs += project.jrubyOptimizationJvmArgs
+      }
+
+      systemProperties += project.jrubyDefaultSystemProperties
+
+      main = 'org.jruby.Main'
     }
   }
 
+  @Override
   @TaskAction
-  public void exec() {
-    PrepareRailsCommandHelper helper = new PrepareRailsCommandHelper(project)
-    helper.prepare()
+  void exec() {
+    project.delete(project.rails.testDataDir)
 
-    def jrubyOpts = helper.jrubyOpts
-
-    // use pathing jar for windows, else directly pass classpath via `-J-cp`
-    if (isWindows()) {
-      environment += ['CLASSPATH': project.getTasksByName('pathingJar', false).first().archivePath]
-    } else {
-      jrubyOpts += '-J-cp'
-      jrubyOpts += helper.classpath().asPath
+    project.copy {
+      from('config')
+      into project.rails.testConfigDir
     }
 
-    environment += ['JRUBY_OPTS': jrubyOpts.join(' ')]
-
-
-    if (OperatingSystem.current().isWindows()) {
-      setExecutable project.rootProject.file("tools/rails/bin/jruby.bat")
-    } else {
-      setExecutable project.rootProject.file("tools/rails/bin/jruby")
+    project.copy {
+      from('db/dbtemplate/h2db')
+      into project.rails.testH2DbDir
     }
 
-    args('-S')
-
-    if (railsCommand instanceof String) {
-      args(Commandline.translateCommandline(railsCommand))
-    } else {
-      args(railsCommand)
+    project.copy {
+      from('db/migrate/h2deltas')
+      into project.rails.testDbDeltasDir
     }
 
-    workingDir project.file("webapp/WEB-INF/rails.new")
-
-    debugEnvironment()
-
-    println "[${workingDir}]\$ ${executable} ${args.join(' ')}"
-
-    standardOutput = System.out
-    errorOutput = System.err
-
-    super.exec()
+    try {
+      debugEnvironment(this, originalEnv)
+      dumpTaskCommand(this)
+      super.exec()
+    } finally {
+      standardOutput.flush()
+      errorOutput.flush()
+    }
   }
 
-  private void debugEnvironment() {
+  static dumpTaskCommand(JavaExecSpec execSpec) {
+    println "[${execSpec.workingDir}]\$ ${execSpec.executable} ${execSpec.allJvmArgs.join(' ')} ${execSpec.main} ${execSpec.args.join(' ')}"
+  }
+
+  static void debugEnvironment(JavaExecSpec javaExecSpec, Map<String, Object> originalEnv) {
     println "Using environment variables"
-    int longestEnv = environment.keySet().sort { a, b -> a.length() - b.length() }.last().length()
+    def toDump = javaExecSpec.environment - originalEnv
 
-    environment.keySet().sort().each { k ->
-      println "${k.padLeft(longestEnv)} = ${environment.get(k)}"
+    int longestEnv = toDump.keySet().sort { a, b -> a.length() - b.length() }.last().length()
+
+    toDump.keySet().sort().each { k ->
+      println """${k.padLeft(longestEnv)}='${toDump.get(k)}' \\"""
     }
-  }
-
-  private boolean isWindows() {
-    OperatingSystem.current().isWindows()
   }
 }

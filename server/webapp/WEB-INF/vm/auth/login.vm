@@ -20,7 +20,7 @@
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8"></meta>
 
-  <link href="$req.getContextPath()/$concatenatedCruiseIconFilePath?#include("admin/admin_version.txt.vm")"
+  <link href="$req.getContextPath()/$concatenatedCruiseIconFilePath"
         rel="shortcut icon"/>
   <link rel="stylesheet" type="text/css" href="$req.getContextPath()/$concatenatedApplicationCssFilePath" media="all"/>
   <link rel="stylesheet" type="text/css" href="$req.getContextPath()/$concatenatedCssApplicationCssFilePath"
@@ -32,11 +32,11 @@
 
   <style type="text/css">
     body {
-      background: #000;
+      background:  #535353;
     }
 
     #bd {
-      background: #000;
+      background: #535353;
       border: none;
       padding-top: 0;
     }
@@ -63,15 +63,43 @@
       color: #FFF;
     }
 
+    //sticky footer
+
+
+    * {
+        margin : 0;
+    }
+
+    html, body {
+        height : 100%;
+    }
+
+    .page-wrap {
+        min-height    : 100%;
+        /* equal to footer height */
+        margin-bottom : -76px;
+    }
+
+    .page-wrap:after {
+        content : "";
+        display : block;
+    }
+
+    .app-footer, .page-wrap:after {
+        height : 76px;
+    }
+
+
   </style>
   <title>Go - Login</title>
 </head>
 <body id="login-page">
+<div class="page-wrap">
 <div id="doc3" class="yui-t7">
   <div id="bd">
     <div id="yui-main">
       <div id="main" class="yui-b">
-        #if ($login_error && $SPRING_SECURITY_LAST_EXCEPTION)
+        #if ($GOCD_SECURITY_AUTHENTICATION_ERROR)
           <div id="error-container" style="">
             <div class="ab-bg">
               <span class="ab-corner lvl1"></span>
@@ -80,9 +108,9 @@
               <span class="ab-corner lvl4"></span>
             </div>
             <div id="error-box">
-              $SPRING_SECURITY_LAST_EXCEPTION.message.replaceAll(";.*", "")
+              $GOCD_SECURITY_AUTHENTICATION_ERROR.replaceAll(";.*", "")
               <a target="_blank"
-                 href="https://docs.go.cd/current/configuration/dev_authentication.html#common-errors">Help
+                 href="${currentGoCDVersion.docsUrl('/configuration/dev_authentication.html#common-errors')}">Help
                 Topic: Authentication</a>
             </div>
             <div class="ab-bg">
@@ -98,27 +126,27 @@
           <div id="graphic-dialog" class="graphic-dialog-${edition.getDisplayType()}">
             <div id="logo-login"><h2>&nbsp;</h2></div>
             <div id="graphic-dialog-input">
-              <!-- <h3>$l.localize("PLEASE_SIGN_IN")</h3> -->
+              <!-- <h3>Please Sign In</h3> -->
               <form action="security_check" id="login_form" method="post">
                 <p>
-                  <label for="user_login">$l.localize("USERNAME")</label>
+                  <label for="user_login">Username</label>
                   <input class="" id="user_login" name="j_username" onfocus="true"
                          type="text"/>
                 </p>
 
                 <p>
-                  <label for="user_password">$l.localize("PASSWORD")</label>
+                  <label for="user_password">Password</label>
                   <input class="" type="password" name="j_password" id="user_password"
                          value="" autocomplete="off"/>
                 </p>
 
                 <p id="login-actions">
-                  <a target="_blank" href="https://go.cd/help"
-                     title="Click to open help documentation" class="help">$l.localize("HELP_SMALL")</a>
+                  <a target="_blank" href="https://gocd.org/help"
+                     title="Click to open help documentation" class="help">Need Help?</a>
                 ##                                    <input class="default" name="commit" type="submit" id="signin" value="Sign in &#187;"/>
 
                   <button class="submit_hover submit primary" type="submit" id="signin2" value="Sign in &#187;">
-                    <span>$l.localize("SIGN_IN")</span>
+                    <span>SIGN IN</span>
                   </button>
 
                 </p>
@@ -127,11 +155,12 @@
               </form>
             </div>
 
-            #foreach ($authentication_plugin_id in $authentication_plugin_registry.getPluginsThatSupportsWebBasedAuthentication())
-              <a href="/go/plugin/interact/$authentication_plugin_id/index"><img
-                  src="$authentication_plugin_registry.getDisplayImageURLFor($authentication_plugin_id)"
-                  alt="$authentication_plugin_registry.getDisplayNameFor($authentication_plugin_id)"/></a>
-            #end
+            <div class="authorization-plugins">
+              #set( $allConfiguredWebBasedAuthorizationPlugins = $security_auth_config_service.getAllConfiguredWebBasedAuthorizationPlugins() )
+              #foreach ($model in $allConfiguredWebBasedAuthorizationPlugins)
+                  <a href="/go/plugin/$model.pluginId()/login"><img class="authorization-plugin-icon" src="$model.imageUrl()" alt="$model.name()"/></a>
+              #end
+            </div>
 
           </div>
         </div>
@@ -144,9 +173,10 @@
       </div>
     </div>
   </div>
-
+</div>
+</div>
   #parse("shared/_copyright_license_info.vm")
 
-</div>
+
 </body>
 </html>

@@ -1,0 +1,229 @@
+/*
+ * Copyright 2019 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m             = require('mithril');
+const Stream        = require('mithril/stream');
+const f             = require('helpers/form_helper');
+const TimeFormatter = require('helpers/time_formatter');
+
+const TriggerWithOptionsInfo = require('models/dashboard/trigger_with_options_info');
+
+const Modal                               = require('views/shared/new_modal');
+const PipelinePauseModalBody              = require('views/dashboard/pipeline_pause_modal_body');
+const TriggerWithOptionsVM                = require('views/dashboard/models/trigger_with_options_vm');
+const PipelineTriggerWithOptionsModalBody = require('views/dashboard/trigger_with_options/modal_body');
+
+const PipelineOperationsWidget = {
+  oninit(vnode) {
+    const self              = vnode.state;
+    const operationMessages = vnode.attrs.operationMessages;
+    self.pauseMessage       = Stream();
+
+    self.trigger = (pipeline, options = {}) => {
+      pipeline.trigger(options).then((res) => {
+        pipeline.triggerDisabled(true);
+        operationMessages.success(pipeline.name, res.message);
+        vnode.attrs.invalidateEtag();
+      }, (res) => {
+        operationMessages.failure(pipeline.name, res.responseJSON.message);
+      });
+    };
+
+    self.unpause = (pipeline) => {
+      vnode.attrs.doCancelPolling();
+      pipeline.unpause().then((res) => {
+        operationMessages.success(pipeline.name, res.message);
+      }, (res) => {
+        operationMessages.failure(pipeline.name, res.responseJSON.message);
+      }).always(vnode.attrs.doRefreshImmediately);
+    };
+
+    self.pause = (pipeline) => {
+      vnode.attrs.doCancelPolling();
+      pipeline.pause({"pause_cause": self.pauseMessage()}).then((res) => {
+        operationMessages.success(pipeline.name, res.message);
+      }, (res) => {
+        operationMessages.failure(pipeline.name, res.responseJSON.message);
+      }).always(vnode.attrs.doRefreshImmediately);
+    };
+
+    self.showPausePopup = (pipeline) => {
+      const modal = new Modal({
+        size:             'medium',
+        title:            `Pause pipeline ${pipeline.name}`,
+        body:             () => (<PipelinePauseModalBody pipelineName={pipeline.name} message={self.pauseMessage}/>),
+        onclose:          () => self.destroyPausePopup(modal),
+        buttons:          () => {
+          return [
+            {
+              text:    "OK",
+              class:   'save primary',
+              onclick: () => {
+                self.pause(pipeline);
+                self.destroyPausePopup(modal);
+              }
+            },
+            {
+              text:    "CLOSE",
+              class:   'save secondary',
+              onclick: () => self.destroyPausePopup(modal)
+            }
+          ];
+        },
+        enterKeyCallback: () => {
+          self.pause(pipeline);
+          self.destroyPausePopup(modal);
+        }
+      });
+      modal.render();
+    };
+
+    const getErrorMessageFromStatus = (textStatus, pipelineName) => {
+      if (textStatus === 'parsererror') {
+        return `Error occurred while fetching trigger with options information for pipeline "${pipelineName}". Check server logs for more information.`;
+      }
+      return "There was an unknown error.";
+    };
+
+    self.destroyPausePopup = (modal) => {
+      self.pauseMessage("");
+      modal.destroy();
+    };
+
+    self.triggerWithOptionsVM   = Stream(new TriggerWithOptionsVM());
+    self.triggerWithOptionsInfo = Stream();
+    self.errorMessage           = Stream('');
+
+    self.showTriggerWithOptionsPopup = (pipeline) => {
+      TriggerWithOptionsInfo.all(pipeline.name)
+        .then((info) => {
+          self.triggerWithOptionsInfo(info);
+          self.triggerWithOptionsVM().initialize(info);
+          self.errorMessage('');
+        })
+        .fail((_ex, textStatus) => {
+          self.errorMessage(getErrorMessageFromStatus(textStatus, pipeline.name));
+        })
+        .always(m.redraw);
+
+      function onModalClose() {
+        self.triggerWithOptionsInfo(undefined);
+        self.triggerWithOptionsVM(new TriggerWithOptionsVM());
+        modal.destroy();
+      }
+
+      const modal = new Modal({
+        size:    'large',
+        title:   `${pipeline.name} - Trigger`,
+        body:    () => (<PipelineTriggerWithOptionsModalBody vm={self.triggerWithOptionsVM}
+                                                             triggerWithOptionsInfo={self.triggerWithOptionsInfo}
+                                                             message={self.errorMessage}/>),
+        onclose: onModalClose,
+        buttons: () => {
+          return [
+            {
+              text:    "Trigger Pipeline",
+              class:   'save primary',
+              onclick: () => {
+                const isValid = self.triggerWithOptionsInfo().validate();
+
+                if (isValid) {
+                  self.trigger(pipeline, self.triggerWithOptionsInfo().getTriggerOptionsJSON());
+                  onModalClose();
+                } else {
+                  m.redraw();
+                }
+              }
+            },
+            {
+              text:    "CLOSE",
+              class:   'save secondary',
+              onclick: onModalClose
+            }
+          ];
+        }
+      });
+      modal.render();
+    };
+
+  },
+
+  view(vnode) {
+    const pipeline          = vnode.attrs.pipeline;
+    const operationMessages = vnode.attrs.operationMessages;
+
+    let pausedMessage, pauseUnpauseClass, onPauseUnpauseClick;
+    let pausedTitlenLabel, playTitlenLabel, playWithOptionsTitlenLabel;
+    if (pipeline.isPaused) {
+      pausedTitlenLabel          = "Pipeline Paused";
+      playTitlenLabel            = "Trigger Pipeline Disabled";
+      playWithOptionsTitlenLabel = "Trigger with Options Disabled";
+      pauseUnpauseClass          = `pipeline_btn unpause ${(pipeline.canPause) ? '' : 'disabled'}`;
+      pausedMessage              = `Paused by ${pipeline.pausedBy} (${pipeline.pausedCause || ''})`;
+      onPauseUnpauseClick        = (pipeline.canPause) && vnode.state.unpause.bind(vnode.state, pipeline);
+    } else {
+      pauseUnpauseClass          = `pipeline_btn pause ${(pipeline.canPause) ? '' : 'disabled'}`;
+      onPauseUnpauseClick        = (pipeline.canPause) && vnode.state.showPausePopup.bind(vnode.state, pipeline);
+      pausedTitlenLabel          = "Pause Pipeline";
+      playTitlenLabel            = "Trigger Pipeline";
+      playWithOptionsTitlenLabel = "Trigger with Options";
+    }
+
+
+    let flashMessage;
+    const flash = operationMessages.get(pipeline.name);
+    if (flash) {
+      flashMessage = (<div class={`pipeline_message ${flash.type}`}><p>{flash.message}</p></div>);
+    }
+    const triggerButtonsTooltipText = pipeline.getDisabledTooltipText();
+    const pauseTooltipText          = pipeline.getPauseDisabledTooltipText();
+
+    let pipelinePauseMessage;
+    if (pipeline.isPaused) {
+      const pausedAtLocalTime  = TimeFormatter.format(pipeline.pausedAt);
+      const pausedAtServerTime = TimeFormatter.formatInServerTime(pipeline.pausedAt);
+      pipelinePauseMessage = (<div className="pipeline_pause-message"><div>{pausedMessage}</div><div title={pausedAtServerTime}>on {pausedAtLocalTime}</div></div>);
+    }
+
+    return (
+      <div>
+        {flashMessage}
+        <ul className="pipeline_operations">
+          <li>
+            <f.button onclick={!pipeline.triggerDisabled() && vnode.state.trigger.bind(vnode.state, pipeline)}
+                      class={`pipeline_btn play ${(pipeline.triggerDisabled() ? 'disabled' : '')}`}
+                      tooltipText={triggerButtonsTooltipText} aria-label={playTitlenLabel} title={playTitlenLabel}/>
+          </li>
+          <li>
+            <f.button
+              onclick={!pipeline.triggerDisabled() && vnode.state.showTriggerWithOptionsPopup.bind(vnode.state, pipeline)}
+              class={`pipeline_btn play_with_options ${(pipeline.triggerDisabled() ? 'disabled' : '')}`}
+              tooltipText={triggerButtonsTooltipText} aria-label={playWithOptionsTitlenLabel}
+              title={playWithOptionsTitlenLabel}/>
+          </li>
+          <li>
+            <f.button onclick={onPauseUnpauseClick} class={pauseUnpauseClass} tooltipText={pauseTooltipText}
+                      aria-label={pausedTitlenLabel} title={pausedTitlenLabel}/>
+          </li>
+        </ul>
+        <a href={pipeline.historyPath} class="pipeline_history">History</a>
+        {pipelinePauseMessage}
+      </div>
+    );
+  }
+};
+
+module.exports = PipelineOperationsWidget;

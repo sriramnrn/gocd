@@ -1,0 +1,68 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import "../../global/common";
+
+$header-font-size: 17px;
+$header-font-weight: 600;
+$main-nav-height: 40px;
+$page-header-height: 50px;
+$page-item-padding: 30px;
+
+.page-header {
+  width:           100%;
+  position:        fixed;
+  display:         flex;
+  left:            0;
+  right:           0;
+  justify-content: space-between;
+  align-content:   center;
+  align-items:     center;
+  box-sizing:      border-box;
+  background:      $page-header-bg;
+  top:             $main-nav-height;
+  height:          $page-header-height;
+  padding-left:    $page-item-padding;
+  padding-right:   $page-item-padding;
+  z-index:         map_get($zindex, 'page-header');
+  box-shadow:      0 0 10px $box-shadow-color;
+}
+
+.section-name {
+  display:     inline-block;
+  color:       $go-primary;
+  font-size:   $header-font-size;
+  font-weight: $header-font-weight;
+  margin:      0;
+  &:after {
+    content: "|";
+    color:   $line-color;
+    margin:  0 10px;
+
+  }
+}
+
+.title {
+  display:     inline-block;
+  color:       $text-color;
+  font-size:   $header-font-size;
+  font-weight: $header-font-weight;
+  margin:      0;
+}
+
+.page_title {
+  display:       flex;
+  align-content: center;
+}

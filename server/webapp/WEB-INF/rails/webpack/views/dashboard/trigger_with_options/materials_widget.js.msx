@@ -1,0 +1,83 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+const m = require('mithril');
+const f = require("helpers/form_helper");
+const _ = require('lodash');
+
+const MaterialInfoWidget = require('views/dashboard/trigger_with_options/material_info_widget');
+
+const MaterialsForTriggerWidget = {
+  oninit(vnode) {
+    const self = vnode.state;
+
+    self.activeClassForMaterial = (materialName) => {
+      return vnode.attrs.vm().isMaterialSelected(materialName) ? 'active' : '';
+    };
+
+    self.shouldMaterialContentBeVisible = (materialName) => {
+      return vnode.attrs.vm().isMaterialSelected(materialName);
+    };
+  },
+
+  view(vnode) {
+    const self = vnode.state;
+    const vm   = vnode.attrs.vm();
+
+    const materialHeadings = _.map(vnode.attrs.materials, (material) => {
+      const name = material.name;
+      let errorIcon;
+      if (material.error()) {
+        errorIcon = (<span class="error-icon"/>);
+      }
+      return (
+        <li class={self.activeClassForMaterial(name)}
+            onclick={vm.selectMaterial.bind(vm, name)}>
+          <span class="material-name">{material.name}</span>
+          <span class="latest-revision">{material.revision.revision || "latest"}</span>
+          {errorIcon}
+        </li>
+      );
+    });
+
+    const materialThatShouldBeVisible = _.find(vnode.attrs.materials, (material) => {
+      return self.shouldMaterialContentBeVisible(material.name);
+    });
+
+    let errorSection;
+    if (materialThatShouldBeVisible.error()) {
+      errorSection = (<div class="material_info-error"><f.alert>
+        {materialThatShouldBeVisible.error()}
+      </f.alert></div>);
+    }
+    return (
+      <div class="v-tab">
+        <ul class="v-tab_tab-head">
+          {materialHeadings}
+        </ul>
+
+        <div class="v-tab_container">
+          {errorSection}
+            <MaterialInfoWidget key={materialThatShouldBeVisible.name}
+                                material={materialThatShouldBeVisible}/>
+        </div>
+      </div>);
+  }
+};
+
+module.exports = MaterialsForTriggerWidget;
+

@@ -1,0 +1,90 @@
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.thoughtworks.go.agent.launcher;
+
+import com.thoughtworks.go.agent.ServerUrlGenerator;
+import com.thoughtworks.go.agent.common.util.Downloader;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.output.NullOutputStream;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+
+import static org.apache.commons.codec.binary.Hex.encodeHexString;
+
+public enum DownloadableFile {
+    AGENT("admin/agent", Downloader.AGENT_BINARY),
+    TFS_IMPL("admin/tfs-impl.jar", Downloader.TFS_IMPL),
+    LAUNCHER("admin/agent-launcher.jar", Downloader.AGENT_LAUNCHER),
+    AGENT_PLUGINS("admin/agent-plugins.zip", Downloader.AGENT_PLUGINS);
+
+    private final String subPath;
+    private final String localFileName;
+
+    DownloadableFile(String subPath, String localFileName) {
+        this.subPath = subPath;
+        this.localFileName = localFileName;
+    }
+
+    public String url(ServerUrlGenerator urlGenerator) {
+        return urlGenerator.serverUrlFor(subPath);
+    }
+
+    public String validatedUrl(ServerUrlGenerator urlGenerator) {
+        String url = url(urlGenerator);
+        try {
+            new URL(url);
+        } catch (MalformedURLException mue) {
+            throw new RuntimeException(
+                    "URL you provided to access Go Server: " + url(urlGenerator) + " is not valid");
+        }
+        return url;
+    }
+
+    @Override
+    public String toString() {
+        return subPath;
+    }
+
+    protected static boolean matchChecksum(File localFile, String expectedSignature) {
+        try (FileInputStream input = new FileInputStream(localFile)) {
+            MessageDigest digester = MessageDigest.getInstance("MD5");
+            try (DigestInputStream digest = new DigestInputStream(input, digester)) {
+                IOUtils.copy(digest, new NullOutputStream());
+            }
+            return expectedSignature.equalsIgnoreCase(encodeHexString(digester.digest()));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean isChecksumEquals(String expectedSignature) {
+        return matchChecksum(getLocalFile(), expectedSignature);
+    }
+
+    public boolean doesNotExist() {
+        return !new File(localFileName).exists();
+    }
+
+    public File getLocalFile() {
+        return new File(localFileName);
+    }
+}

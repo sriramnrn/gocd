@@ -1,0 +1,114 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m = require('mithril');
+const _ = require('lodash');
+
+const Plain = {
+  view(vnode) {
+    return (
+      <div class="environment-variables-tab-content">
+        <p class="small-txt">Override environment and pipeline level variables</p>
+        <dl class="environment-variables plain key-value-pair">
+          {
+            _.map(vnode.attrs.variables, (variable) => {
+              const hasChanged = variable.isDirtyValue();
+              let mayBeOverridenText;
+              if (hasChanged) {
+                mayBeOverridenText = (
+                  <div class="overridden-message">
+                    <label>The value is overridden. Default value :</label>
+                    <p>{variable.getOriginalValue()}</p>
+                  </div>);
+              }
+
+              return (
+                <span>
+                    <dt class="name">{variable.name()}</dt>
+                    <dd class="value">
+                      <input class="small"
+                             type="text"
+                             value={variable.value()}
+                             oninput={m.withAttr('value', variable.value)}/>
+                      {mayBeOverridenText}
+                    </dd>
+                  </span>
+              );
+            })
+          }
+        </dl>
+      </div>
+    );
+  }
+};
+
+const Secure = {
+
+  oninit(vnode) {
+    vnode.state.override = (variable) => {
+      variable.editValue();
+      variable.value('');
+    };
+
+    vnode.state.reset = (variable) => {
+      variable.resetToOriginalValue();
+      variable.becomeSecureValue();
+    };
+  },
+
+  view(vnode) {
+    const variables = vnode.attrs.variables;
+
+    return (
+      <div class="environment-variables-tab-content">
+        <p class="small-txt">Override secure environment and pipeline level variables</p>
+        <dl class="environment-variables secure key-value-pair">
+          {
+            _.map(variables, (variable) => {
+              const isEditing = variable.isEditingValue();
+              let overrideOrResetBtn;
+              if (isEditing) {
+                overrideOrResetBtn = (
+                  <a class="reset" onclick={vnode.state.reset.bind(vnode.state, variable)}>Reset</a>);
+              } else {
+                overrideOrResetBtn = (<a class="override"
+                                         onclick={vnode.state.override.bind(vnode.state, variable)}>Override</a>);
+              }
+
+              return (
+                <span>
+                  <dt class="name">{variable.name()}</dt>
+                  <dd class="value">
+                    <input class="small"
+                           type="password"
+                           value={variable.isEditingValue() ? variable.value() : '*****'}
+                           oninput={m.withAttr('value', variable.value)}
+                           disabled={!variable.isEditingValue()}/>
+                    {overrideOrResetBtn}
+                  </dd>
+                </span>
+              );
+            })
+          }
+        </dl>
+      </div>
+    );
+  }
+};
+
+module.exports = {
+  Plain, Secure
+};

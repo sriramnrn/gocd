@@ -25,12 +25,12 @@
     #end
 #end
 <div id="build_history_holder" class="sidebar-container">
-    <h4 class="entity_title">Job History</h4>
+    <h4 class="entity_title dropdown-arrow-icon" data-toggle='dropdown'>Job History</h4>
     <div id="buildlist-container" class="round-content">
         #if($presenter.recent25.size() == 0)
             <p class="text-only">No jobs found.</p>
         #end
-        <ul class="buildlist">
+        <ul class="buildlist dropdown-menu">
             #foreach( $listPresenter in $presenter.recent25 )
             <li id="build_list_${velocityCount}" #if($listPresenter.isSame($presenter.id)) class="current" #end >
                 <a href="$req.getContextPath()/tab/build/detail/${listPresenter.buildLocator}">
@@ -40,7 +40,8 @@
                     <div class="color_code_small"></div>
                     #end
                 <strong>${listPresenter.buildLocatorForDisplay}</strong>
-                <div class="time_ago">${listPresenter.humanReadableScheduledDate}</div>
+                <div class="time_ago" data="${listPresenter.scheduledTime}"></div>
+
                 </a>
                 <!-- should be ${listPresenter.tabToShow} -->
             </li>
@@ -51,5 +52,14 @@
     #foreach( $listPresenter in $presenter.recent25 )
         json_to_css.update_build_list(eval(${listPresenter.toJsonString()}), ${velocityCount}, "$req.getContextPath()/$concatenatedStageBarCancelledIconFilePath");
     #end
+
+      jQuery(function() {
+          jQuery(".buildlist .time_ago").each(function(idx, timeSpan) {
+            var timestamp = parseInt(jQuery(timeSpan).attr("data"));
+            if (isNaN(timestamp)) return;
+            var time = new Date(timestamp);
+            jQuery(timeSpan).text(moment(time).format('DD MMM YYYY [at] HH:mm:ss [Local Time]'));
+          });
+        });
     </script>
 </div>

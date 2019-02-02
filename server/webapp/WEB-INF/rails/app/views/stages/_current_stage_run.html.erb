@@ -1,0 +1,5 @@
+<% if @stage.getTotalRuns() > 1 %>
+    <a href="#" id="show_other_stage_runs"><%= @stage.getStageCounter() %> of <%= @stage.getTotalRuns() %></a>
+<% else %>
+    <span><%= @stage.getStageCounter() %> of <%= @stage.getTotalRuns() %></span>
+<% end %>

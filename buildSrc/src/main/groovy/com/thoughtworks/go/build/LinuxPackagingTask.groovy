@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.thoughtworks.go.build;
+package com.thoughtworks.go.build
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.Input
@@ -35,12 +35,18 @@ public abstract class LinuxPackagingTask extends DefaultTask {
   @Input
   String distVersion
 
+  @Input
+  void setFiles(files) {
+    this.files = files
+    files.each { fileName, permissions ->
+      inputs.files(permissions.source)
+    }
+  }
 
   @OutputFile
   abstract public File getOutputFile()
 
   LinuxPackagingTask() {
-    outputs.upToDateWhen { false }
   }
 
   @TaskAction
@@ -70,7 +76,7 @@ public abstract class LinuxPackagingTask extends DefaultTask {
     cmd += ['--category', 'Development/Build Tools']
     cmd += ['--architecture', 'all']
     cmd += ['--maintainer', 'ThoughtWorks, Inc.']
-    cmd += ['--url', 'https://go.cd']
+    cmd += ['--url', 'https://gocd.org']
     cmd += ['--before-install', project.file('linux/shared/before-install.sh.erb')]
     cmd += ['--before-upgrade', project.file("linux/${packageType()}/before-upgrade.sh.erb")]
     cmd += ['--after-upgrade', project.file("linux/${packageType()}/after-upgrade.sh.erb")]
@@ -122,16 +128,9 @@ public abstract class LinuxPackagingTask extends DefaultTask {
       project.copy {
         from permissions.source
         into project.file("${buildRoot()}/${new File(fileName).parentFile}")
-        rename new File(permissions.source).name, new File(fileName).name
+        rename project.file(permissions.source).name, new File(fileName).name
       }
     }
-
-    File propertiesFile = project.fileTree(buildRoot()) { include("**/*/log4j.properties") }.files.first()
-
-    def text = propertiesFile.getText().replaceAll(/\.File=(.*)\.log/, ".File=/var/log/${packageName}/\$1.log")
-
-    propertiesFile.write(text)
-
   }
 
 }

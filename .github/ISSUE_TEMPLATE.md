@@ -2,10 +2,12 @@
 
 <!--- Please specify the issue type to help us categorize the issue, mention any one of the below types -->
 
+- Security issue? [**DO NOT** report it here. Use [hackerone](https://hackerone.com/gocd) or send a mail to support@thoughtworks.com]
 - Bug Report
 - Feature proposal
 - Feature enhancement
 - Documentation Report
+- Question? [**DO NOT** ask it here. Ask in the [mailing list](https://groups.google.com/forum/#!forum/go-cd)].
 
 ##### Summary
 
@@ -15,7 +17,7 @@
 
 <!--- 
 Describe the environment in which you encountered this issue.
-Details of the environment GoCD is running in can be fetched from the GoCD support api - http://<go-server-host>/api/go/support.
+Details of the environment GoCD is running in can be fetched from the GoCD support api - http://<go-server-host>/go/api/support.
 If you are pasting plain text, please surround it with 3 backticks on each side
 
 ```plain
@@ -29,8 +31,8 @@ to prevent formatting
 <!--- We recommend providing the for us to reproduce the issue quicker -->
 
 * Go Version: `Available in the footer`
-* JAVA Version: `Available from http://<go-server-host>/api/go/about`
-* OS: `Available from http://<go-server-host>/api/go/about`
+* JAVA Version: `Available from http://<go-server-host>/go/about`
+* OS: `Available from http://<go-server-host>/go/about`
 * Browser vendor and version (if relevant): `Hopefully not Internet Explorer 7 :)`
 
 ###### Additional Environment Details

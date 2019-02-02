@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2018 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 package com.thoughtworks.go.build
 
+import de.undercouch.gradle.tasks.download.DownloadAction
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.Task
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
-import org.gradle.api.tasks.ParallelizableTask
 
-@ParallelizableTask
 class WindowsPackagingTask extends DefaultTask {
   @Input
   String packageName
@@ -35,7 +35,7 @@ class WindowsPackagingTask extends DefaultTask {
 
   @OutputFile
   public File getOutputFile() {
-    project.file("${project.convention.plugins.get("base").distsDir}/win/${packageName}-${version}-${distVersion}.exe")
+    project.file("${project.convention.plugins.get("base").distsDir}/win/${packageName}-${version}-${distVersion}-jre-${flavour()}-setup.exe")
   }
 
   WindowsPackagingTask() {
@@ -44,8 +44,12 @@ class WindowsPackagingTask extends DefaultTask {
     buildPackage()
   }
 
+  def winRootDir() {
+    project.file("${project.buildDir}/${packageName}/win")
+  }
+
   def buildRoot() {
-    project.file("${project.buildDir}/${packageName}/win/BUILD_ROOT")
+    project.file("${winRootDir()}/BUILD_ROOT")
   }
 
   def versionedDir() {
@@ -58,13 +62,28 @@ class WindowsPackagingTask extends DefaultTask {
       buildRoot().mkdirs()
       project.convention.plugins.get("base").distsDir.mkdirs()
 
-      project.exec {
-        commandLine "bash", "-c", "set -o pipefail; curl --silent --fail ${jreLocation()} | tar -zxf - -C ${buildRoot()}"
-        workingDir buildRoot()
+      File jreDownloadDir = project.file("${winRootDir()}/jre-download")
 
-        standardOutput = System.out
-        errorOutput = System.err
+      jreDownloadDir.deleteDir()
+      jreDownloadDir.mkdirs()
+
+      def downloadAction = new DownloadAction(project)
+      downloadAction.src(jreLocation())
+      downloadAction.dest(jreDownloadDir)
+      downloadAction.execute()
+
+      project.copy {
+        from project.zipTree(project.fileTree(jreDownloadDir).singleFile)
+        into buildRoot()
+
+        // exclude jdk specific stuff
+        exclude 'jdk*/lib/src.zip'
+        exclude 'jdk*/include/**/*.*'
+        exclude 'jdk*/jmods/**/*.*'
+        includeEmptyDirs = false
       }
+
+      jreDownloadDir.deleteDir()
     }
 
     doLast {
@@ -73,18 +92,25 @@ class WindowsPackagingTask extends DefaultTask {
   }
 
   String jreLocation() {
-    if (!System.getenv('WINDOWS_JRE_URL')) {
-      throw new RuntimeException("Please specify environment variable WINDOWS_JRE_URL")
+    if (specifiedJreLocation() != null) {
+      specifiedJreLocation()
+    } else {
+      throw new GradleException("Please specify environment variable WINDOWS_${flavour().toUpperCase()}_JDK_URL to point to a windows JDK location.")
     }
-
-    System.getenv('WINDOWS_JRE_URL')
   }
 
+  def specifiedJreLocation() {
+    System.getenv("WINDOWS_${flavour().toUpperCase()}_JDK_URL")
+  }
+
+  def flavour() {
+    "64bit"
+  }
 
   def buildPackage() {
     doLast {
       def names = []
-      buildRoot().eachDirMatch(~/jre.*/, { names << it })
+      buildRoot().eachDirMatch(~/jdk.*/, { names << it })
       def jreDir = names.first()
 
       def env = [
@@ -94,11 +120,12 @@ class WindowsPackagingTask extends DefaultTask {
           'MODULE'           : packageName.replaceAll(/^go-/, ''),
           'GO_ICON'          : project.file('windows-shared/gocd.ico').absolutePath,
           'VERSION'          : "${version}-${distVersion}",
-          'REGVER'           : "${version}${distVersion.padRight(5, '0')}".replaceAll(/\./, ''),
+          'REGVER'           : "${version.split(/\./).collect{it.padLeft(2, '0')}.join()}${distVersion.padRight(5, '0')}",
           'JAVA'             : 'jre',
           'JAVASRC'          : jreDir,
           'DISABLE_LOGGING'  : System.getenv('DISABLE_WIN_INSTALLER_LOGGING') ?: false,
-          'OUTDIR'           : "${project.convention.plugins.get("base").distsDir}/win"
+          'OUTFILE'           : getOutputFile(),
+          'FLAVOUR'           : "${flavour()}"
       ]
 
       project.exec {

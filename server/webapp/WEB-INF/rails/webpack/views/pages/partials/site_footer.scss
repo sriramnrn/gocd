@@ -1,0 +1,129 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import "../../global/common";
+
+$maintenance-mode-banner-height: 54px;
+$maintenance-mode-banner-message-font-size: 17px;
+
+.footer-warning-banner {
+  position:       fixed;
+  background:     $warning;
+  color:          $warning-txt;
+  width:          100%;
+  bottom:         11px;
+  left:           0;
+  height:         $maintenance-mode-banner-height;
+  line-height:    $maintenance-mode-banner-height;
+  text-align:     center;
+  vertical-align: middle;
+  font-size:      $maintenance-mode-banner-message-font-size;
+}
+
+.footer {
+  background:      $footer-bg;
+  padding:         10px;
+  display:         flex;
+  flex-direction:  column;
+  justify-content: space-between;
+  line-height:     19px;
+  @media(min-width: $screen-md) {
+    flex-direction: row;
+  }
+
+}
+
+.left {
+  padding:    10px 20px;
+  text-align: center;
+  @media(min-width: $screen-md) {
+    width:      60%;
+    text-align: left;
+  }
+  @media(min-width: $screen-lg) {
+    width: 70%;
+  }
+}
+
+.content {
+  word-break:  break-all;
+  font-size:   12px;
+  margin:      0;
+  line-height: 19px;
+
+  a {
+    color: $link-color;
+  }
+
+}
+
+.right {
+  padding:         10px 20px;
+  display:         flex;
+  justify-content: center;
+  @media(min-width: $screen-md) {
+    width:           40%;
+    justify-content: flex-end;
+  }
+  @media(min-width: $screen-lg) {
+    width: 30%;
+  }
+}
+
+.gocd-version {
+  display: block;
+}
+
+.social a {
+  display:         inline-block;
+  text-decoration: none;
+  margin:          0 3px;
+
+  @mixin footer-icon($icon) {
+    @include icon-before($type: $icon, $color: $icon-color, $size: 16px, $line-height: 1.5rem);
+  }
+
+  &.twitter {
+    @include footer-icon($icon: $fa-var-twitter);
+  }
+
+  &.github {
+    @include footer-icon($icon: $fa-var-github);
+  }
+
+  &.forums {
+    @include footer-icon($icon: $fa-var-comment);
+  }
+
+  &.plugins {
+    @include footer-icon($icon: $fa-var-plug);
+  }
+
+  &.documentation {
+    @include footer-icon($icon: $fa-var-book);
+  }
+
+  &.cctray {
+    @include footer-icon($icon: $fa-var-feed);
+  }
+
+  &.api {
+    @include footer-icon($icon: $fa-var-code);
+  }
+
+  &.server-details {
+    @include footer-icon($icon: $fa-var-server);
+  }
+}

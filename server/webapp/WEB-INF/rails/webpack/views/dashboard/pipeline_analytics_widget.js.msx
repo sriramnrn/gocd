@@ -1,0 +1,58 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m = require('mithril');
+
+const Interactions          = require("models/shared/analytics_interaction_manager");
+const Models                = Interactions.ensure().ns("PipelineMetrics");
+const init                  = require("rails-shared/plugin-endpoint").init;
+
+const Modal                 = require("views/shared/new_modal");
+const AnalyticsiFrameWidget = require("views/shared/analytics_iframe_widget");
+const AnalyticsEndpoint     = require("rails-shared/plugin-endpoint");
+
+function createModal(pluginId, metricId, pipeline) {
+  const uid = Models.uid(0, pluginId, "pipeline", metricId),
+      model = Models.modelFor(uid),
+     params = { pipeline_name: pipeline.name }; // eslint-disable-line camelcase
+
+  model.url(Models.toUrl(uid, params));
+
+  AnalyticsEndpoint.ensure("v1");
+
+  const modal = new Modal({
+    size:    "analytics-modal",
+    title:   `Analytics for pipeline: ${pipeline.name}`,
+    body:    () => (m(AnalyticsiFrameWidget, {model, uid, title: "Pipeline Build Time", pluginId, init})),
+    onclose: () => modal.destroy(),
+    buttons: []
+  });
+
+  modal.render();
+}
+
+const PipelineAnalyticsWidget = {
+  view(vnode) {
+    return m("a", {
+      class: "pipeline-analytics",
+      onclick() {
+        createModal(vnode.attrs.pluginId, vnode.attrs.metricId, vnode.attrs.pipeline);
+      }
+    });
+  }
+};
+
+module.exports = PipelineAnalyticsWidget;

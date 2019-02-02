@@ -1,0 +1,95 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m                      = require('mithril');
+const _                      = require('lodash');
+const TimeFormatter          = require('helpers/time_formatter');
+const StagesInstanceWidget   = require('views/dashboard/stages_instance_widget');
+const MaterialRevisionWidget = require('views/dashboard/trigger_with_options/material_revision_widget');
+
+const PipelineInstanceWidget = {
+  oninit(vnode) {
+    this.toggleDropdown = function (e) {
+      vnode.attrs.buildCause(undefined);
+      vnode.attrs.instance.getBuildCause().then(vnode.attrs.buildCause);
+      vnode.attrs.dropdown.show(vnode.attrs.pipelineName, vnode.attrs.instance.counter);
+      e.stopPropagation();
+    };
+
+    this.preventPropagation = function (e) {
+      e.stopPropagation();
+    };
+  },
+  onupdate(vnode) {
+    const widthOfWindow           = window.innerWidth;
+    const popup                   = vnode.dom.querySelector('.material_changes');
+    const rightCoordinateOfWidget = popup ? popup.getBoundingClientRect().right : 0;
+    if (rightCoordinateOfWidget > widthOfWindow) {
+      popup.style.right = '0px';
+    }
+  },
+
+  view: (vnode) => {
+    const instance        = vnode.attrs.instance;
+    const instanceCounter = instance.counter;
+    const dropdown        = vnode.attrs.dropdown;
+    const pipelineName    = vnode.attrs.pipelineName;
+
+    const scheduledAtLocalTime  = `on ${TimeFormatter.format(instance.scheduledAt)}`;
+    const scheduledAtServerTime = TimeFormatter.formatInServerTime(instance.scheduledAt);
+
+    let dropdownWidget;
+    if (dropdown.isOpen(pipelineName, instanceCounter)) {
+      const buildCause = vnode.attrs.buildCause();
+
+      let buildCauseListOrSpinner;
+      if (buildCause) {
+        buildCauseListOrSpinner = _.map(buildCause, (revision) => {
+          return (<MaterialRevisionWidget revision={revision} trackingTool={vnode.attrs.trackingTool}/>);
+        });
+      } else {
+        buildCauseListOrSpinner = (<div class="page-spinner small"></div>);
+      }
+
+      dropdownWidget = (
+        <div class="material_changes" onclick={vnode.state.preventPropagation.bind(vnode.state)}>
+          {buildCauseListOrSpinner}
+        </div>
+      );
+    }
+
+    return (
+      <div class="pipeline_instance">
+        <label class="pipeline_instance-label">Instance: {instance.label}</label>
+        <div class="more_info">
+          <ul class="info">
+            <li><a href={instance.comparePath}>Compare</a></li>
+            <li><a onclick={vnode.state.toggleDropdown.bind(vnode)} aria-label="Changes" title="Changes"><span class="changes">Changes</span></a></li>
+            <li><a href={instance.vsmPath} title="Value Stream Map">VSM</a></li>
+          </ul>
+          {dropdownWidget}
+        </div>
+        <div class="pipeline_instance-details">
+          <div>{instance.triggeredBy}</div>
+          <div title={scheduledAtServerTime}>{scheduledAtLocalTime}</div>
+        </div>
+        <StagesInstanceWidget stages={instance.stages}/>
+      </div>
+    );
+  }
+};
+
+module.exports = PipelineInstanceWidget;

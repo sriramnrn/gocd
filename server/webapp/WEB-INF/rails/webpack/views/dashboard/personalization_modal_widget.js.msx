@@ -1,0 +1,216 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m = require("mithril");
+const _ = require("lodash");
+const f = require("helpers/form_helper");
+
+import {SearchBox} from "views/components/search_box";
+import {docsUrl} from "gen/gocd_version";
+
+const FilterNameInput = {
+  oncreate(vnode) {
+    vnode.dom.querySelector(".view-name").focus();
+  },
+
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+    const submitOnEnter = (e) => {
+      if (isEnterKey(e)) {
+        e.stopPropagation();
+        e.preventDefault();
+        vnode.attrs.save();
+      }
+    };
+
+    return <section class="filter-name">
+      <f.input label={<span class="required">View name</span>} required={true} class="view-name" model={vm} attrName="name" onkeypress={submitOnEnter} />
+    </section>;
+  }
+};
+
+const BlanketSelector = {
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+    return <div class="blanket-selection">
+      <span class="blanket-selection_label">Select pipelines</span>
+      <div className="select-pipelines_buttons">
+        <f.button class={vm && vm.hasAllSelected() ? "btn_all active" : "btn_all"} disabled={!vm} onclick={vm && vm.selectAll}>All</f.button>
+        <f.button class={vm && vm.hasNoneSelected() ? "btn_none active" : "btn_none"}  disabled={!vm} onclick={vm && vm.selectNone}>None</f.button>
+      </div>
+    </div>;
+  }
+};
+
+const StageStateCriteria = {
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+
+    return <div class="stage-state-selector">
+      <div class="checkbox-help">
+        <f.checkbox name="state" model={vm} attrName="failing" label="Failed" labelClass="checkbox-help_label"/>
+        <Tooltip vm={vm} name="failed-pipelines">Show only pipelines whose last run stage has failed, among pipelines
+          selected for this view</Tooltip>
+      </div>
+      <div class="checkbox-help">
+        <f.checkbox name="state" model={vm} attrName="building" label="Building" labelClass="checkbox-help_label"/>
+        <Tooltip vm={vm} name="building-pipelines">Show only pipelines with jobs which are scheduled or building, among
+          pipelines chosen for this view</Tooltip>
+      </div>
+    </div>;
+  }
+};
+
+const PipelineSelectors = {
+  view(vnode) {
+    const pipelines = vnode.attrs.pipelines;
+    return m("ul", {class: "selected-pipelines_pipeline-list"},
+      _.map(pipelines, (p) => <li><f.checkbox model={p} attrName="selected" label={p.name} /></li>)
+    );
+  }
+};
+
+const PipelineGroupSelection = {
+  view(vnode) {
+    const vm = vnode.attrs.vm, name = vnode.attrs.name;
+    return <li class={`selected-pipelines_group ${(vm.expanded() ? "expanded" : "collapsed")}`}>
+      <i class="pipeline-list-toggle" onclick={() => vm.expanded(!vm.expanded())} />
+      <f.checkbox model={vm} attrName="selected" indeterminate={vm.indeterminate()} disabled={vm.disabled()} class="selected-pipelines_group_checkbox" label={name}/>
+      <PipelineSelectors pipelines={vm.pipelines} />
+    </li>;
+  }
+};
+
+const SelectedPipelineList = {
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+
+    if (!vm) { return <div class="loading-pipelines">
+        <i class="spinner"/> Loading pipelines&hellip;
+      </div>;
+    }
+
+    const groups = vnode.attrs.vm.displayedList();
+    return m("ul", {class: "selected-pipelines"},
+      _.map(groups, (groupVM, name) => {
+        return <PipelineGroupSelection vm={groupVM} name={name} />;
+      })
+    );
+  }
+};
+
+const AlertContainer = {
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+    if (vm.errorResponse()) {
+      return <div class="personalize-editor-error-response">
+        <i class="close-button" onclick={() => vm.errorResponse(null)}></i>
+        {vm.errorResponse()}
+      </div>;
+    }
+  }
+};
+
+const Tooltip = {
+  oninit(vnode) {
+    vnode.state.show = false;
+    vnode.state.offset = -22;
+  },
+
+  onupdate(vnode) {
+    const vm = vnode.attrs.vm;
+    const name = vnode.attrs.name;
+
+    if (vm.tooltipVisible(name)) {
+      const tx = rightEdge(vnode.dom.querySelector(".tooltip"));
+      const mx = rightEdge(parentModal(vnode.dom));
+
+      if (tx > mx) {
+        vnode.state.offset = mx - tx - 22;
+        setTimeout(m.redraw, 0);
+      }
+    }
+  },
+
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+    const name = vnode.attrs.name;
+
+    const toggle = (e) => { e.stopPropagation(); vm.tooltip(vm.tooltipVisible(name) ? null : name); };
+
+    return <span class="text-with-tooltip">
+      {vnode.attrs.text}
+      <span class={vm.tooltipVisible(name) ? "tooltip-container show" : "tooltip-container"}>
+        <i class="tooltip-hint" onclick={toggle} />
+        <div class="tooltip" style={`left: ${vnode.state.offset}px`} role="tooltip">{vnode.children}</div>
+      </span>
+    </span>;
+  }
+};
+
+const PersonalizationModalWidget = {
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+
+    return <div class="personalize-editor-controls">
+      <div className="view-top">
+        <AlertContainer vm={vm}/>
+        <FilterNameInput {...vnode.attrs} />
+        <div className="show-pipelines">
+          <span class="section-label">Show pipelines:</span>
+          <div class="checkbox-help">
+            <f.checkbox name="include-new-pipelines" model={vm} attrName="includeNewPipelines" label="New" labelClass="checkbox-help_label"/>
+            <Tooltip vm={vm} name="include-new-pipelines">
+              {"Include pipelines created since this view was last updated "}
+              <f.link
+                href={docsUrl("/navigation/pipelines_dashboard_page.html#personalize-pipelines-view")}
+                target="_blank">
+                More&hellip;
+              </f.link>
+            </Tooltip>
+          </div>
+          <StageStateCriteria vm={vm}/>
+        </div>
+      </div>
+
+      <div class="pipeline-search-container">
+        <BlanketSelector vm={vm.selectionVM()} />
+        <SearchBox containerClass="search-box-personalize-editor" disabled={!vm} model={vm.selectionVM()} attrName="searchTerm" placeholder="Search for a Pipeline" />
+      </div>
+
+      <div class={vm.hasSearch() ? "pipeline-selections pipeline-search-in-progress" : "pipeline-selections"}>
+        <SelectedPipelineList vm={vm.selectionVM()} />
+      </div>
+    </div>;
+  }
+};
+
+function isEnterKey(e) {
+  if (e.key && "Enter" === e.key) { return true; }
+  return 13 === (e.keyCode || e.which);
+}
+
+function parentModal(el) {
+  while(el && !el.classList.contains("overlay")) { el = el.parentNode; }
+  return el;
+}
+
+function rightEdge(el) {
+  const rect = el.getBoundingClientRect();
+  return rect.x + rect.width;
+}
+
+module.exports = PersonalizationModalWidget;

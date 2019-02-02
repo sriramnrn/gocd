@@ -1,0 +1,128 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import "../../global/common";
+
+
+.disabled {
+  cursor:         not-allowed;
+  pointer-events: none;
+}
+
+.btn-small {
+  padding:     0 10px;
+  height:      $form-element-height-small;
+  line-height: $form-element-height-small;
+  font-weight: 400;
+  font-size:   13px;
+}
+
+.btn-primary {
+  @include button($background-color: $btn-primary);
+}
+
+.btn-danger {
+  @include button($background-color: $btn-danger);
+}
+
+.btn-secondary {
+  @include button($background-color: $btn-secondary);
+}
+
+.btn-reset {
+  @include button($background-color: $btn-reset);
+}
+
+.btn-cancel {
+  @include button($background-color: transparent);
+  color: $text-color;
+}
+
+.btn-link {
+  @include button($background-color: transparent);
+  color:           $text-color;
+  padding:         0;
+  text-decoration: underline;
+  line-height:     normal;
+  height:          auto;
+}
+
+.btn-default {
+  @include button($background-color: $white);
+  color:  $text-color;
+  border: 1px solid $border-color;
+}
+
+.btn-dropdown {
+  @include icon-after($type: $fa-var-angle-down) {
+    margin-right: -5px;
+  }
+}
+
+.icon-add {
+  border: 10px solid $secondary-bg;
+}
+
+.icon-doc {
+  @include icon-before($type: $fa-var-file);
+  margin-right: 10px;
+
+  &:before {
+    margin: 5px 10px 5px -5px;
+  }
+}
+
+.icon-filter {
+  @include icon-before($type: $fa-var-filter);
+
+  &:before {
+    margin: 5px 10px 5px -5px;
+  }
+}
+
+.button + .button {
+  margin-left: 20px;
+}
+
+.button-group {
+  display: inline-flex;
+
+  .button + .button {
+    margin-left: 0;
+  }
+
+  > .button {
+    border:        none;
+    border-left:   1px solid $border-color;
+    border-radius: 0;
+
+    &:first-child {
+      border-left:   none;
+      border-radius: $global-border-radius 0 0 $global-border-radius;
+    }
+
+    &:last-child {
+      border-radius: 0 $global-border-radius $global-border-radius 0;
+    }
+  }
+
+  > .btn-dropdown-container {
+    border-left: 1px solid $line-color;
+    position: relative;
+    .btn-dropdown {
+      border-radius: 0 $global-border-radius $global-border-radius 0;
+    }
+  }
+}

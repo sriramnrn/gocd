@@ -1,0 +1,164 @@
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m = require('mithril');
+const f = require('helpers/form_helper');
+
+const _     = require('lodash');
+const $     = require('jquery');
+const uuid4 = require('uuid/v4');
+// instead of each modal being a top level component of its own (and causing a redraw of everything else on the page)
+// we manage a single component that's always mounted as soon as the page loads up, creating a new modal will create
+// a sub-component in the top level component.
+// see https://github.com/lhorie/mithril.js/issues/694
+const allModals      = {};
+const defaultOptions = {
+  title:   'This is the title',
+  body:    () => (<small>This is the body</small>),
+  size:    'tiny',
+  buttons: [
+    {
+      text:     'OK',
+      onclick:  _.noop(),
+      disabled: _.identity(false)
+    },
+  ],
+  onclose: _.noop()
+};
+
+const Modal = function (options) {
+  const self    = this;
+  const modalId = `modal-${uuid4()}`;
+  options       = _.assign({}, defaultOptions, options);
+
+  const $body = $('body');
+
+  const uuid = uuid4();
+
+  this.modalDialog = {
+    oninit(vnode) {
+      this.close = (onclose, destroy, e) => {
+        if (onclose) {
+          onclose(e);
+        }
+
+        if (!e.defaultPrevented) {
+          destroy();
+        }
+      };
+
+      this.handleEnterKey = (e) => {
+        if (e.key === "Enter") {
+          options.enterKeyCallback ? options.enterKeyCallback() : _.noop();
+        }
+      };
+
+      this.handleEscapeKey = () => {
+        $body.on(`keydown.${uuid}`, (e) => {
+          if (e.key === "Escape") {
+            vnode.state.close(options.onclose, self.destroy, e);
+          }
+        });
+      };
+
+      this.handleEscapeKey();
+    },
+
+    onremove() {
+      $body.off(`keydown.${uuid}`);
+    },
+
+    view(vnode) {
+      const buttons    = _.map(_.isFunction(options.buttons) ? options.buttons() : options.buttons, (button) => {
+        return (
+          <f.button disabled={button.disabled ? button.disabled() : false}
+                    onclick={button.onclick}
+                    class={button.class}>{button.text}</f.button>
+        );
+      });
+      const buttonHtml = (<f.row class="modal-buttons" collapse> {buttons} </f.row>);
+      return (
+        <div class="reveal-overlay" style={{display: 'block'}} onkeydown={vnode.state.handleEnterKey}>
+          <div class={`reveal ${options.size ? options.size : ''}`}
+               style={{display: 'block'}}>
+
+            <div class="modal-header">
+              <h5 class="modal-title">{options.title}</h5>
+              <button class="close-button"
+                      aria-label="Close modal"
+                      type="button"
+                      onclick={vnode.state.close.bind(vnode, options.onclose, self.destroy)}>
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+
+            <div class="modal-body">
+              {options.body()}
+            </div>
+
+            {buttons.length === 0 ? "" : buttonHtml}
+
+          </div>
+        </div>
+      );
+    }
+  };
+
+  this.render = function () {
+    allModals[modalId] = this;
+    $body.addClass("fixed");
+    m.redraw();
+  };
+
+  this.destroy = function () {
+    delete allModals[modalId];
+    $body.removeClass("fixed");
+    m.redraw();
+  };
+};
+
+$(() => {
+  const $body        = $('body');
+  const $modalParent = $('<div class="new-modal-container"/>').appendTo($body);
+
+  // so you can directly access the modals in tests via `$('.modal-parent').data('modal')`
+  $modalParent.data('modals', allModals);
+  const ModalDialogs = {
+    view() {
+      const sortedModalKeys = _.keysIn(allModals).sort();
+      return (
+        <div>
+          {_.map(sortedModalKeys, (key) => {
+            return m(allModals[key].modalDialog);
+          })}
+        </div>
+      );
+    }
+  };
+  m.mount($modalParent.get(0), ModalDialogs);
+});
+
+Modal.destroyAll = function () {
+  _.each(_.values(allModals), (modal) => {
+    modal.destroy();
+  });
+};
+
+Modal.count = function () {
+  return _.keys(allModals).length;
+};
+
+module.exports = Modal;

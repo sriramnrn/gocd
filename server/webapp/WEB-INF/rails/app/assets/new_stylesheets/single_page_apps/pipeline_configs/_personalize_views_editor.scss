@@ -1,0 +1,413 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+$personalize-modal-err-tooltip-bg: rgba($tooltip-background-color, 0.75);
+$view-top-bg: $section-bg;
+$icon-color: #647984;
+
+.overlay-personalize-editor {
+  width: 530px;
+  top:   10vh;
+
+  .is-invalid-label {
+    .form-error {
+      margin:      0;
+      text-align:  right;
+      white-space: normal;
+      flex-grow:   1;
+    }
+  }
+
+  .overlay-content {
+    height: 70vh;
+  }
+
+  .overlay-footer {
+    justify-content: flex-start;
+  }
+
+  .tooltip {
+    // scss-lint:disable ImportantRule
+    background:  $personalize-modal-err-tooltip-bg;
+    max-width:   unset !important;
+    top:         -$tooltip-pip-width;
+    transform:   translateY(-100%);
+    white-space: nowrap;
+
+    &:before {
+      @include css-triangle($tooltip-pip-width, $personalize-modal-err-tooltip-bg, down);
+
+      top:       100%;
+      left:      20px;
+      transform: unset;
+    }
+  }
+
+  .has-tip:hover + .tooltip {
+    // disabled buttons don't fire events, thus will not trigger tooltip
+    display: block !important; // scss-lint:disable ImportantRule
+  }
+}
+
+.overlay-delete-view {
+  width: 500px;
+
+  .overlay-content {
+    min-height: unset;
+
+    .personalization-view-name {
+      font-weight: 700;
+    }
+  }
+}
+
+.personalize-editor-error-response {
+  position:      fixed;
+  top:           53px;
+  left:          0;
+  right:         0;
+  padding:       20px;
+  padding-right: 40px;
+  background:    map-get($foundation-palette, alert);
+  color:         #fff;
+  font-weight:   600;
+  z-index:       100;
+
+  .close-button {
+    @include icon-before($type: close);
+
+    position: absolute;
+    right:    20px;
+    padding:  5px;
+    cursor:   pointer;
+  }
+}
+
+.view-top {
+  background: $view-top-bg;
+  margin:     -20px -30px 20px;
+  padding:    20px 30px;
+}
+
+.show-pipelines {
+  border:        1px solid $light-border;
+  background:    #fff;
+  display:       flex;
+  padding:       10px 20px;
+  border-radius: 3px;
+
+  input {
+    margin-bottom: 0;
+  }
+}
+
+.text-with-tooltip {
+  display: inline-block;
+
+  .tooltip {
+    @include unselectable;
+
+    display:     none;
+    width:       310px;
+    white-space: normal;
+  }
+
+  .tooltip-hint {
+    @include icon-before($type: question-circle);
+
+    vertical-align: middle;
+    margin:         0;
+
+    &:hover {
+      cursor: pointer;
+    }
+  }
+
+  .tooltip-container {
+    position: relative;
+
+    &.show {
+      .tooltip {
+        display: block;
+
+        &:before {
+          display: none;
+        }
+      }
+
+      .tooltip-hint {
+        &:after {
+          @include css-triangle($tooltip-pip-width, $personalize-modal-err-tooltip-bg, down);
+
+          position: absolute;
+          top:      -12px;
+        }
+      }
+    }
+  }
+}
+
+.section-label {
+  line-height:  25px;
+  margin-right: 20px;
+  white-space:  nowrap;
+}
+
+.search-pipelines {
+  margin-bottom: 10px;
+  border:        1px solid #d6e0e2;
+  background:    #fff;
+  height:        40px;
+}
+
+.search-box-personalize-editor {
+  display:   flex;
+  flex-grow: 1;
+}
+
+.filter-name {
+  border:        0;
+  padding:       0;
+  margin-bottom: 10px;
+
+  label {
+    display:         flex;
+    justify-content: space-between;
+    align-content:   center;
+    flex-wrap:       wrap;
+    align-items:     center;
+
+    span {
+      flex-shrink:  1;
+      white-space:  nowrap;
+      margin-right: 30px;
+    }
+  }
+}
+
+.view-name {
+  flex-grow:     1;
+  width:         75%;
+  margin-bottom: 0;
+  height:        40px;
+  border-color:  $light-border;
+  padding:       10px 20px;
+
+  &:focus {
+    background: #fff;
+  }
+}
+
+.stage-state-selector {
+  display: flex;
+
+  label {
+    margin-left: 25px;
+  }
+}
+
+.checkbox-help, .checkbox-help_label {
+  display:     flex;
+  align-items: center;
+}
+
+.pipeline-search-container {
+  display:       flex;
+  margin-bottom: 20px;
+}
+
+.blanket-selection {
+  padding-right: 22px;
+}
+
+.blanket-selection_label {
+  font-size:  13px;
+  margin-top: -2px;
+  display:    block;
+}
+
+.select-pipelines_buttons {
+  display:    flex;
+  margin-top: 2px;
+}
+
+.btn_all, .btn_none {
+  border:     1px solid $light-border;
+  background: #fff;
+  color:      #333;
+  padding:    3px 12px;
+  font-size:  12px;
+  margin:     0;
+
+  &:hover {
+    background: #fff;
+    color:      #333;
+  }
+
+  &:focus {
+    outline: 0;
+  }
+
+  &.active {
+    background:   $go-primary;
+    color:        #fff;
+    border-color: $go-primary;
+  }
+}
+
+.btn_all {
+  border-radius: $global-border-radius 0 0 $global-border-radius;
+}
+
+.btn_none {
+  border-radius: 0 $global-border-radius $global-border-radius 0;
+  margin-left:   -1px;
+}
+
+.pipeline-selections {
+  border:        1px solid $light-border;
+  padding:       20px;
+  border-radius: $global-border-radius;
+
+  &.pipeline-search-in-progress .selected-pipelines_group_checkbox {
+    display: none;
+  }
+
+  [type="checkbox"] {
+    margin-bottom: 0.75rem;
+  }
+
+  .loading-pipelines {
+    @include animation(fadeIn 0.2s ease-in);
+
+    text-align: center;
+    font-size:  200%;
+
+    .spinner {
+      @include icon-before($type: spinner, $margin: 0);
+
+      &:before {
+        @include animation(spin 2s linear infinite);
+      }
+    }
+  }
+
+  label {
+    display: inline-block;
+  }
+}
+
+.selected-pipelines {
+  list-style-type: none;
+  margin:          0;
+
+  > li > label {
+    font-weight: 600;
+  }
+}
+
+.selected-pipelines_group {
+  border-bottom: dashed 1px #ccc;
+  padding-left:  30px;
+  position:      relative;
+
+  &:last-of-type {
+    border: 0;
+  }
+
+  &.expanded {
+    .pipeline-list-toggle {
+      @include icon-before($type: chevron-down, $size: 12px);
+
+      &:before {
+        color: $icon-color;
+      }
+    }
+  }
+
+  &.collapsed {
+    .pipeline-list-toggle {
+      @include icon-before($type: chevron-right, $size: 12px, $color: $icon-color);
+
+      &:before {
+        color: $icon-color;
+      }
+    }
+
+    .selected-pipelines_pipeline-list {
+      display: none;
+    }
+  }
+}
+
+.selected-pipelines_pipeline-list {
+  list-style-type: none;
+  margin:          0;
+}
+
+.pipeline-list-toggle {
+  position: absolute;
+  left:     0;
+  top:      4px;
+  cursor:   pointer;
+}
+
+.overlay-footer {
+  @include clearfix;
+
+  display: block;
+}
+
+.btn-delete {
+  @include icon-before($type: trash, $margin: 0 10px 0 0, $progress-spinner: true);
+
+  float:      left;
+  background: #fff;
+  color:      #333;
+  border:     1px solid #e9edef;
+  transition: $transition;
+
+  &:before {
+    color: $icon-color;
+  }
+
+  &:hover {
+    transition:   $transition;
+    background:   #fff;
+    color:        #333;
+    border-color: darken(#e9edef, 10%);
+  }
+}
+
+.btn-save, .btn-cancel {
+  float: right;
+
+  ~ .tooltip {
+    left:  auto;
+    right: 0;
+
+    &:before {
+      left:  auto;
+      right: 20px;
+    }
+  }
+}
+
+.required:after {
+  content:      "*";
+  color:        #c00;
+  padding-left: 3px;
+}

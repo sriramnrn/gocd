@@ -15,7 +15,7 @@
  *************************GO-LICENSE-END***********************************#
 
 #set($_page_title="Current Activity")
-#set($extra_css_list = ['toolkit', 'pipeline-tab'])
+#set($extra_css_list = ['pipeline-tab'])
 #parse("shared/_header.vm")
 
 <textarea rows="0" cols="0" id="pipeline-list-template" style="display: none;">
@@ -36,15 +36,6 @@
         #set($show_action_bar_in_breadcrumbs = "pipeline/_pipeline_action_bar")
         #parse("shared/_breadcrumbs.vm")
         <!-- /breadcrumbs -->
-        
-        #parse("shared/_page_intro_top.vm")
-        <p>This view shows you the most recent build activities happening in each stage of every pipeline in Cruise.
-           A stage in a pipeline can only have one activity occurring at one time; as a result,
-            each stage in this view may be part of a different build label. Click the activity links to see all build activity in the stage or pipeline;
-            click the detail links to see all information available for the stage or job within a specific label.
-            <a class="more" target="_blank" title="Learn more from help documentation" href="http://www.go.cd/documentation/user/current/navigation/pipeline_activity_page.html">more...</a>
-        </p>
-        #parse("shared/_page_intro_bottom.vm")
 
         <!-- pipeline start -->
         <div id="build-pipelines" class="container-in-body">
@@ -64,12 +55,12 @@
     var pipelineActions = new PipelineActions();
     var stageActions = new StageActions();
     var pipelineSelector = new PipelineSelector();
-    var dashboard_periodical_executer = new DashboardPeriodicalExecuter('pipelineStatus.json');
+    var dashboard_periodical_executor = new DashboardPeriodicalExecutor('pipelineStatus.json');
 
     var pipelineObserver = new PipelineObserver('pipelines');
-    dashboard_periodical_executer.register(pipelineObserver);
+    dashboard_periodical_executor.register(pipelineObserver);
 
-    dashboard_periodical_executer.start();
+    dashboard_periodical_executor.start();
 </script>
 
 #parse("shared/_footer.vm")

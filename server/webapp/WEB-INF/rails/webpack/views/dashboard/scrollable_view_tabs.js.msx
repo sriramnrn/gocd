@@ -1,0 +1,111 @@
+/*
+ * Copyright 2018 ThoughtWorks, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+const m   = require("mithril");
+const $   = require("jquery");
+const raf = require("helpers/throttle-raf");
+
+const SortableViewTabs = require("views/dashboard/sortable_view_tabs");
+
+const ScrollableViewTabs = {
+  oncreate(vnode) {
+    const vm = vnode.attrs.vm;
+    const padding = 0;
+
+    if (!vnode.state.attached) {
+      window.addEventListener("resize", raf(() => {
+        const previous = vm.paged();
+        vm.paged(detectPaging(vnode, padding));
+
+        if (vm.paged() === !previous) { m.redraw(); }
+      }));
+    }
+
+    $(vnode.dom).on("click", ".page-prev,.page-next", (e) => {
+      if (vm.paged()) {
+        const scrollable = $(vnode.dom.querySelector(".dashboard-tabs-sortable"));
+        const pageSize = scrollable[0].clientWidth - padding;
+        const current = scrollable.scrollLeft(), max = scrollable[0].scrollWidth - pageSize;
+        const button = $(e.currentTarget);
+
+        if (button.hasClass("page-next")) {
+          if (current < max) {
+            scrollable.animate({scrollLeft: Math.min(current + pageSize, max)}, 250);
+          }
+        } else {
+          if (current > 0) {
+            scrollable.animate({scrollLeft: Math.max(0, current - pageSize)}, 250);
+          }
+        }
+      }
+    });
+
+    ensureCurrentTabInView(vnode.dom);
+
+    vm.onchange(m.redraw);
+    vm.onchange(() => ensureCurrentTabInView(vnode.dom));
+    vnode.state.attached = true;
+  },
+
+  onupdate(vnode) {
+    vnode.attrs.vm.paged(detectPaging(vnode, 0));
+  },
+
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+
+    return <div class={vm.paged() ? "dashboard-tabs-scrollable paged" : "dashboard-tabs-scrollable"}>
+      <button class="page-prev" title="scroll left"><i class="icon_page-prev"/></button>
+      <SortableViewTabs {...vnode.attrs} />
+      <button class="page-next" title="scroll right"><i class="icon_page-next"/></button>
+    </div>;
+  }
+};
+
+function detectPaging(vnode, padding) {
+  const toleranceForIE = 1;
+  return (vnode.dom.querySelector(".dashboard-tabs-sortable").scrollWidth - vnode.dom.clientWidth - padding) > toleranceForIE;
+}
+
+function ensureCurrentTabInView(viewable) {
+  const scrollable = $(viewable.querySelector(".dashboard-tabs-sortable"));
+  const tab = scrollable.find(".current");
+  const padding = (parseInt($(".dashboard-tabs").css("padding-left"), 10) || 0);
+
+  if (tab.length) {
+    const L = tab.position().left;
+    const R = L + tab.outerWidth(true);
+    const I = scrollable.outerWidth(true);
+    const offset = $(viewable.querySelector(".page-prev")).outerWidth(true) + padding;
+
+    // theoretically we should first test if tab.width() > viewable.width() before anything else,
+    // and then center the tab in the viewable area, but our CSS does not allow this situation to happen.
+
+    // tab is too far to the right
+    if (R > I) {
+      scrollable.animate({ scrollLeft: scrollable.scrollLeft() + R - I + offset }, 250);
+      return;
+    }
+
+    // tab is too far to the left
+    if (L < 0) {
+      scrollable.animate({ scrollLeft: scrollable.scrollLeft() + L - offset}, 250);
+      return;
+    }
+  }
+}
+
+module.exports = ScrollableViewTabs;

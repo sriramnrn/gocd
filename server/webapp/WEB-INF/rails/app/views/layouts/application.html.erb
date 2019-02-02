@@ -1,0 +1,24 @@
+<!DOCTYPE HTML>
+<html xmlns="http://www.w3.org/1999/xhtml" lang='en'>
+
+
+<head>
+  <%= render :partial => "shared/head" %>
+</head>
+<body id="<%= page_name %>" class="<%= page_name %>" <%= render "shared/body_data_attrs" %>>
+<div class="page-wrap">
+  <div id="body_bg">
+    <%= render :partial => "shared/header" %>
+    <div id='body_content'>
+      <div class="messaging_wrapper" id="messaging_wrapper">
+        <%= render :partial => "shared/flash_message" %>
+        <%= render :partial => "shared/config_save_actions", :locals => {:scope => {}} -%>
+      </div>
+      <%= render :partial => "shared/subheader" %>
+      <%= yield %>
+    </div>
+  </div>
+</div>
+<%= render :partial => 'navigation_elements/footer' %>
+</body>
+</html>

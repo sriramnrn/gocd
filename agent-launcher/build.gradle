@@ -1,7 +1,5 @@
-import com.thoughtworks.go.build.VerifyJarTask
-
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2018 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,31 +14,33 @@ import com.thoughtworks.go.build.VerifyJarTask
  * limitations under the License.
  */
 
+import com.thoughtworks.go.build.VerifyJarTask
+
 description = 'Agent Launcher Jar'
 
 dependencies {
   compile project(':agent-common')
-  testCompile project(':test-utils')
+  testCompileOnly group: 'junit', name: 'junit', version: project.versions.junit
+  testRuntimeOnly group: 'org.junit.vintage', name: 'junit-vintage-engine', version: project.versions.junit5
+  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: project.versions.junit5
+  testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: project.versions.junit5
+  testCompile group: 'org.mockito', name: 'mockito-core', version: project.versions.mockito
+  testCompile project(':test:test-utils')
 }
 
 jar {
   classifier 'classes'
 }
 
-task fatJar(type: Jar, dependsOn: [':agent-launcher:jar', ':agent-common:jar']) {
+task fatJar(type: Jar) {
+  finalizedBy 'verifyJar'
+  dependsOn jar
   manifest {
     attributes 'Go-Agent-Launcher-Class': 'com.thoughtworks.go.agent.launcher.AgentLauncherImpl'
     attributes 'Go-Agent-Launcher-Lib-Dir': 'libs'
   }
 
-  doFirst {
-    from(configurations.compile) { into "libs/" }
-    from(jar.archivePath) { into('libs/') }
-  }
-
-  doLast {
-    verifyJar.execute()
-  }
+  from(configurations.compile + jar.archivePath) { into "libs/" }
 }
 
 task verifyJar(type: VerifyJarTask) {
@@ -50,33 +50,19 @@ task verifyJar(type: VerifyJarTask) {
           "agent-common-${project.version}.jar",
           "agent-launcher-${project.version}-classes.jar",
           "base-${project.version}.jar",
-          "commons-codec-1.4.jar",
-          "commons-io-2.5.jar",
-          "commons-lang-2.6.jar",
-          "commons-logging-1.1.1.jar",
-          "fluent-hc-4.5.2.jar",
-          "httpclient-4.5.2.jar",
-          "httpcore-4.4.4.jar",
-          "jcommander-1.48.jar",
-          "joda-time-2.3.jar",
-          "log4j-1.2.17.jar",
+          "commons-io-${project.versions.commonsIO}.jar",
+          "commons-lang3-${project.versions.commonsLang3}.jar",
+          "commons-codec-${project.versions.commonsCodec}.jar",
+          "httpclient-${project.versions.apacheHttpComponents}.jar",
+          "httpcore-4.4.10.jar",
+          "jcl-over-slf4j-${project.versions.slf4j}.jar",
+          "jcommander-${project.versions.jcommander}.jar",
+          "joda-time-${project.versions.jodaTime}.jar",
+          "logback-classic-${project.versions.logback}.jar",
+          "logback-core-${project.versions.logback}.jar",
+          "slf4j-api-${project.versions.slf4j}.jar",
       ]
   ]
-}
-
-
-task prepare(dependsOn: [':test-agent:jar']) {
-  doFirst {
-    project.copy {
-      from { project(':test-agent').jar.archivePath }
-      into "testdata"
-      rename "(.*)-${project.version}.jar", '$1.jar'
-    }
-  }
-}
-
-test {
-  dependsOn prepare
 }
 
 artifacts {

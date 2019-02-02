@@ -1,0 +1,17 @@
+<% if @config_file_conflict -%>
+    <div id="config_save_actions" class="flash">
+        <button id="reload_config" class="reload_config primary">Reload</button>
+        <label class="inline">This will refresh the page and you will lose your changes on this page.</label>
+    </div>
+    <script type="text/javascript">
+        Util.on_load(function() {
+           jQuery("#reload_config").click(function() {
+               var location = "<%= request.referer -%>";
+               if (location.endsWith("#")) {
+                   location = location.substring(0, location.length - 1);
+               }
+               window.location.href = location;
+           });
+        });
+    </script>
+<% end -%>

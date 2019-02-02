@@ -1,0 +1,49 @@
+const m              = require("mithril");
+const _              = require("lodash");
+const f              = require("helpers/form_helper");
+const PipelineWidget = require("views/dashboard/pipeline_widget");
+
+const GroupHeading = {
+  view(vnode) {
+    const vm    = vnode.attrs.vm;
+    const paths = vm.routes();
+
+    return <div class="dashboard-group_title">
+      <f.link disabled={!vm.canAdminister} href={paths.show} class="dashboard-group_name"
+              aria-label={vm.label()}>{vm.name || "Pipelines not in any Environment"}</f.link>
+      {vm.name && <f.link class="edit_config dashboard-group_edit-config" disabled={!vm.canAdminister} href={paths.edit}
+                          tooltipText={vm.tooltipForEdit()} title={vm.titleForEdit()} aria-label={vm.ariaLabelForEdit()}/>}
+    </div>;
+  }
+};
+
+const Group = {
+  view(vnode) {
+    const vm = vnode.attrs.vm;
+    const resolver = vnode.attrs.resolver;
+    const pipelines = vm.resolvePipelines(resolver);
+
+    const sharedArgs = _.assign({}, vnode.attrs);
+    _.each(["vm", "resolver", "pipelines", "scheme"], (k) => delete sharedArgs[k]);
+
+    return <div class="dashboard-group" key={vm.name}>
+      <GroupHeading {...vnode.attrs} />
+      <ul class="dashboard-group_items">
+        {_.map(pipelines, (pipeline) => <PipelineWidget invalidateEtag={vnode.attrs.invalidateEtag} pipeline={pipeline} key={pipeline.name} {...sharedArgs} />)}
+      </ul>
+    </div>;
+  }
+};
+
+const DashboardGroupsWidget = {
+  view(vnode) {
+    const sharedArgs = _.assign({}, vnode.attrs);
+    delete sharedArgs.groups;
+
+    return _.map(vnode.attrs.groups, (group) => <Group vm={group}
+                                                       invalidateEtag={vnode.attrs.invalidateEtag}
+                                                       {...sharedArgs} />);
+  }
+};
+
+module.exports = DashboardGroupsWidget;

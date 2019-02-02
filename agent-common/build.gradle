@@ -18,20 +18,12 @@ description = 'GoCD Agent Common Utilities'
 
 dependencies {
   compile project(':base')
-  compile group: 'com.beust', name: 'jcommander', version: '1.48'
-  testCompile project(':test-utils')
-}
-
-task prepare(dependsOn: [':agent-launcher:fatJar', ':test-agent:jar']) {
-  doFirst {
-    project.copy {
-      from { project(':test-agent').jar.archivePath }
-      into "testdata"
-      rename "(.*)-${project.version}.jar", '$1.jar'
-    }
-  }
-}
-
-test {
-  dependsOn prepare
+  compile group: 'com.beust', name: 'jcommander', version: project.versions.jcommander
+  testCompile group: 'org.mockito', name: 'mockito-core', version: project.versions.mockito
+  testCompile group: 'org.hamcrest', name: 'hamcrest-library', version: project.versions.hamcrest
+  testCompile project(':test:test-utils')
+  testCompileOnly group: 'junit', name: 'junit', version: project.versions.junit
+  testRuntimeOnly group: 'org.junit.vintage', name: 'junit-vintage-engine', version: project.versions.junit5
+  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: project.versions.junit5
+  testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: project.versions.junit5
 }
