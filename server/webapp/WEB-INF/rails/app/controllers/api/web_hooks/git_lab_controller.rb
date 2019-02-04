@@ -18,7 +18,7 @@ module Api
   module WebHooks
     class GitLabController < WebHookController
       before_action :verify_content_origin
-      before_action :allow_only_push_event
+      before_action :allow_only_push_or_merge_events
       before_action :verify_payload
 
       protected
@@ -45,8 +45,8 @@ module Api
         payload['project']['path_with_namespace']
       end
 
-      def allow_only_push_event
-        unless request.headers['X-Gitlab-Event'] == 'Push Hook'
+      def allow_only_push_or_merge_events
+        unless ((request.headers['X-Gitlab-Event'] == 'Push Hook') || (request.headers['X-Gitlab-Event'] == 'Merge Request Hook'))
           render plain: "Ignoring event of type `#{request.headers['X-Gitlab-Event']}'", status: :accepted, layout: nil
         end
       end
@@ -64,6 +64,7 @@ module Api
       def payload
         if request.content_mime_type == :json
           JSON.parse(request.raw_post)
+          Rails.logger.warn(request.raw_post)
         end
       end
 
