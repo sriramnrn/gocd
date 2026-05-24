@@ -29,6 +29,7 @@ function getConfigOptions(argv: any, env: any): ConfigOptions {
   const assetsDir              = path.join(__dirname, "..");
   const railsRoot              = path.join(assetsDir, "..");
   const production             = argv.mode === "production";
+  const debug                  = env.debug === true || env.debug === "true";
   const watch                  = argv.watch;
   const singlePageAppModuleDir = path.join(assetsDir, "single_page_apps");
   const cacheDir               = path.join(railsRoot, "tmp");
@@ -38,6 +39,7 @@ function getConfigOptions(argv: any, env: any): ConfigOptions {
                                                                     `used-packages-${production ? "prod" : "dev"}.json`);
   return {
     production,
+    debug,
     watch,
     assetsDir,
     singlePageAppModuleDir,
@@ -67,8 +69,9 @@ function configuration(env: any, argv: any): webpack.Configuration {
       cacheDirectory: path.join(configOptions.cacheDir, "webpack-cache"),
     },
     bail: !argv.watch,
-    devtool: configOptions.production ? "source-map" : "eval-source-map",
+    devtool: configOptions.production || configOptions.debug ? "source-map" : "eval-source-map",
     optimization: configOptions.production ? {
+      minimize: !configOptions.debug,
       splitChunks: {
         cacheGroups: {
           vendor: {

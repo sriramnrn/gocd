@@ -195,6 +195,48 @@ def compileAssetsWebpackDev = tasks.register('compileAssetsWebpackDev', YarnRunT
   yarnCommand = ['webpack-dev', '--env', "outputDir=${destinationDir.toPath().toString()}", '--env', "licenseReportFile=${yarnLicenseReportFile}"]
 }
 
+def compileAssetsWebpackDebug = tasks.register('compileAssetsWebpackDebug', YarnRunTask) {
+  dependsOn yarnInstall, generateJSRoutes
+
+  def yarnLicenseReportFile = layout.buildDirectory.file("reports/yarn-license-debug/license-report.json").get().asFile
+  outputs.dir(yarnLicenseReportFile.parentFile)
+
+  source(fileTree(project.railsRoot) { include "eslint*.config.mjs" })
+  source("${project.railsRoot}/babel.config.json")
+  source("${project.railsRoot}/tsconfig.json")
+  source("${project.railsRoot}/.stylelintrc.yml")
+
+  source("${project.railsRoot}/webpack")
+  source("${project.railsRoot}/config")
+
+  workingDir = project.railsRoot
+  destinationDir = project.file("${project.railsRoot}/public/assets/webpack")
+  yarnCommand = ['webpack-debug', '--env', "outputDir=${destinationDir.toPath().toString()}", '--env', "licenseReportFile=${yarnLicenseReportFile}", '--env', 'debug=true']
+}
+
+def compileAssetsWebpackProdDebug = tasks.register('compileAssetsWebpackProdDebug', YarnRunTask) {
+  dependsOn yarnInstall, generateJSRoutes
+
+  def yarnLicenseReportFile = layout.buildDirectory.file("reports/yarn-license-prod-debug/license-report.json").get().asFile
+  outputs.dir(yarnLicenseReportFile.parentFile)
+
+  source(fileTree(project.railsRoot) { include "eslint*.config.mjs" })
+  source("${project.railsRoot}/babel.config.json")
+  source("${project.railsRoot}/tsconfig.json")
+  source("${project.railsRoot}/.stylelintrc.yml")
+
+  source("${project.railsRoot}/webpack")
+  source("${project.railsRoot}/config")
+
+  workingDir = project.railsRoot
+  destinationDir = layout.buildDirectory.dir("webpack-assets-prod-debug").get().asFile
+  yarnCommand = ['webpack-prod-debug', '--env', "outputDir=${destinationDir.toPath().toString()}", '--env', "licenseReportFile=${yarnLicenseReportFile}", '--env', 'debug=true']
+
+  doFirst {
+    delete "${workingDir}/tmp" // Clean the cacheDir from webpack/config/webpack.config.ts
+  }
+}
+
 def compileAssetsWebpackProd = tasks.register('compileAssetsWebpackProd', YarnRunTask) {
   dependsOn yarnInstall, generateJSRoutes
 

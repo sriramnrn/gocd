@@ -21,6 +21,7 @@ import webpack from "webpack";
 
 export interface ConfigOptions {
   production: boolean;
+  debug: boolean;
   watch: boolean;
   assetsDir: string;
   singlePageAppModuleDir: string;

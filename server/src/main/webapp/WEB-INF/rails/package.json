@@ -16,6 +16,8 @@
   "scripts": {
     "webpack-watch": "cross-env NODE_OPTIONS=\"--max-old-space-size=800\" webpack --config webpack/config/webpack.config.ts --color --mode=development --watch",
     "webpack-dev": "cross-env NODE_OPTIONS=\"--max-old-space-size=800\" webpack --config webpack/config/webpack.config.ts --color --mode=development",
+    "webpack-debug": "cross-env NODE_OPTIONS=\"--max-old-space-size=800\" webpack --config webpack/config/webpack.config.ts --color --mode=development --watch --env debug=true",
+    "webpack-prod-debug": "cross-env NODE_OPTIONS=\"--max-old-space-size=800\" webpack --config webpack/config/webpack.config.ts --color --mode=production --env debug=true",
     "webpack-prod": "cross-env NODE_OPTIONS=\"--max-old-space-size=800\" webpack --config webpack/config/webpack.config.ts --color --mode=production",
     "jasmine-ci": "karma start --single-run",
     "jasmine-server": "karma start",
