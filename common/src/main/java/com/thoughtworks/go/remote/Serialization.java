@@ -62,6 +62,7 @@ import static java.lang.String.format;
 import static java.time.format.DateTimeFormatter.ISO_INSTANT;
 import static org.apache.commons.io.FilenameUtils.separatorsToSystem;
 
+@SuppressWarnings("deprecation")
 public class Serialization {
     public static String toJson(Object obj) {
         return SingletonHolder.INSTANCE.toJson(obj);
