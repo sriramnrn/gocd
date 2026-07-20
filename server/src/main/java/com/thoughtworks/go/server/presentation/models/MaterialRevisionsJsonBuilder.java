@@ -15,6 +15,7 @@
  */
 package com.thoughtworks.go.server.presentation.models;
 
+import com.thoughtworks.go.config.materials.PackageMaterial;
 import com.thoughtworks.go.domain.CommentRenderer;
 import com.thoughtworks.go.domain.MaterialRevision;
 import com.thoughtworks.go.domain.ModificationVisitorAdapter;
@@ -29,7 +30,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.thoughtworks.go.config.materials.PackageMaterial.TYPE;
 import static java.lang.String.valueOf;
 
 public class MaterialRevisionsJsonBuilder extends ModificationVisitorAdapter {
@@ -54,7 +54,7 @@ public class MaterialRevisionsJsonBuilder extends ModificationVisitorAdapter {
         materialJson.put("revision", revision.getRevision().getRevision());
         materialJson.put("revision_href", revision.getRevision().getRevisionUrl());
         materialJson.put("user", revision.buildCausedBy());
-        materialJson.put("date", Dates.formatIso8601CompactOffset(revision.getDateOfLatestModification()));
+        materialJson.put("date", Dates.formatIso8601SystemCompactOffsetNoMillis(revision.getDateOfLatestModification()));
         materialJson.put("changed", valueOf(revision.isChanged()));
         materialJson.put("modifications", modificationsJson);
 
@@ -73,12 +73,11 @@ public class MaterialRevisionsJsonBuilder extends ModificationVisitorAdapter {
         Map<String, Object> jsonMap = new LinkedHashMap<>();
         jsonMap.put("user", modification.getUserDisplayName());
         jsonMap.put("revision", modification.getRevision());
-        jsonMap.put("date", Dates.formatIso8601CompactOffset(modification.getModifiedTime()));
-        String comment = modification.getComment();
-        if (!revision.getMaterial().getMaterialType().equals(TYPE)) {
-            comment = commentRenderer.render(comment);
-        }
-        jsonMap.put("comment", comment);
+        jsonMap.put("date", Dates.formatIso8601SystemCompactOffsetNoMillis(modification.getModifiedTime()));
+        jsonMap.putAll(PackageMaterial.TYPE.equals(revision.getMaterial().getMaterialType())
+            ? Map.of("commentFormat", "json", "comment", modification.getComment())
+            : Map.of("commentFormat", "html", "comment", commentRenderer.render(modification.getComment()))
+        );
         jsonMap.put("modifiedFiles", modifiedFilesJson);
 
         modificationsJson.add(jsonMap);

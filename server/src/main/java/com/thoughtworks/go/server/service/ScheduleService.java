@@ -52,11 +52,13 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
+import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
 import static com.thoughtworks.go.domain.buildcause.BuildCause.APPROVER_AUTOMATICALLY_TRIGGERED;
 import static java.lang.String.join;
 
@@ -197,7 +199,11 @@ public class ScheduleService {
     }
 
     private ServerHealthState stageSchedulingFailedState(String pipelineName, CannotScheduleException e) {
-        return ServerHealthState.failedToScheduleStage(HealthStateType.general(HealthStateScope.forStage(pipelineName, e.getStageName())), pipelineName, e.getStageName(), e.getMessage());
+        return stageSchedulingFailedState(pipelineName, e.getStageName(), e.getMessage(), HealthStateType.general(HealthStateScope.forStage(pipelineName, e.getStageName())));
+    }
+
+    static ServerHealthState stageSchedulingFailedState(String pipelineName, String stageName, String description, HealthStateType healthStateType) {
+        return ServerHealthState.error(String.format("Failed to trigger stage [%s] pipeline [%s]", stageName, pipelineName), description, healthStateType, Duration.ofMinutes(2));
     }
 
     private ServerHealthState stageSchedulingSuccessfulState(String pipelineName, String stageName) {
@@ -215,8 +221,8 @@ public class ScheduleService {
     public Stage scheduleStage(final Pipeline pipeline, final String stageName, final String username, final StageInstanceCreator creator, final ErrorConditionHandler errorHandler) {
         return transactionTemplate.execute(status -> {
             String pipelineName = pipeline.getName();
-            PipelineConfig pipelineConfig = goConfigService.pipelineConfigNamed(new CaseInsensitiveString(pipelineName));
-            StageConfig stageConfig = pipelineConfig.findBy(new CaseInsensitiveString(stageName));
+            PipelineConfig pipelineConfig = goConfigService.pipelineConfigNamed(cis(pipelineName));
+            StageConfig stageConfig = pipelineConfig.findBy(cis(stageName));
             if (stageConfig == null) {
                 throw new StageNotFoundException(pipelineName, stageName);
             }
@@ -454,7 +460,7 @@ public class ScheduleService {
 
     private boolean shouldTriggerThisStageInNewerPipeline(Pipeline pipeline, Stage stage) {
         return !goConfigService.isFirstStage(pipeline.getName(), stage.getName())
-                && !goConfigService.requiresApproval(new CaseInsensitiveString(pipeline.getName()), new CaseInsensitiveString(stage.getName()));
+                && !goConfigService.requiresApproval(cis(pipeline.getName()), cis(stage.getName()));
     }
 
     private void triggerCurrentStageInNewerPipeline(String pipelineName, Stage currentStage) {
@@ -554,8 +560,6 @@ public class ScheduleService {
                         }
 
                         job.changeState(jobState);
-                        //TODO: #2318 JobInstance should contain identifier after it's loaded from database
-                        job.setIdentifier(jobIdentifier);
                         jobInstanceService.updateStateAndResult(job);
 
                         synchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
@@ -698,8 +702,6 @@ public class ScheduleService {
                 if (jobInstance.isNull() || jobInstance.getResult() == JobResult.Cancelled || jobInstance.getState() == JobState.Rescheduled) {
                     return;
                 }
-                //TODO: #2318 JobInstance should contain identifier after it's loaded from database
-                jobInstance.setIdentifier(jobIdentifier);
                 if (!Strings.CS.equals(jobInstance.getAgentUuid(), agentUuid)) {
                     LOGGER.error("Build Instance is using agent [{}] but status updating from agent [{}]", jobInstance.getAgentUuid(), agentUuid);
                     throw new InvalidAgentException("AgentUUID has changed in the middle of a job. AgentUUID:" + agentUuid + ", Build: " + jobInstance);

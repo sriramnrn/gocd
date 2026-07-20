@@ -16,7 +16,6 @@
 package com.thoughtworks.go.server.dao;
 
 import com.thoughtworks.go.config.Agents;
-import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.config.elastic.ClusterProfile;
@@ -28,8 +27,7 @@ import com.thoughtworks.go.domain.config.ConfigurationValue;
 import com.thoughtworks.go.helper.BuildPlanMother;
 import com.thoughtworks.go.helper.JobInstanceMother;
 import com.thoughtworks.go.helper.PipelineMother;
-import com.thoughtworks.go.server.cache.GoCache;
-import com.thoughtworks.go.server.service.InstanceFactory;
+import com.thoughtworks.go.server.caching.GoCache;
 import com.thoughtworks.go.server.service.JobInstanceService;
 import com.thoughtworks.go.server.service.ScheduleService;
 import com.thoughtworks.go.server.transaction.SqlMapClientTemplate;
@@ -52,6 +50,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.time.Instant;
 import java.util.*;
 
+import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
 import static com.thoughtworks.go.domain.buildcause.BuildCause.APPROVER_AUTOMATICALLY_TRIGGERED;
 import static com.thoughtworks.go.helper.JobInstanceMother.*;
 import static com.thoughtworks.go.helper.ModificationsMother.modifySomeFiles;
@@ -579,7 +578,7 @@ public class JobInstanceSqlMapDaoIntegrationTest {
         assertThat(jobPlans.getLast().getIdentifier().getRerunOfCounter()).isNull();
 
         dbHelper.passStage(savedStage);
-        Stage stage = instanceFactory.createStageForRerunOfJobs(savedStage, List.of(JOB_NAME), schedulingContext, pipelineConfig.getStage(new CaseInsensitiveString(STAGE_NAME)), new TimeProvider(), "md5");
+        Stage stage = instanceFactory.createStageForRerunOfJobs(savedStage, List.of(JOB_NAME), schedulingContext, pipelineConfig.getStage(cis(STAGE_NAME)), new TimeProvider(), "md5");
         dbHelper.saveStage(savedPipeline, stage, stage.getOrderId() + 1);
 
         jobPlans = jobInstanceDao.orderedScheduledBuilds();

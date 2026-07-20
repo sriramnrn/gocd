@@ -16,7 +16,6 @@
 package com.thoughtworks.go.server.service;
 
 import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.config.exceptions.EntityType;
 import com.thoughtworks.go.domain.MaterialRevision;
 import com.thoughtworks.go.domain.Pipeline;
@@ -37,6 +36,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
 import static com.thoughtworks.go.serverhealth.HealthStateScope.forPipeline;
 import static com.thoughtworks.go.serverhealth.HealthStateType.general;
 
@@ -62,7 +62,7 @@ public class ChangesetService {
             return new ArrayList<>();
         }
 
-        if (!goConfigService.hasPipelineNamed(new CaseInsensitiveString(pipelineName))) {
+        if (!goConfigService.hasPipelineNamed(cis(pipelineName))) {
             result.notFound(EntityType.Pipeline.notFoundMessage(pipelineName), general(forPipeline(pipelineName)));
             return new ArrayList<>();
         }
@@ -131,14 +131,10 @@ public class ChangesetService {
             fingerprints.add(materialConfig.getFingerprint());
         }
         for (PipelineConfigDependencyGraph upstream : graph.getUpstreamDependencies()) {
-            if (canView(username, upstream.getCurrent())) {
+            if (securityService.hasViewPermissionForPipeline(username, CaseInsensitiveString.str(upstream.getCurrent().name()))) {
                 populateViewableMaterialsStartingAt(upstream, username, fingerprints);
             }
         }
-    }
-
-    private boolean canView(Username username, PipelineConfig pipeline) {
-        return securityService.hasViewPermissionForPipeline(username, CaseInsensitiveString.str(pipeline.name()));
     }
 
     private List<MaterialRevision> modificationsPerMaterialBetween(String pipelineName, int fromCounter, int toCounter) {
@@ -188,11 +184,11 @@ public class ChangesetService {
 
         PipelineConfigDependencyGraph graph = goConfigService.upstreamDependencyGraphOf(pipelineName);
         Set<String> allMaterialFingerprints = graph.allMaterialFingerprints();
-        Set<String> reachableMaterialfingerprints = populateReachableFingerprints(graph, username);
+        Set<String> reachableMaterialFingerprints = populateReachableFingerprints(graph, username);
         FingerprintLoader<ModificationForPipeline> loader = ModificationForPipeline::getMaterialFingerprint;
 
         for (Map.Entry<Long, List<ModificationForPipeline>> pipelineIdAndModifications : modificationsForPipelineIds.entrySet()) {
-            List<ModificationForPipeline> visibleModifications = filterFingerprintHolders(pipelineIdAndModifications.getValue(), reachableMaterialfingerprints, allMaterialFingerprints, loader);
+            List<ModificationForPipeline> visibleModifications = filterFingerprintHolders(pipelineIdAndModifications.getValue(), reachableMaterialFingerprints, allMaterialFingerprints, loader);
             pipelineIdAndModifications.setValue(visibleModifications);
         }
         return modificationsForPipelineIds;

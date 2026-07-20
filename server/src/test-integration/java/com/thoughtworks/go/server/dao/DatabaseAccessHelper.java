@@ -26,13 +26,12 @@ import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.Modification;
 import com.thoughtworks.go.domain.materials.dependency.DependencyMaterialRevision;
 import com.thoughtworks.go.helper.*;
-import com.thoughtworks.go.server.cache.GoCache;
+import com.thoughtworks.go.server.caching.GoCache;
 import com.thoughtworks.go.server.domain.PipelineTimeline;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.persistence.AgentDao;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
 import com.thoughtworks.go.server.persistence.PipelineRepository;
-import com.thoughtworks.go.server.service.InstanceFactory;
 import com.thoughtworks.go.server.service.ManualBuild;
 import com.thoughtworks.go.server.service.MaterialConfigConverter;
 import com.thoughtworks.go.server.service.PipelineService;
@@ -62,6 +61,7 @@ import java.sql.Statement;
 import java.time.ZonedDateTime;
 import java.util.*;
 
+import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
 import static com.thoughtworks.go.domain.JobResult.Failed;
 import static com.thoughtworks.go.domain.PersistentObject.NOT_PERSISTED;
 import static com.thoughtworks.go.helper.ModificationsMother.modifyOneFile;
@@ -209,7 +209,7 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
         StageConfig stageConfig = StageConfigMother.stageConfig(stageName,
             BuildPlanMother.withBuildPlans(jobConfigNames));
         MaterialConfigs materialConfigs = MaterialConfigsMother.multipleMaterialConfigs();
-        return new PipelineConfig(new CaseInsensitiveString(pipelineName), materialConfigs, stageConfig);
+        return new PipelineConfig(cis(pipelineName), materialConfigs, stageConfig);
     }
 
     private Pipeline scheduleWithFileChanges(PipelineConfig pipelineConfig) {

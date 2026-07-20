@@ -21,8 +21,6 @@ import com.thoughtworks.go.config.PipelineConfig;
 import com.thoughtworks.go.config.PipelineConfigs;
 import com.thoughtworks.go.config.security.GoConfigPipelinePermissionsAuthority;
 import com.thoughtworks.go.config.security.Permissions;
-import com.thoughtworks.go.config.security.permissions.NoOnePermission;
-import com.thoughtworks.go.config.security.users.NoOne;
 import com.thoughtworks.go.domain.PipelineGroupVisitor;
 import com.thoughtworks.go.domain.PipelinePauseInfo;
 import com.thoughtworks.go.presentation.pipelinehistory.PipelineInstanceModel;
@@ -43,6 +41,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 
+import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
 import static com.thoughtworks.go.config.CaseInsensitiveString.str;
 import static com.thoughtworks.go.domain.buildcause.BuildCause.createEmpty;
 import static com.thoughtworks.go.presentation.pipelinehistory.PipelineInstanceModel.createEmptyPipelineInstanceModel;
@@ -106,8 +105,7 @@ public class GoDashboardCurrentStateLoader {
         LOGGER.debug("Populating dashboard pipelines");
         config.accept((PipelineGroupVisitor) group -> group.accept(pipelineConfig -> {
             long start = System.currentTimeMillis();
-            Permissions permissions = permissionsFor(pipelineConfig, pipelinesAndTheirPermissions);
-
+            Permissions permissions = pipelinesAndTheirPermissions.getOrDefault(pipelineConfig.getName(), Permissions.NOONE);
             pipelines.add(createGoDashboardPipeline(pipelineConfig, permissions, historyForDashboard, group));
 
             if (LOGGER.isDebugEnabled()) {
@@ -124,8 +122,8 @@ public class GoDashboardCurrentStateLoader {
     }
 
     private PipelineInstanceModels loadHistoryForPipelines(List<String> pipelineNames) {
-        LOGGER.debug("Loading history for dashboard with {} pipelines", pipelineNames.size());
         try {
+            LOGGER.debug("Loading history for dashboard with {} pipelines", pipelineNames.size());
             return pipelineDao.loadHistoryForDashboard(pipelineNames);
         } finally {
             LOGGER.debug("Done loading history for dashboard");
@@ -204,13 +202,6 @@ public class GoDashboardCurrentStateLoader {
         instanceModel.setCanUnlock(canBeUnlocked);
     }
 
-    private Permissions permissionsFor(PipelineConfig pipelineConfig, Map<CaseInsensitiveString, Permissions> pipelinesAndTheirPermissions) {
-        if (pipelinesAndTheirPermissions.containsKey(pipelineConfig.name())) {
-            return pipelinesAndTheirPermissions.get(pipelineConfig.name());
-        }
-        return new Permissions(NoOne.INSTANCE, NoOne.INSTANCE, NoOne.INSTANCE, NoOnePermission.INSTANCE);
-    }
-
     public void reset() {
         historyForDashboard = PipelineInstanceModels.createPipelineInstanceModels();
         lastKnownPipelineNames = new HashSet<>();
@@ -218,6 +209,6 @@ public class GoDashboardCurrentStateLoader {
 
     public void clearEntryFor(CaseInsensitiveString pipeline) {
         lastKnownPipelineNames.remove(pipeline);
-        historyForDashboard.removeIf(pipelineInstanceModel -> pipeline.equals(new CaseInsensitiveString(pipelineInstanceModel.getName())));
+        historyForDashboard.removeIf(pipelineInstanceModel -> pipeline.equals(cis(pipelineInstanceModel.getName())));
     }
 }

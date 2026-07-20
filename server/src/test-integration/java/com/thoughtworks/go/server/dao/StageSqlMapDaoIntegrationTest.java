@@ -26,9 +26,8 @@ import com.thoughtworks.go.helper.*;
 import com.thoughtworks.go.presentation.pipelinehistory.StageHistoryEntry;
 import com.thoughtworks.go.presentation.pipelinehistory.StageHistoryPage;
 import com.thoughtworks.go.presentation.pipelinehistory.StageInstanceModels;
-import com.thoughtworks.go.server.cache.GoCache;
+import com.thoughtworks.go.server.caching.GoCache;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
-import com.thoughtworks.go.server.service.InstanceFactory;
 import com.thoughtworks.go.server.service.ScheduleService;
 import com.thoughtworks.go.server.service.ScheduleTestUtil;
 import com.thoughtworks.go.server.service.result.HttpOperationResult;
@@ -54,10 +53,12 @@ import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
 import static com.thoughtworks.go.config.Approval.TYPE_MANUAL;
+import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
 import static com.thoughtworks.go.config.CaseInsensitiveString.str;
 import static com.thoughtworks.go.domain.PersistentObject.NOT_PERSISTED;
 import static com.thoughtworks.go.domain.buildcause.BuildCause.APPROVER_AUTOMATICALLY_TRIGGERED;
@@ -598,7 +599,7 @@ public class StageSqlMapDaoIntegrationTest {
     public void findStageHistoryPage_shouldCacheStageHistoryPage() {
         SqlMapClientTemplate mockTemplate = mock(SqlMapClientTemplate.class);
 
-        Stage stage = StageMother.passedStageInstance("dev", "java", "pipeline-name");
+        Stage stage = StageMother.passedStageInstance("pipeline-name", "dev", "java");
         stage.setApprovedBy("admin");
 
         stageDao.setSqlMapClientTemplate(mockTemplate);
@@ -903,8 +904,8 @@ public class StageSqlMapDaoIntegrationTest {
         dbHelper.pass(completed);
         Pipeline scheduled = dbHelper.schedulePipeline(mingleConfig, new TimeProvider());
         assignJobInstances(pipelineAndFirstStageOf(scheduled).stage, pipelineAndFirstStageOf(completed).stage);
-        Long duration = stageDao.getDurationOfLastSuccessfulOnAgent(str(mingleConfig.name()), STAGE_DEV, scheduled.getFirstStage().getJobInstances().getFirst());
-        assertThat(duration).isGreaterThan(0L);
+        Duration duration = stageDao.getDurationOfLastSuccessfulOnAgent(scheduled.getFirstStage().getJobInstances().getFirst());
+        assertThat(duration).isPositive();
     }
 
     @Test
@@ -992,7 +993,7 @@ public class StageSqlMapDaoIntegrationTest {
 
     private Stage rerunFirstStage(Pipeline pipeline) {
         Stage firstStage = pipeline.getFirstStage();
-        Stage newInstance = instanceFactory.createStageInstance(mingleConfig.findBy(new CaseInsensitiveString(firstStage.getName())), new DefaultSchedulingContext("anyone"), md5, new TimeProvider());
+        Stage newInstance = instanceFactory.createStageInstance(mingleConfig.findBy(cis(firstStage.getName())), new DefaultSchedulingContext("anyone"), md5, new TimeProvider());
         return stageDao.saveWithJobs(pipeline, newInstance);
     }
 
@@ -1220,8 +1221,8 @@ public class StageSqlMapDaoIntegrationTest {
         SqlMapClientTemplate mockTemplate = mock(SqlMapClientTemplate.class);
         stageDao.setSqlMapClientTemplate(mockTemplate);
 
-        Stage stage1 = StageMother.passedStageInstance("first", "job", "pipeline");
-        Stage stage2 = StageMother.passedStageInstance("second", "job", "pipeline");
+        Stage stage1 = StageMother.passedStageInstance("pipeline", "first", "job");
+        Stage stage2 = StageMother.passedStageInstance("pipeline", "second", "job");
         List<Stage> stages = List.of(stage1, stage2);
         doReturn(stages).when(mockTemplate).queryForList("getStagesByPipelineNameAndCounter", Map.of("pipelineName", "pipeline", "pipelineCounter", 1));
 
@@ -1238,8 +1239,8 @@ public class StageSqlMapDaoIntegrationTest {
         SqlMapClientTemplate mockTemplate = mock(SqlMapClientTemplate.class);
         stageDao.setSqlMapClientTemplate(mockTemplate);
 
-        Stage stage1 = StageMother.passedStageInstance("first", "job", "pipeline");
-        Stage stage2 = StageMother.passedStageInstance("second", "job", "pipeline");
+        Stage stage1 = StageMother.passedStageInstance("pipeline", "first", "job");
+        Stage stage2 = StageMother.passedStageInstance("pipeline", "second", "job");
         List<Stage> stages = List.of(stage1, stage2);
         doReturn(stages).when(mockTemplate).queryForList("getStagesByPipelineNameAndCounter", Map.of("pipelineName", "pipeline", "pipelineCounter", 1));
 
@@ -1259,8 +1260,8 @@ public class StageSqlMapDaoIntegrationTest {
         SqlMapClientTemplate mockTemplate = mock(SqlMapClientTemplate.class);
         stageDao.setSqlMapClientTemplate(mockTemplate);
 
-        Stage stage1 = StageMother.passedStageInstance("first", "job", "pipeline");
-        Stage stage2 = StageMother.passedStageInstance("second", "job", "pipeline");
+        Stage stage1 = StageMother.passedStageInstance("pipeline", "first", "job");
+        Stage stage2 = StageMother.passedStageInstance("pipeline", "second", "job");
         List<Stage> stages = List.of(stage1, stage2);
         doReturn(stages).when(mockTemplate).queryForList("getStagesByPipelineNameAndCounter", Map.of("pipelineName", "pipeline", "pipelineCounter", 1));
 
@@ -1323,7 +1324,7 @@ public class StageSqlMapDaoIntegrationTest {
     public void findStageHistoryPage_shouldReturnStageHistoryEntryWithConfigVersion() {
         SqlMapClientTemplate mockTemplate = mock(SqlMapClientTemplate.class);
 
-        Stage stage = StageMother.passedStageInstance("dev", "java", "pipeline-name");
+        Stage stage = StageMother.passedStageInstance("pipeline-name", "dev", "java");
         stage.setApprovedBy("admin");
         stage.setConfigVersion("md5-test");
 
