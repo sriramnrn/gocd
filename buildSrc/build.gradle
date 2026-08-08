@@ -18,12 +18,6 @@ plugins {
   id 'groovy'
 }
 
-repositories {
-  gradlePluginPortal()
-  mavenCentral()
-  mavenLocal()
-}
-
 dependencies {
   implementation localGroovy()
   implementation gradleApi()

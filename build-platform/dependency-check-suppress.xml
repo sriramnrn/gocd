@@ -49,6 +49,7 @@
     <cve>CVE-2026-41849</cve>
     <cve>CVE-2026-41850</cve>
     <cve>CVE-2026-41851</cve>
+    <cve>CVE-2026-41852</cve>
   </suppress>
   <suppress>
     <notes><![CDATA[
@@ -115,6 +116,7 @@
     <cve>CVE-2026-22745</cve>
     <cve>CVE-2026-41841</cve>
     <cve>CVE-2026-41842</cve>
+    <cve>CVE-2026-41843</cve>
   </suppress>
   <suppress>
     <notes><![CDATA[
@@ -359,7 +361,14 @@
     ]]></notes>
     <packageUrl regex="true">^pkg:maven/org\.eclipse\.jetty.*/.*@10.*$</packageUrl>
     <cve>CVE-2026-6790</cve>
-</suppress>
+  </suppress>
+  <suppress>
+    <notes><![CDATA[
+    GoCD does not rely on jetty digest authentication.
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.eclipse\.jetty.*/.*@10.*$</packageUrl>
+    <cve>CVE-2026-10050</cve>
+  </suppress>
 
   <suppress>
     <notes><![CDATA[
@@ -369,14 +378,13 @@
     <cve>CVE-2025-4949</cve>
   </suppress>
 
-  <suppress until="2026-10-07">
+  <suppress>
     <notes><![CDATA[
-    False positives in GoCD usage as GoCD only uses HttpComponents as an agent client where it also controls
-    the server implementation it is talking to (via Jetty).
+    False positive as GoCD doest usethe static file loading via Spark, but this vulnerability was raised without any
+     alidation and should be considered highly likely to be a complete waste of time.
     ]]></notes>
-    <packageUrl regex="true">^pkg:maven/org\.apache\.httpcomponents/httpcore@4\..*$</packageUrl>
-    <cve>CVE-2026-54399</cve>
-    <cve>CVE-2026-54428</cve>
+    <packageUrl regex="true">^pkg:maven/com\.sparkjava/spark-core@.*$</packageUrl>
+    <vulnerabilityName>CVE-2026-17459</vulnerabilityName>
   </suppress>
 
   <suppress>

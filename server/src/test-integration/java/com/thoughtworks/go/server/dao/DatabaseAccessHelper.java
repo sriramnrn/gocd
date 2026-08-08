@@ -21,6 +21,7 @@ import com.thoughtworks.go.config.elastic.ElasticProfile;
 import com.thoughtworks.go.config.materials.MaterialConfigs;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterial;
 import com.thoughtworks.go.domain.*;
+import com.thoughtworks.go.domain.activity.AgentAssignment;
 import com.thoughtworks.go.domain.buildcause.BuildCause;
 import com.thoughtworks.go.domain.materials.Material;
 import com.thoughtworks.go.domain.materials.Modification;
@@ -29,9 +30,11 @@ import com.thoughtworks.go.helper.*;
 import com.thoughtworks.go.server.caching.GoCache;
 import com.thoughtworks.go.server.domain.PipelineTimeline;
 import com.thoughtworks.go.server.domain.Username;
+import com.thoughtworks.go.server.materials.MaterialUpdateService;
 import com.thoughtworks.go.server.persistence.AgentDao;
 import com.thoughtworks.go.server.persistence.MaterialRepository;
 import com.thoughtworks.go.server.persistence.PipelineRepository;
+import com.thoughtworks.go.server.service.AgentService;
 import com.thoughtworks.go.server.service.ManualBuild;
 import com.thoughtworks.go.server.service.MaterialConfigConverter;
 import com.thoughtworks.go.server.service.PipelineService;
@@ -60,8 +63,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static com.thoughtworks.go.config.CaseInsensitiveString.cis;
+import static org.awaitility.Awaitility.await;
 import static com.thoughtworks.go.domain.JobResult.Failed;
 import static com.thoughtworks.go.domain.PersistentObject.NOT_PERSISTED;
 import static com.thoughtworks.go.helper.ModificationsMother.modifyOneFile;
@@ -86,6 +91,14 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
     private final GoCache goCache;
     private final InstanceFactory instanceFactory;
     private final JobAgentMetadataDao jobAgentMetadataDao;
+
+    // Optional, since not all test application contexts using this helper include these services
+    @Autowired(required = false)
+    private MaterialUpdateService materialUpdateService;
+    @Autowired(required = false)
+    private AgentService agentService;
+    @Autowired(required = false)
+    private AgentAssignment agentAssignment;
 
     @Autowired
     public DatabaseAccessHelper(DataSource dataSource,
@@ -158,11 +171,47 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
                 cache.clear();
             }
         }
+        // Also cleared on setup since the registry is synced from the (shared, on-disk) database when the Spring
+        // context boots - which can capture agents registered by tests still running in a previously forked JVM.
+        clearInMemoryAgentRegistry();
     }
 
     public void onTearDown() throws Exception {
+        waitForMaterialUpdatesNotInProgress();
         databaseTester.onTearDown();
         goCache.clear();
+        clearInMemoryAgentRegistry();
+    }
+
+    /**
+     * The in-memory agent registry is a singleton that otherwise outlives the (wiped) agents table rows it
+     * mirrors, leaking agents registered by one test into the next - which breaks tests whose expectations
+     * depend on which agents exist (e.g. whether scheduling run-on-all-agents jobs is possible).
+     */
+    private void clearInMemoryAgentRegistry() {
+        if (agentService != null) {
+            agentService.clearAll();
+        }
+        if (agentAssignment != null) {
+            agentAssignment.clear();
+        }
+    }
+
+    /**
+     * Waits for all in-flight material updates to complete. Also called before wiping the database on teardown:
+     * materials that tests trigger updates of are often fake, so their async updates fail quickly - potentially
+     * while a test's teardown is already underway. If such an update is still in-flight when the database is wiped,
+     * its completion handling can re-cache a MaterialInstance whose row no longer exists, poisoning the (already
+     * cleared) cache for whichever test next uses a material with the same fingerprint.
+     */
+    public void waitForMaterialUpdatesNotInProgress() {
+        if (materialUpdateService == null) {
+            return;
+        }
+        await()
+            .atMost(10, TimeUnit.SECONDS)
+            .alias("Material updates still in progress")
+            .until(() -> !materialUpdateService.anyUpdatesInProgress());
     }
 
     public TransactionTemplate txTemplate() {

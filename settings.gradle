@@ -22,8 +22,31 @@ pluginManagement {
   }
 }
 
-rootProject.name = 'gocd'
+def terracottaGroups = ['net.sf.ehcache', 'org.terracotta']
+def jitpackGroups = ['com.github.gocd-contrib', 'com.github.sbrannen']
+def excludeNicheGroups = { repo ->
+  repo.content {
+    terracottaGroups.each { excludeGroupAndSubgroups it }
+    jitpackGroups.each { excludeGroup it }
+  }
+}
 
+dependencyResolutionManagement {
+  repositories {
+    mavenCentral excludeNicheGroups
+    mavenLocal excludeNicheGroups
+    maven {
+      url = 'https://repo.terracotta.org/maven2/' // Needed for later ehcache repos
+      content { terracottaGroups.each { includeGroupAndSubgroups it } }
+    }
+    maven {
+      url = 'https://jitpack.io' // Needed for spring-test-junit5 and jruby-rack
+      content { jitpackGroups.each { includeGroup it } }
+    }
+  }
+}
+
+rootProject.name = 'gocd'
 enableFeaturePreview('GROOVY_COMPILATION_AVOIDANCE')
 
 include ':agent'
@@ -145,4 +168,3 @@ include ':tw-go-plugins'
 include ':util'
 
 apply from: 'settings-docker.gradle'
-
