@@ -94,7 +94,7 @@ dependencies {
 
   packagingOnly rootProject.deps.servletApi
 
-  copyOnly project(path: ':tfs-impl:tfs-impl-14', configuration: 'fatJarConfig')
+  copyOnly project(path: ':tfs-impl-14', configuration: 'fatJarConfig')
   copyOnly project(path: ':agent', configuration: 'fatJarConfig')
   copyOnly project(path: ':agent-launcher', configuration: 'fatJarConfig')
   copyOnlyTestData(testFixtures(project(':test:test-agent')))
@@ -128,7 +128,7 @@ dependencies {
   implementation rootProject.deps.dom4j
 
   jruby rootProject.deps.jruby
-  runtimeOnly rootProject.deps.rack
+  runtimeOnly rootProject.deps.jrubyRack
   implementation rootProject.deps.apacheHttpComponents
 
   implementation rootProject.deps.jakartaAnnotation
@@ -153,6 +153,7 @@ dependencies {
   runtimeOnly rootProject.deps.angusMailSmtp
 
   implementation rootProject.deps.slf4jApi
+  implementation rootProject.deps.slf4jJul
   implementation(rootProject.deps.jgitServer) {
     exclude(module: 'jsch')
     exclude(module: 'jzlib')
@@ -202,6 +203,7 @@ dependencies {
     exclude(group: 'org.postgresql')
     exclude(group: 'com.oracle.database.jdbc')
   }
+  integrationTestImplementation rootProject.deps.ztExec
 
   testFixturesApi project(':domain')
   testFixturesImplementation project(':util')
@@ -405,7 +407,7 @@ tasks.withType(Test).configureEach {
     'db.password'                   : '',
     'db.name'                       : 'cruise',
     'db.port'                       : '',
-    'rails.use.compressed.js'       : false,
+    'go.server.mode'                : 'development',
     'go.enforce.server.immutability': 'N',
   ]
 
@@ -521,7 +523,8 @@ def war = tasks.register('war', Jar) {
         + configurations.packagingOnly
         + configurations.allApis
         + configurations.spark
-        - configurations.runtimeClasspath.findAll { it.name.startsWith('logback') } // Rely on logback from launcher
+        // Rely on logging libs from launcher parent classloader; JettyServer pins org.slf4j/org.apache.commons.logging as system classes
+        - configurations.runtimeClasspath.findAll { jar -> ['logback', 'slf4j-api', 'jcl-over-slf4j', 'jul-to-slf4j'].any { jar.name.startsWith(it) } }
     )
       .collect { f -> f.toString() }
       .toSet()
@@ -577,19 +580,18 @@ tasks.register('verifyWar', VerifyJarTask) {
         "activemq-openwire-legacy-${rootProject.versions.activeMQ}.jar",
         "angus-activation-2.0.3.jar",
         "angus-core-${rootProject.versions.angusMailSmtp}.jar",
-        "ant-${rootProject.versions.apacheAnt}.jar",
         "antlr-2.7.6.jar",
         "aopalliance-1.0.jar",
-        "asm-9.7.1.jar",
-        "asm-analysis-9.7.1.jar",
-        "asm-commons-9.7.1.jar",
-        "asm-tree-9.7.1.jar",
-        "asm-util-9.7.1.jar",
+        "asm-${rootProject.versions.asmBom}.jar",
+        "asm-analysis-${rootProject.versions.asmBom}.jar",
+        "asm-commons-${rootProject.versions.asmBom}.jar",
+        "asm-tree-${rootProject.versions.asmBom}.jar",
+        "asm-util-${rootProject.versions.asmBom}.jar",
         "aspectjweaver-${rootProject.versions.aspectj}.jar",
         "backport9-1.13.jar",
         "base-${project.version}.jar",
         "bucket4j_jdk17-core-${rootProject.versions.bucket4j}.jar",
-        "bucket4j-caffeine-${rootProject.versions.bucket4jCaffeine}.jar",
+        "bucket4j_jdk17-caffeine-${rootProject.versions.bucket4j}.jar",
         "caffeine-${rootProject.versions.caffeine}.jar",
         "cloning-${rootProject.versions.cloning}.jar",
         "commandline-${project.version}.jar",
@@ -635,9 +637,9 @@ tasks.register('verifyWar', VerifyJarTask) {
         "httpcore-4.4.16.jar",
         "invokebinder-1.13.jar",
         "istack-commons-runtime-4.1.2.jar",
-        "jackson-annotations-${rootProject.versions.jacksonBom.replaceFirst(/\.\d+$/, '')}.jar",
-        "jackson-core-${rootProject.versions.jacksonBom}.jar",
-        "jackson-databind-${rootProject.versions.jacksonBom}.jar",
+        "jackson-annotations-[\\d.]+\\.jar",
+        "jackson-core-[\\d.]+\\.jar",
+        "jackson-databind-[\\d.]+\\.jar",
         "jakarta.activation-api-2.1.4.jar",
         "jakarta.annotation-api-${rootProject.versions.jakartaAnnotation}.jar",
         "jakarta.inject-api-${rootProject.versions.jakartaInject}.jar",
@@ -650,7 +652,6 @@ tasks.register('verifyWar', VerifyJarTask) {
         "jaxb-core-${rootProject.versions.jaxbBom}.jar",
         "jaxb-runtime-${rootProject.versions.jaxbBom}.jar",
         "jaxen-${rootProject.versions.jaxen}.jar",
-        "jcl-over-slf4j-${rootProject.versions.slf4jBom}.jar",
         "jcodings-1.0.63.jar",
         "jdom2-${rootProject.versions.jdom}.jar",
         "jffi-1.3.15.jar",
@@ -669,7 +670,7 @@ tasks.register('verifyWar', VerifyJarTask) {
         "joni-2.2.5.jar",
         "jruby-${rootProject.versions.jruby}.jar",
         "jruby-base-${rootProject.versions.jruby}.jar",
-        "jruby-rack-${rootProject.versions.rack}.jar",
+        "jruby-rack-${rootProject.versions.jrubyRack}.jar",
         "jruby-stdlib-${rootProject.versions.jruby}.jar",
         "json-utils-${rootProject.versions.jolt}.jar",
         "jzlib-1.1.5.jar",
@@ -684,11 +685,11 @@ tasks.register('verifyWar', VerifyJarTask) {
         "org.eclipse.jgit-${rootProject.versions.jgit}.jar",
         "org.eclipse.jgit.http.server-${rootProject.versions.jgit}.jar",
         "plugin-metadata-store-${project.version}.jar",
+        "plexus-utils-${rootProject.versions.plexusUtils}.jar",
         "postgresql-${rootProject.versions.postgresql}.jar",
         "quartz-${rootProject.versions.quartz}.jar",
         "rack_hack-${project.version}.jar",
         "semantic-version-${rootProject.versions.semanticVersion}.jar",
-        "slf4j-api-${rootProject.versions.slf4jBom}.jar",
         "smtp-${rootProject.versions.angusMailSmtp}.jar",
         "spark-core-${rootProject.versions.spark}.jar",
         "spring-aop-${rootProject.versions.spring}.jar",
@@ -722,7 +723,7 @@ tasks.register('verifyWar', VerifyJarTask) {
     denylistedContents.each {denylist ->
       archiveOps.zipTree(jar).matching {
         include denylist.key
-      }.visit { element ->
+      }.visit { FileVisitDetails element ->
         if (!element.directory) denylistedErrors << "war ${denylist.value}: ${element.relativePath.pathString}"
       }
     }
@@ -741,6 +742,10 @@ tasks.register('licenseReportAggregate') {
 
   dependsOn compileAssetsWebpackProd
   dependsOn generateRubygemsLicenseReport
+
+  // try our best to run verifications first since logic here relies on the expectations here
+  def verifyJarTasks = rootProject.subprojects.collectMany { eachProject -> eachProject.tasks.withType(VerifyJarTask) }
+  shouldRunAfter verifyJarTasks
 
   def rubygemsReportFile = (generateRubygemsLicenseReport as Task).outputs.files.singleFile
   def extraJavascriptLicenses = project.file("${project.railsRoot}/app/assets/javascripts/lib/_licenses.json")
@@ -808,19 +813,6 @@ tasks.register('licenseReportAggregate') {
       ]
     ],
     [
-      moduleName    : ':com.microsoft.tfs.sdk',
-      moduleVersion : rootProject.versions.tfsSdk,
-      moduleUrls    : [
-        "https://github.com/Microsoft/team-explorer-everywhere"
-      ],
-      moduleLicenses: [
-        [
-          moduleLicense   : 'MIT',
-          moduleLicenseUrl: "https://spdx.org/licenses/MIT.html"
-        ]
-      ]
-    ],
-    [
       moduleName    : 'org.hibernate.javax.persistence:hibernate-jpa-2.0-api',
       moduleVersion : '1.0.1.Final',
       moduleUrls    : [
@@ -876,16 +868,16 @@ tasks.register('licenseReportAggregate') {
     allReportJarDependencies
   }
 
-  def getLicenseDataFor = { Set<String> allJars, Set<Map<String, Object>> allDependenciesInReport ->
-    allJars.inject(new LinkedHashMap<String, Map<String, Object>>(), { result, eachPackagedJar ->
+  def getLicenseDataFor = { Set<String> allExpectedJarRegexes, Set<Map<String, Object>> allDependenciesInReport ->
+    allExpectedJarRegexes.inject(new LinkedHashMap<String, Map<String, Object>>(), { result, packagedJarRegex ->
       Map<String, Object> module = allDependenciesInReport.find { Map<String, Object> eachDependencyInReport ->
         def (_, artifactId) = (eachDependencyInReport.moduleName as String).split(':')
         def version = eachDependencyInReport.moduleVersion
-        eachPackagedJar =~ /^${artifactId}-${version}(-.+)?\.jar/
+        packagedJarRegex =~ /^${artifactId}-${version}(-.+)?\.jar/ || "${artifactId}-${version}.jar" =~ packagedJarRegex
       }
 
       if (module == null) {
-        throw new GradleException("Expected to find packaged jar ${eachPackagedJar} but was not found in the license report")
+        throw new GradleException("Expected to find packaged jar ${packagedJarRegex} but was not found in the license report")
       }
 
       result.put(module.moduleName as String, module)
@@ -907,21 +899,17 @@ tasks.register('licenseReportAggregate') {
   doFirst {
     LinkedHashSet<Map<String, Object>> allJarDependencyLicenses = getJarDependencyLicenses()
 
-    List<VerifyJarTask> verifyJarTasks = rootProject.subprojects.collectMany { eachProject ->
-      eachProject.tasks.withType(VerifyJarTask)
-    }
-
-    // list of all jars that we package
-    Set<String> allJars = verifyJarTasks.collectMany { VerifyJarTask eachTask ->
-      eachTask.expectedJars.values().flatten()
-    }.collect { name -> name.toString() }.sort().unique()
+    // list of all jars that we expect to package
+    Set<String> allExpectedJarRegexes = verifyJarTasks
+      .collectMany { VerifyJarTask eachTask -> eachTask.expectedJars.values().flatten() }
+      .collect { name -> name.toString() }.sort().unique()
 
     // remove unwanted stuff, mostly nested zip files and jars with GoCD package version
-    allJars.removeIf { name -> name.endsWith(".zip") || name.endsWith("-${version}.jar") || name.contains("-${version}-") }
-    allJars.removeAll(goCDJarsWithoutLicenses)
+    allExpectedJarRegexes.removeIf { name -> name.endsWith(".zip") || name.endsWith("-${version}.jar") || name.contains("-${version}-") }
+    allExpectedJarRegexes.removeAll(goCDJarsWithoutLicenses)
 
     // get the licenses corresponding to the jars we actually package.
-    def licensesForPackagedJarDependencies = getLicenseDataFor(allJars, allJarDependencyLicenses) as Map<String, Map<String, Object>>
+    def licensesForPackagedJarDependencies = getLicenseDataFor(allExpectedJarRegexes, allJarDependencyLicenses) as Map<String, Map<String, Object>>
 
     delete(licenseReportAggregateOutputDir)
     licenseReportAggregateOutputDir.get().asFile.mkdirs()

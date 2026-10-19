@@ -16,7 +16,6 @@
 package com.thoughtworks.go.domain.materials.tfs;
 
 import com.thoughtworks.go.domain.JarDetector;
-import com.thoughtworks.go.util.NestedJarClassLoader;
 import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.util.command.CommandArgument;
 import com.thoughtworks.go.util.command.UrlArgument;
@@ -32,6 +31,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.nio.file.Paths;
+import java.util.concurrent.ThreadFactory;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 
@@ -41,6 +41,9 @@ import java.util.jar.JarInputStream;
 class TfsSDKCommandBuilder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TfsSDKCommandBuilder.class);
+    private static final ThreadFactory THREAD_FACTORY = Thread.ofVirtual()
+        .name("TfsSDKCleanup-", 1)
+        .factory();
     private final File tempFolder = new File("data/tfs-sdk");
     private final ClassLoader sdkLoader;
     private static volatile TfsSDKCommandBuilder ME;
@@ -93,13 +96,11 @@ class TfsSDKCommandBuilder {
         registerShutdownHook();
         explodeNatives();
         setNativePath(tempFolder);
-        return new NestedJarClassLoader(getJarURL(), "org/apache/commons/logging/");
+        return new NestedJarClassLoader(getJarURL());
     }
 
     private void registerShutdownHook() {
-        Thread hook = new Thread(() -> FileUtils.deleteQuietly(tempFolder));
-        hook.setName("TfsSDKCleanup" + hook.getName());
-        Runtime.getRuntime().addShutdownHook(hook);
+        Runtime.getRuntime().addShutdownHook(THREAD_FACTORY.newThread(() -> FileUtils.deleteQuietly(tempFolder)));
     }
 
     private void setNativePath(File tempFolder) {

@@ -109,6 +109,7 @@ abstract class YarnRunTask extends DefaultTask {
         execSpec.environment = normalizeEnvironmentPath(execSpec.environment)
         execSpec.environment("PATH", ([additionalPath] + execSpec.environment["PATH"].toString()).join(File.pathSeparator))
       }
+      execSpec.environment("CI", GoVersions.isCi())
       execSpec.environment("FORCE_COLOR", "true")
       execSpec.workingDir = this.getWorkingDir()
       execSpec.commandLine = [yarnExecutable(execSpec.workingDir), "run"] + getYarnCommand()
@@ -120,6 +121,6 @@ abstract class YarnRunTask extends DefaultTask {
     // Allow yarn with or without a mise shim on windows; which changes the entrypoint
     (OperatingSystem.current().isWindows() ? ["yarn", "yarn.cmd"] : ["yarn"])
       .find { cmd -> GoVersions.canRunTool("$cmd --version", workingDir) }
-      ?: { throw new RuntimeException("could not find yarn on path - do you need to do `corepack enable && ./gradlew --stop`?") }()
+      ?: { throw new RuntimeException("could not find yarn on path - do you need to do `./gradlew --stop` to correct Daemon to use mise-managed paths?") }()
   }
 }

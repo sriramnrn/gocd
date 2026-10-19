@@ -33,27 +33,25 @@ public class ExponentialBackOff {
     private final float multiplier;
     private final Instant failureStartTime;
 
-    private long retryIntervalMillis;
-    private Instant lastFailureTime;
+    private volatile long retryIntervalMillis = DEFAULT_INITIAL_INTERVAL_IN_MILLIS;
+    private volatile Instant lastFailureTime;
 
     public ExponentialBackOff(float multiplier) {
         this(multiplier, new SystemTimeClock());
     }
 
     protected ExponentialBackOff(float multiplier, SystemTimeClock clock) {
-        this.clock = clock;
-        this.retryIntervalMillis = DEFAULT_INITIAL_INTERVAL_IN_MILLIS;
-        Instant now = now();
-        this.lastFailureTime = now;
-        this.failureStartTime = now;
         this.multiplier = multiplier;
+        this.clock = clock;
+        this.failureStartTime = now();
+        this.lastFailureTime = failureStartTime;
     }
 
     public BackOffResult backOffResult() {
-        Instant nextAttempt = lastFailureTime.plus(this.retryIntervalMillis, MILLIS);
+        Instant lastFailed = this.lastFailureTime;
+        Instant nextAttempt = lastFailed.plus(this.retryIntervalMillis, MILLIS);
         boolean backOff = nextAttempt.isAfter(now());
-
-        return new BackOffResult(backOff, failureStartTime, lastFailureTime, nextAttempt);
+        return new BackOffResult(backOff, failureStartTime, lastFailed, nextAttempt);
     }
 
     public void failedAgain() {

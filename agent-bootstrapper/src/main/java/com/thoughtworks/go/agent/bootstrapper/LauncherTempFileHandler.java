@@ -16,7 +16,6 @@
 package com.thoughtworks.go.agent.bootstrapper;
 
 import com.thoughtworks.go.util.FileUtil;
-import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,8 +26,10 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+import static com.thoughtworks.go.util.ExceptionUtils.uncaughtExceptionHandlerFor;
 import static java.lang.String.join;
 import static java.lang.System.lineSeparator;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -36,6 +37,10 @@ import static java.nio.file.StandardOpenOption.*;
 
 class LauncherTempFileHandler implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(LauncherTempFileHandler.class);
+    private static final ThreadFactory THREAD_FACTORY = Thread.ofVirtual()
+        .name("TempFileReaper-", 1)
+        .uncaughtExceptionHandler(uncaughtExceptionHandlerFor(LOG))
+        .factory();
 
     private static final Path LAUNCHER_TMP_FILE_LIST = Path.of(".tmp.file.list");
     private static final int LAUNCHER_TMP_CLEANUP_INTERVAL_MINUTES = 10;
@@ -60,9 +65,9 @@ class LauncherTempFileHandler implements Runnable {
             Set<String> fileSet = new HashSet<>(fileList);
             for (String fileName : fileSet) {
                 File file = new File(fileName);
-                FileUtils.deleteQuietly(file);
+                FileUtil.deleteQuietly(file);
                 File depsDir = new File(FileUtil.TMP_PARENT_DIR, fileName);
-                FileUtils.deleteQuietly(depsDir);
+                FileUtil.deleteQuietly(depsDir);
                 if (!file.exists() && !depsDir.exists()) {
                     fileList.remove(fileName);
                 }
@@ -74,9 +79,7 @@ class LauncherTempFileHandler implements Runnable {
 
     public synchronized static void startReaperIfNecessary() {
         if (reaperThread == null) {
-            reaperThread = new Thread(new LauncherTempFileHandler());
-            reaperThread.setName("TempFileReaper" + reaperThread.getName());
-            reaperThread.setDaemon(true);
+            reaperThread = THREAD_FACTORY.newThread(new LauncherTempFileHandler());
             reaperThread.start();
         }
     }

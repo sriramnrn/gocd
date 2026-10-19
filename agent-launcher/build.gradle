@@ -25,7 +25,6 @@ configurations {
 dependencies {
   implementation(project(':base')) { capabilities { requireFeature('logging') } }
   implementation(project(':agent-common')) { capabilities { requireFeature('agent-client') } }
-  implementation rootProject.deps.commonsIO
   implementation rootProject.deps.slf4jApi
 
   testImplementation(testFixtures(project(':agent-common')))
@@ -61,10 +60,9 @@ tasks.register('verifyJar', VerifyJarTask) {
       "agent-common-${project.version}.jar",
       "agent-launcher-${project.version}-classes.jar",
       "base-${project.version}.jar",
-      "bcpkix-jdk18on-${rootProject.versions.bouncyCastle}.jar",
-      "bcprov-jdk18on-${rootProject.versions.bouncyCastle}.jar",
-      "bcutil-jdk18on-${rootProject.versions.bouncyCastle}.jar",
-      "commons-io-${rootProject.versions.commonsIO}.jar",
+      "bcpkix-jdk18on-[\\d.]+\\.jar",
+      "bcprov-jdk18on-[\\d.]+\\.jar",
+      "bcutil-jdk18on-[\\d.]+\\.jar",
       "httpclient-${rootProject.versions.apacheHttpComponents}.jar",
       "httpcore-4.4.16.jar",
       "jcl-over-slf4j-${rootProject.versions.slf4jBom}.jar",

@@ -15,6 +15,7 @@
  */
 package com.thoughtworks.go.plugin.infra.monitor;
 
+import com.thoughtworks.go.util.ExceptionUtils;
 import com.thoughtworks.go.util.SystemEnvironment;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
@@ -153,19 +154,24 @@ public class DefaultPluginJarLocationMonitor implements PluginJarLocationMonitor
 
         public PluginLocationMonitorThread() {
             super("goPluginLocationMonitor");
+            setUncaughtExceptionHandler(ExceptionUtils.uncaughtExceptionHandlerFor(LOGGER));
             setDaemon(true);
         }
 
         @Override
         public void run() {
             do {
-                oneShot();
+                try {
+                    oneShot();
 
-                long interval = systemEnvironment.getPluginLocationMonitorIntervalInMillis();
-                if (interval <= 0) {
-                    break;
+                    long interval = systemEnvironment.getPluginLocationMonitorIntervalInMillis();
+                    if (interval <= 0) {
+                        break;
+                    }
+                    waitForMonitorInterval(interval);
+                } catch (Throwable t) {
+                    LOGGER.error("Failed to check plugin location for changes", t);
                 }
-                waitForMonitorInterval(interval);
             } while (!Thread.currentThread().isInterrupted());
         }
 

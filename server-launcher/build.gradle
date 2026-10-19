@@ -48,15 +48,12 @@ configurations {
 }
 
 dependencies {
-  packagingInLibDir platform(project(':build-platform'))
-
   packagingInDefaultFilesDir project(path: ':agent-launcher', configuration: 'fatJarConfig')
   packagingInDefaultFilesDir project(path: ':agent', configuration: 'fatJarConfig')
-  packagingInDefaultFilesDir project(path: ':tfs-impl:tfs-impl-14', configuration: 'fatJarConfig')
+  packagingInDefaultFilesDir project(path: ':tfs-impl-14', configuration: 'fatJarConfig')
 
   packagingInLibDir rootProject.deps.jetty
   packagingInLibDir rootProject.deps.jettyJmx
-  packagingInLibDir rootProject.deps.jettyServlets
   packagingInLibDir rootProject.deps.jettyUtil
   packagingInLibDir rootProject.deps.jettyDeploy
   packagingInLibDir rootProject.deps.jettyWebsocket
@@ -65,7 +62,6 @@ dependencies {
     transitive = false
   }
   packagingInLibDir rootProject.deps.servletApi
-  packagingInLibDir rootProject.deps.commonsIO
 
   // Not needed for compilation, but we want to centralize all logging using logback
   packagingInLibDir rootProject.deps.slf4jApi
@@ -95,6 +91,7 @@ tasks.register('mainJar', Jar) {
   from({ configurations.packagingInMainJarServerJar.collect { it.isDirectory() ? it : zipTree(it) } }) {
     include "**/GoLauncher*.class"
     include "**/GoServer*.class"
+    include "**/ServerLogging*.class"
     include "**/util/validators/*.class"
 
     into('/')
@@ -108,6 +105,7 @@ tasks.register('mainJar', Jar) {
   }
 
   from({ configurations.packagingInMainJarBaseJar.collect { it.isDirectory() ? it : zipTree(it) } }) {
+    include "**/FileUtil*.class"
     include "**/LogHelper.class"
     include "**/LogConfigurator*.class"
     include "**/SystemEnvironment*.class"
@@ -181,7 +179,6 @@ tasks.register('verifyFatJar', VerifyJarTask) {
       "tfs-impl-14.jar",
     ],
     "lib"         : [
-      "commons-io-${rootProject.versions.commonsIO}.jar",
       "go-plugin-activator.jar",
       "jakarta.servlet-api-${rootProject.versions.servletApi}.jar",
       "jcl-over-slf4j-${rootProject.versions.slf4jBom}.jar",
@@ -192,7 +189,6 @@ tasks.register('verifyFatJar', VerifyJarTask) {
       "jetty-security-${rootProject.versions.jetty}.jar",
       "jetty-server-${rootProject.versions.jetty}.jar",
       "jetty-servlet-${rootProject.versions.jetty}.jar",
-      "jetty-servlets-${rootProject.versions.jetty}.jar",
       "jetty-util-${rootProject.versions.jetty}.jar",
       "jetty-webapp-${rootProject.versions.jetty}.jar",
       "jetty-xml-${rootProject.versions.jetty}.jar",

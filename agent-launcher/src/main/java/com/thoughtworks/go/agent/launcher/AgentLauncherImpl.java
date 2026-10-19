@@ -25,7 +25,6 @@ import com.thoughtworks.go.agent.common.util.Downloader;
 import com.thoughtworks.go.agent.common.util.JarUtil;
 import com.thoughtworks.go.logging.LogConfigurator;
 import com.thoughtworks.go.util.FileUtil;
-import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +34,11 @@ import java.math.BigInteger;
 import java.net.URLClassLoader;
 import java.security.SecureRandom;
 import java.util.Map;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Predicate;
 import java.util.jar.JarEntry;
+
+import static com.thoughtworks.go.util.ExceptionUtils.uncaughtExceptionHandlerFor;
 
 @SuppressWarnings("unused")
 public class AgentLauncherImpl implements AgentLauncher {
@@ -44,6 +46,10 @@ public class AgentLauncherImpl implements AgentLauncher {
     static final String AGENT_BOOTSTRAPPER_LOCK_FILE = ".agent-bootstrapper.running";
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentLauncherImpl.class);
+    private static final ThreadFactory THREAD_FACTORY = Thread.ofVirtual()
+        .name("AgentLauncherLockFileCleanup-", 1)
+        .uncaughtExceptionHandler(uncaughtExceptionHandlerFor(LOG))
+        .factory();
     private static final String JAR_ATTRIBUTE_GO_AGENT_BOOTSTRAP_CLASS = "Go-Agent-Bootstrap-Class";
     private static final int UNKNOWN_EXCEPTION_OCCURRED = -273;
 
@@ -111,8 +117,7 @@ public class AgentLauncherImpl implements AgentLauncher {
     }
 
     private Thread registerShutdownHook() {
-        Thread shutdownHook = new Thread(lockFile::delete);
-        shutdownHook.setName("AgentLauncherLockFileCleanup" + shutdownHook.getName());
+        Thread shutdownHook = THREAD_FACTORY.newThread(lockFile::delete);
         Runtime.getRuntime().addShutdownHook(shutdownHook);
         return shutdownHook;
     }
@@ -141,7 +146,7 @@ public class AgentLauncherImpl implements AgentLauncher {
                     throw new RuntimeException(e);
                 }
             } finally {
-                FileUtils.deleteQuietly(tempDir);
+                FileUtil.deleteQuietly(tempDir);
             }
         }
 
